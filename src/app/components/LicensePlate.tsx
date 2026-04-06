@@ -1,46 +1,119 @@
-import React from "react";
+import { useTranslation } from "react-i18next";
+
+export type PlateType = "civilian" | "military" | "police";
 
 interface LicensePlateProps {
   plateNumber: string;
+  plateType?: PlateType;
   className?: string;
 }
 
-export function LicensePlate({ plateNumber, className = "" }: LicensePlateProps) {
+/** Fixed Hebrew suffixes — never translated */
+const PLATE_SUFFIX: Record<Exclude<PlateType, "civilian">, string> = {
+  military: "\u05E6",
+  police: "\u05DE",
+};
+
+/** Outer chrome: thin light rim like stamped metal (shared with modal) */
+export const LICENSE_PLATE_FRAME_CLASS =
+  "rounded-[10px] border-[3px] border-white/95 shadow-[0_4px_14px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]";
+
+export function LicensePlateBlueStrip() {
+  const { t } = useTranslation();
+  return (
+    <div className="bg-[#0038b8] h-full flex flex-col items-center justify-center px-2 sm:px-3 gap-0.5 sm:gap-1 w-[20%] min-w-[56px] max-w-[76px] shrink-0 border-e border-black/20 shadow-[inset_-2px_0_8px_rgba(0,0,0,0.15)]">
+      <div className="bg-white rounded-sm p-0.5 sm:p-1 flex items-center justify-center mb-0.5 sm:mb-1 shadow-sm">
+        <svg className="w-6 h-4 sm:w-7 sm:h-5" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+          <rect width="220" height="160" fill="white" />
+          <rect width="220" height="53.33" fill="#0038b8" />
+          <rect y="106.67" width="220" height="53.33" fill="#0038b8" />
+          <polygon
+            points="110,53.33 120,73.33 142,73.33 124,86.67 132,106.67 110,93.33 88,106.67 96,86.67 78,73.33 100,73.33"
+            fill="#0038b8"
+          />
+        </svg>
+      </div>
+      <div className="text-white text-xs sm:text-lg font-black tracking-tight drop-shadow-sm">IL</div>
+      <div className="text-white text-[7px] sm:text-[9px] leading-tight text-center font-semibold opacity-95">
+        {t("licensePlate.line1")}
+      </div>
+      <div className="text-white text-[5px] sm:text-[7px] leading-tight opacity-90">{t("licensePlate.line2")}</div>
+    </div>
+  );
+}
+
+function embossedLightText(className: string) {
+  return `${className} [text-shadow:0_1px_0_rgba(255,255,255,0.35),0_-1px_2px_rgba(0,0,0,0.5)]`;
+}
+
+function stampedDarkText(className: string) {
+  return `${className} [text-shadow:0_2px_0_rgba(0,0,0,0.45),0_1px_0_rgba(255,255,255,0.08)]`;
+}
+
+function formatPlateDisplay(plateNumber: string, plateType: PlateType): string {
+  if (plateType === "civilian") return plateNumber;
+  const suf = PLATE_SUFFIX[plateType];
+  const n = plateNumber.trim();
+  if (!n) return `-${suf}`;
+  return `${n}-${suf}`;
+}
+
+export function LicensePlate({ plateNumber, plateType = "civilian", className = "" }: LicensePlateProps) {
+  const display = formatPlateDisplay(plateNumber, plateType);
+
   return (
     <div className={className}>
       <div
-        className="bg-yellow-400 rounded-xl border-4 sm:border-[6px] border-black shadow-2xl flex items-center overflow-hidden w-full"
+        className={`${LICENSE_PLATE_FRAME_CLASS} flex items-stretch overflow-hidden w-full`}
         style={{ aspectRatio: "3.8/1" }}
       >
-        <div className="bg-blue-600 h-full flex flex-col items-center justify-center px-2 sm:px-4 gap-0.5 sm:gap-1 w-[20%] min-w-[60px] max-w-[80px]">
-          <div className="bg-white rounded-sm p-0.5 sm:p-1 flex items-center justify-center mb-0.5 sm:mb-1">
-            <svg
-              className="w-6 h-4 sm:w-8 sm:h-6"
-              viewBox="0 0 220 160"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <rect width="220" height="160" fill="white" />
-              <rect width="220" height="53.33" fill="#0038b8" />
-              <rect y="106.67" width="220" height="53.33" fill="#0038b8" />
-              <polygon
-                points="110,53.33 120,73.33 142,73.33 124,86.67 132,106.67 110,93.33 88,106.67 96,86.67 78,73.33 100,73.33"
-                fill="#0038b8"
-              />
-            </svg>
-          </div>
-          <div className="text-white text-sm sm:text-xl font-bold tracking-tight">IL</div>
-          <div className="text-white text-[8px] sm:text-[10px] leading-tight text-center">ישראל</div>
-          <div className="text-white text-[6px] sm:text-[8px] leading-tight">ISRAEL</div>
-        </div>
+        {plateType === "civilian" && (
+          <>
+            <LicensePlateBlueStrip />
+            <div className="flex-1 min-w-0 bg-gradient-to-b from-[#ffe94a] via-[#f5d20a] to-[#e6bc00] flex items-center justify-center px-2 sm:px-5 border-s border-black/10 shadow-[inset_0_2px_6px_rgba(255,255,255,0.45)]">
+              <div
+                className={stampedDarkText(
+                  "text-center text-2xl sm:text-4xl font-black text-neutral-900 tracking-widest tabular-nums"
+                )}
+                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                dir="ltr"
+              >
+                {display}
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="flex-1 h-full flex items-center justify-center px-3 sm:px-6">
-          <div
-            className="text-center text-3xl sm:text-5xl font-bold text-black tracking-widest"
-            style={{ fontFamily: "monospace" }}
-          >
-            {plateNumber}
+        {plateType === "military" && (
+          <div className="flex-1 min-w-0 bg-gradient-to-b from-zinc-800 via-neutral-950 to-black flex items-center justify-center px-3 sm:px-8 shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)]">
+            <div
+              className={embossedLightText(
+                "text-center text-2xl sm:text-4xl font-black text-white tracking-widest tabular-nums"
+              )}
+              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+              dir="ltr"
+            >
+              {display}
+            </div>
           </div>
-        </div>
+        )}
+
+        {plateType === "police" && (
+          <>
+            <LicensePlateBlueStrip />
+            <div className="flex-1 min-w-0 bg-gradient-to-b from-[#dc2626] via-[#b91c1c] to-[#991b1b] flex items-center justify-center px-2 sm:px-5 border-s border-black/15 shadow-[inset_0_2px_6px_rgba(255,255,255,0.12)]">
+              <div
+                className={embossedLightText(
+                  "text-center text-2xl sm:text-4xl font-black text-white tracking-widest tabular-nums"
+                )}
+                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                dir="ltr"
+              >
+                {display}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

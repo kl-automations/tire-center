@@ -1,7 +1,22 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useLayoutEffect, type ReactNode } from "react";
+import i18n from "i18next";
 
 type Theme = "light" | "dark";
-type Language = "he" | "en" | "ar";
+export type Language = "he" | "en" | "ar";
+
+/** BCP 47 locale for Date formatting — matches app language from ThemeContext */
+export function getDateLocaleForLanguage(language: Language): string {
+  switch (language) {
+    case "he":
+      return "he-IL";
+    case "en":
+      return "en-US";
+    case "ar":
+      return "ar-SA";
+    default:
+      return "he-IL";
+  }
+}
 
 interface ThemeContextValue {
   theme: Theme;
@@ -46,6 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setLanguage = (l: Language) => {
     setLanguageState(l);
     localStorage.setItem("language", l);
+    i18n.changeLanguage(l);
   };
 
   const dir = language === "en" ? "ltr" : "rtl";
@@ -58,6 +74,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.classList.remove("dark");
     }
   }, [theme]);
+
+  useLayoutEffect(() => {
+    document.documentElement.dir = dir;
+    document.documentElement.lang = language;
+  }, [language, dir]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, language, setLanguage, dir }}>

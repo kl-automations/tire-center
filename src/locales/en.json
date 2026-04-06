@@ -1,0 +1,153 @@
+{
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "continue": "Continue",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode",
+    "loading": "Loading...",
+    "requestNotFound": "Report not found",
+    "newRequest": "New Report",
+    "spareTire": "Spare tire",
+    "frontAlignment": "Front Alignment",
+    "requestNumberLine": "Report no.: {{requestNumber}}"
+  },
+  "wheels": {
+    "frontRight": "Front Right",
+    "frontLeft": "Front Left",
+    "rearRight": "Rear Right",
+    "rearLeft": "Rear Left",
+    "rearRightInner": "Right inner",
+    "rearLeftInner": "Left inner",
+    "spareTire": "Spare"
+  },
+  "services": {
+    "puncture": "Puncture",
+    "balancing": "Balancing",
+    "sensor": "Sensor"
+  },
+  "status": {
+    "waiting": "Waiting for approval",
+    "approved": "Approved",
+    "partlyApproved": "Partly approved — see details!",
+    "declined": "Declined"
+  },
+  "approval": {
+    "full": "Approved",
+    "punctureOnly": "Puncture repair only",
+    "none": "Not approved"
+  },
+  "login": {
+    "title": "Kogol Service Report",
+    "subtitle": "Log in to Kogol System",
+    "username": "Username",
+    "usernamePlaceholder": "Enter username",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password",
+    "submit": "Log In",
+    "changeLanguage": "Change language"
+  },
+  "dashboard": {
+    "title": "Kogol Service Report",
+    "subtitle": "Main Dashboard",
+    "chooseAction": "Choose an action",
+    "newRequest": "New Report",
+    "newRequestDesc": "Create a new report for a vehicle",
+    "openRequests": "Open Reports",
+    "openRequestsDesc": "View active reports",
+    "history": "Report History",
+    "historyDesc": "Browse previous reports"
+  },
+  "settings": {
+    "title": "Settings",
+    "account": "Account",
+    "connectedUser": "Connected User",
+    "displayMode": "Display Mode",
+    "language": "Language",
+    "signOut": "Sign Out"
+  },
+  "openRequests": {
+    "title": "Open Reports",
+    "empty": "No open reports",
+    "searchPlaceholder": "Search by plate, report no., or rejection reason...",
+    "dateFrom": "From date",
+    "dateTo": "To date"
+  },
+  "requestDetail": {
+    "title": "Report Details",
+    "wheelsInRequest": "Wheels in Report",
+    "clickWheelHint": "Click on a marked wheel to view details",
+    "reason": "Reason",
+    "confirmTitle": "Confirm Completion",
+    "confirmQuestion": "Confirm completion of work on this report?",
+    "notesLabel": "Notes (optional)",
+    "notesPlaceholder": "Describe the work performed...",
+    "confirmButton": "Confirm Completion"
+  },
+  "history": {
+    "title": "Report History",
+    "searchPlaceholder": "Search by license plate or report no....",
+    "dateFrom": "From date",
+    "dateTo": "To date",
+    "empty": "No reports found"
+  },
+  "historyDetail": {
+    "title": "Report Details",
+    "completedPrefix": "Completed:",
+    "rejectedOnPrefix": "Rejected on:",
+    "wheelsInRequest": "Wheels in Report",
+    "clickWheelHint": "Click on a marked wheel to view details",
+    "reason": "Reason",
+    "executionNotes": "Work Notes"
+  },
+  "licensePlate": {
+    "line1": "Israel",
+    "line2": "ISRAEL"
+  },
+  "plateType": {
+    "label": "Vehicle Type",
+    "civilian": "Civilian",
+    "military": "Military",
+    "police": "Police"
+  },
+  "carVisualization": {
+    "front": "▲ Front",
+    "rear": "▼ Rear"
+  },
+  "tirePopup": {
+    "issueType": "Issue type",
+    "mode": {
+      "replacement": "Replacement",
+      "repair": "Repair",
+      "relocation": "Relocate"
+    },
+    "subtitleReplacement": "Select replacement reason",
+    "subtitleRepair": "Select repair: puncture, sensor, balancing",
+    "subtitleRelocation": "Select which wheel the tire was moved to",
+    "reasonLabel": "Replacement reason",
+    "loadingReasons": "Loading reasons...",
+    "selectReason": "Select a reason...",
+    "movedToLabel": "Moved to",
+    "selectTargetWheel": "Select wheel…",
+    "continueToCheck": "Continue to Carool check"
+  },
+  "licensePlateModal": {
+    "title": "New Report",
+    "subtitle": "Enter the vehicle license plate number"
+  },
+  "acceptedRequest": {
+    "title": "New Report",
+    "selectWheel": "Select a wheel",
+    "identified": "Identified – {{customerName}}"
+  },
+  "declinedRequest": {
+    "title": "New Report",
+    "noApproval": "Not Authorized",
+    "rejectionReason": "Rejection reason:",
+    "backHome": "Back to Home"
+  },
+  "caroolCheck": {
+    "title": "Carool Check",
+    "cameraPlaceholder": "Carool camera interface will appear here"
+  }
+}

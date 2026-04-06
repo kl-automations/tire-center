@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Sun, Moon, Globe } from "lucide-react";
 import { useTheme } from "../ThemeContext";
 
@@ -7,6 +8,7 @@ const LANG_LABELS: Record<string, string> = { he: "עב", en: "EN", ar: "عر" }
 const LANG_ORDER = ["he", "en", "ar"] as const;
 
 export function Login() {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
@@ -24,20 +26,20 @@ export function Login() {
   };
 
   return (
-    <div className="size-full flex items-center justify-center relative" dir="rtl">
+    <div className="size-full flex items-center justify-center relative">
       {/* Top bar controls */}
-      <div className="absolute top-4 left-4 flex items-center gap-2">
+      <div className="absolute top-4 start-4 flex items-center gap-2">
         <button
           onClick={toggleTheme}
           className="flex items-center justify-center w-10 h-10 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
-          title={theme === "dark" ? "מצב בהיר" : "מצב כהה"}
+          title={theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
         >
           {theme === "dark" ? <Sun className="w-5 h-5 text-foreground" /> : <Moon className="w-5 h-5 text-foreground" />}
         </button>
         <button
           onClick={cycleLanguage}
           className="flex items-center justify-center gap-1 h-10 px-3 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
-          title="שנה שפה"
+          title={t("login.changeLanguage")}
         >
           <Globe className="w-4 h-4 text-foreground" />
           <span className="text-sm font-bold text-foreground">{LANG_LABELS[language]}</span>
@@ -64,8 +66,8 @@ export function Login() {
               <circle cx="12" cy="12" r="2" />
             </svg>
           </div>
-          <h1 className="text-3xl text-foreground mb-2">מרכז צמיגים</h1>
-          <p className="text-muted-foreground">התחבר למערכת Kogol</p>
+          <h1 className="text-3xl text-foreground mb-2">{t("login.title")}</h1>
+          <p className="text-muted-foreground">{t("login.subtitle")}</p>
         </div>
 
         {/* Login Form Card */}
@@ -74,7 +76,7 @@ export function Login() {
             {/* Username Field */}
             <div className="space-y-2">
               <label htmlFor="username" className="block text-card-foreground">
-                שם משתמש
+                {t("login.username")}
               </label>
               <input
                 id="username"
@@ -82,7 +84,7 @@ export function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                placeholder="הזן שם משתמש"
+                placeholder={t("login.usernamePlaceholder")}
                 required
               />
             </div>
@@ -90,7 +92,7 @@ export function Login() {
             {/* Password Field */}
             <div className="space-y-2">
               <label htmlFor="password" className="block text-card-foreground">
-                סיסמא
+                {t("login.password")}
               </label>
               <input
                 id="password"
@@ -98,7 +100,7 @@ export function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                placeholder="הזן סיסמא"
+                placeholder={t("login.passwordPlaceholder")}
                 required
               />
             </div>
@@ -108,7 +110,7 @@ export function Login() {
               type="submit"
               className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
             >
-              התחבר
+              {t("login.submit")}
             </button>
           </form>
         </div>

@@ -1,0 +1,153 @@
+{
+  "common": {
+    "yes": "نعم",
+    "no": "لا",
+    "continue": "متابعة",
+    "lightMode": "الوضع الفاتح",
+    "darkMode": "الوضع الداكن",
+    "loading": "جارٍ التحميل...",
+    "requestNotFound": "لم يتم العثور على التقرير",
+    "newRequest": "تقرير جديد",
+    "spareTire": "عجلة الاحتياط",
+    "frontAlignment": "ضبط الزوايا الأمامية",
+    "requestNumberLine": "رقم الطلب: {{requestNumber}}"
+  },
+  "wheels": {
+    "frontRight": "أمامي أيمن",
+    "frontLeft": "أمامي أيسر",
+    "rearRight": "خلفي أيمن",
+    "rearLeft": "خلفي أيسر",
+    "rearRightInner": "عجلة يمين داخلية",
+    "rearLeftInner": "عجلة يسار داخلية",
+    "spareTire": "الاحتياط"
+  },
+  "services": {
+    "puncture": "ثقب",
+    "balancing": "موازنة",
+    "sensor": "حسّاس"
+  },
+  "status": {
+    "waiting": "بانتظار الموافقة",
+    "approved": "تمت الموافقة",
+    "partlyApproved": "موافقة جزئية — انظر التفاصيل!",
+    "declined": "مرفوض"
+  },
+  "approval": {
+    "full": "تمت الموافقة",
+    "punctureOnly": "إصلاح الثقب فقط",
+    "none": "غير موافق عليه"
+  },
+  "login": {
+    "title": "تقرير خدمة كوغل",
+    "subtitle": "تسجيل الدخول إلى نظام كوغل",
+    "username": "اسم المستخدم",
+    "usernamePlaceholder": "أدخل اسم المستخدم",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "أدخل كلمة المرور",
+    "submit": "تسجيل الدخول",
+    "changeLanguage": "تغيير اللغة"
+  },
+  "dashboard": {
+    "title": "تقرير خدمة كوغل",
+    "subtitle": "لوحة التحكم الرئيسية",
+    "chooseAction": "اختر إجراءً",
+    "newRequest": "تقرير جديد",
+    "newRequestDesc": "إنشاء تقرير جديد لمركبة",
+    "openRequests": "تقارير مفتوحة",
+    "openRequestsDesc": "عرض التقارير النشطة",
+    "history": "سجلّ التقارير",
+    "historyDesc": "تصفّح التقارير السابقة"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "account": "الحساب",
+    "connectedUser": "المستخدم المتصل",
+    "displayMode": "وضع العرض",
+    "language": "اللغة",
+    "signOut": "تسجيل الخروج"
+  },
+  "openRequests": {
+    "title": "تقارير مفتوحة",
+    "empty": "لا توجد تقارير مفتوحة",
+    "searchPlaceholder": "البحث برقم اللوحة أو رقم الطلب أو سبب الرفض...",
+    "dateFrom": "من تاريخ",
+    "dateTo": "إلى تاريخ"
+  },
+  "requestDetail": {
+    "title": "تفاصيل التقرير",
+    "wheelsInRequest": "العجلات في التقرير",
+    "clickWheelHint": "اضغط على عجلة مُعلَّمة لعرض التفاصيل",
+    "reason": "السبب",
+    "confirmTitle": "تأكيد الإنجاز",
+    "confirmQuestion": "هل تريد تأكيد إنهاء العمل على هذا التقرير؟",
+    "notesLabel": "ملاحظات (اختياري)",
+    "notesPlaceholder": "صِف العمل الذي تم تنفيذه...",
+    "confirmButton": "تأكيد الإنجاز"
+  },
+  "history": {
+    "title": "سجلّ التقارير",
+    "searchPlaceholder": "البحث برقم اللوحة أو رقم الطلب...",
+    "dateFrom": "من تاريخ",
+    "dateTo": "إلى تاريخ",
+    "empty": "لم يتم العثور على تقارير"
+  },
+  "historyDetail": {
+    "title": "تفاصيل التقرير",
+    "completedPrefix": "اكتمل:",
+    "rejectedOnPrefix": "مرفوض في:",
+    "wheelsInRequest": "العجلات في التقرير",
+    "clickWheelHint": "اضغط على عجلة مُعلَّمة لعرض التفاصيل",
+    "reason": "السبب",
+    "executionNotes": "ملاحظات التنفيذ"
+  },
+  "licensePlate": {
+    "line1": "إسرائيل",
+    "line2": "ISRAEL"
+  },
+  "plateType": {
+    "label": "نوع المركبة",
+    "civilian": "مدني",
+    "military": "عسكري",
+    "police": "شرطة"
+  },
+  "carVisualization": {
+    "front": "▲ أمامي",
+    "rear": "▼ خلفي"
+  },
+  "tirePopup": {
+    "issueType": "نوع البلاغ",
+    "mode": {
+      "replacement": "استبدال",
+      "repair": "إصلاح",
+      "relocation": "نقل موضع"
+    },
+    "subtitleReplacement": "اختر سبب الاستبدال",
+    "subtitleRepair": "حدد الإصلاح: ثقب، حساس، موازنة",
+    "subtitleRelocation": "اختر العجلة التي نُقل إليها الإطار",
+    "reasonLabel": "سبب الاستبدال",
+    "loadingReasons": "جارٍ تحميل الأسباب...",
+    "selectReason": "اختر سبباً...",
+    "movedToLabel": "نُقل إلى",
+    "selectTargetWheel": "اختر عجلة…",
+    "continueToCheck": "المتابعة إلى فحص كارول"
+  },
+  "licensePlateModal": {
+    "title": "تقرير جديد",
+    "subtitle": "أدخل رقم لوحة المركبة"
+  },
+  "acceptedRequest": {
+    "title": "تقرير جديد",
+    "selectWheel": "اختر عجلة",
+    "identified": "مُعرَّف – {{customerName}}"
+  },
+  "declinedRequest": {
+    "title": "تقرير جديد",
+    "noApproval": "غير مصرّح بالتنفيذ",
+    "rejectionReason": "سبب الرفض:",
+    "backHome": "العودة إلى الصفحة الرئيسية"
+  },
+  "caroolCheck": {
+    "title": "فحص كارول",
+    "cameraPlaceholder": "ستظهر واجهة كاميرا كارول هنا"
+  }
+}

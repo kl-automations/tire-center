@@ -1,4 +1,14 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
+import type { PlateType } from "./LicensePlate";
+import type { VehicleWheelCount } from "../vehicleWheelLayout";
+
+/** Unicode vehicle emojis are side/profile view; there is no true top-down glyph. */
+function vehicleEmoji(plateType: PlateType, isSixWheel: boolean): string {
+  if (isSixWheel) return "🚛";
+  if (plateType === "police") return "🚔";
+  return "🚘";
+}
 
 export type WheelColor = "green" | "orange" | "red" | "default";
 
@@ -9,6 +19,12 @@ interface CarVisualizationProps {
   wheelColors?: Record<string, WheelColor>;
   frontTireSize: string;
   rearTireSize: string;
+  /** When true, a fifth wheel (spare) is shown centered between the axles */
+  showSpareTire?: boolean;
+  /** 4 = standard; 6 = dual rear with inner wheels (from backend) */
+  wheelCount?: VehicleWheelCount;
+  /** Civilian / military → 🚘; police → 🚔; 6-wheel → 🚛 */
+  plateType?: PlateType;
 }
 
 function TireIcon({ className }: { className?: string }) {
@@ -83,7 +99,7 @@ function WheelButton({
       className={`flex flex-col items-center gap-2 px-5 py-4 rounded-2xl border-2 transition-all duration-200 ${styles.border}`}
     >
       <TireIcon className={`w-12 h-12 ${styles.icon}`} />
-      <span className={`text-sm font-semibold whitespace-nowrap ${styles.label}`}>
+      <span className={`text-xs sm:text-sm font-semibold text-center whitespace-normal max-w-[10rem] leading-tight ${styles.label}`}>
         {label}
       </span>
     </button>
@@ -97,7 +113,12 @@ export function CarVisualization({
   wheelColors = {},
   frontTireSize,
   rearTireSize,
+  showSpareTire = false,
+  wheelCount = 4,
+  plateType = "civilian",
 }: CarVisualizationProps) {
+  const { t } = useTranslation();
+  const isSixWheel = wheelCount === 6;
   const getColor = (pos: string): WheelColor => {
     if (wheelColors[pos]) return wheelColors[pos];
     if (affectedWheels.has(pos)) return "red";
@@ -105,11 +126,11 @@ export function CarVisualization({
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 py-2" dir="rtl">
+    <div className="flex flex-col items-center gap-4 py-2">
       {/* Front label */}
       <div className="flex flex-col items-center gap-1">
         <span className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
-          ▲ קדמי
+          {t("carVisualization.front")}
         </span>
         <span dir="ltr" className="text-sm font-bold text-foreground bg-muted px-3 py-0.5 rounded-full">
           {frontTireSize}
@@ -119,42 +140,93 @@ export function CarVisualization({
       {/* Front wheels */}
       <div className="flex gap-10 justify-center">
         <WheelButton
-          label="ימין קדמי"
+          label={t("wheels.frontRight")}
           isSelected={selectedWheel === "front-right"}
           color={getColor("front-right")}
           onClick={() => onWheelClick("front-right")}
         />
         <WheelButton
-          label="שמאל קדמי"
+          label={t("wheels.frontLeft")}
           isSelected={selectedWheel === "front-left"}
           color={getColor("front-left")}
           onClick={() => onWheelClick("front-left")}
         />
       </div>
 
-      {/* Car emoji */}
-      <div className="text-7xl leading-none select-none my-1 rotate-90">🚗</div>
-
-      {/* Rear wheels */}
-      <div className="flex gap-10 justify-center">
-        <WheelButton
-          label="ימין אחורי"
-          isSelected={selectedWheel === "rear-right"}
-          color={getColor("rear-right")}
-          onClick={() => onWheelClick("rear-right")}
-        />
-        <WheelButton
-          label="שמאל אחורי"
-          isSelected={selectedWheel === "rear-left"}
-          color={getColor("rear-left")}
-          onClick={() => onWheelClick("rear-left")}
-        />
+      {/* Side/profile emoji, natural orientation (no rotate — avoids “sideways” look). */}
+      <div
+        className="text-7xl leading-none select-none my-1 inline-flex items-center justify-center"
+        role="img"
+        aria-hidden
+      >
+        {vehicleEmoji(plateType, isSixWheel)}
       </div>
+
+      {/* Spare tire — centered between axles */}
+      {showSpareTire && (
+        <div className="flex justify-center w-full py-1">
+          <WheelButton
+            label={t("wheels.spareTire")}
+            isSelected={selectedWheel === "spare-tire"}
+            color={getColor("spare-tire")}
+            onClick={() => onWheelClick("spare-tire")}
+          />
+        </div>
+      )}
+
+      {/* Rear wheels — dual row when 6-wheel (inner + outer per side) */}
+      {isSixWheel ? (
+        <div className="flex flex-col items-center gap-3 w-full">
+          <div className="flex gap-8 sm:gap-10 justify-center flex-wrap">
+            <WheelButton
+              label={t("wheels.rearRight")}
+              isSelected={selectedWheel === "rear-right"}
+              color={getColor("rear-right")}
+              onClick={() => onWheelClick("rear-right")}
+            />
+            <WheelButton
+              label={t("wheels.rearLeft")}
+              isSelected={selectedWheel === "rear-left"}
+              color={getColor("rear-left")}
+              onClick={() => onWheelClick("rear-left")}
+            />
+          </div>
+          <div className="flex gap-8 sm:gap-10 justify-center flex-wrap">
+            <WheelButton
+              label={t("wheels.rearRightInner")}
+              isSelected={selectedWheel === "rear-right-inner"}
+              color={getColor("rear-right-inner")}
+              onClick={() => onWheelClick("rear-right-inner")}
+            />
+            <WheelButton
+              label={t("wheels.rearLeftInner")}
+              isSelected={selectedWheel === "rear-left-inner"}
+              color={getColor("rear-left-inner")}
+              onClick={() => onWheelClick("rear-left-inner")}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-10 justify-center">
+          <WheelButton
+            label={t("wheels.rearRight")}
+            isSelected={selectedWheel === "rear-right"}
+            color={getColor("rear-right")}
+            onClick={() => onWheelClick("rear-right")}
+          />
+          <WheelButton
+            label={t("wheels.rearLeft")}
+            isSelected={selectedWheel === "rear-left"}
+            color={getColor("rear-left")}
+            onClick={() => onWheelClick("rear-left")}
+          />
+        </div>
+      )}
 
       {/* Rear label */}
       <div className="flex flex-col items-center gap-1">
         <span className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
-          ▼ אחורי
+          {t("carVisualization.rear")}
         </span>
         <span dir="ltr" className="text-sm font-bold text-foreground bg-muted px-3 py-0.5 rounded-full">
           {rearTireSize}

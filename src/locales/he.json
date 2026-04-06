@@ -1,0 +1,153 @@
+{
+  "common": {
+    "yes": "כן",
+    "no": "לא",
+    "continue": "המשך",
+    "lightMode": "מצב בהיר",
+    "darkMode": "מצב כהה",
+    "loading": "טוען...",
+    "requestNotFound": "דיווח לא נמצא",
+    "newRequest": "דיווח חדש",
+    "spareTire": "גלגל רזרבי",
+    "frontAlignment": "כיוון פרונט",
+    "requestNumberLine": "מספר פנייה: {{requestNumber}}"
+  },
+  "wheels": {
+    "frontRight": "ימין קדמי",
+    "frontLeft": "שמאל קדמי",
+    "rearRight": "ימין אחורי",
+    "rearLeft": "שמאל אחורי",
+    "rearRightInner": "גלגל ימני פנימי",
+    "rearLeftInner": "גלגל שמאלי פנימי",
+    "spareTire": "גלגל רזרבי"
+  },
+  "services": {
+    "puncture": "תקר",
+    "balancing": "איזון",
+    "sensor": "חיישן"
+  },
+  "status": {
+    "waiting": "ממתין לאישור",
+    "approved": "מאושר",
+    "partlyApproved": "מאושר חלקית — ראה פירוט!",
+    "declined": "נדחה"
+  },
+  "approval": {
+    "full": "מאושר",
+    "punctureOnly": "תיקון תקר בלבד",
+    "none": "לא מאושר"
+  },
+  "login": {
+    "title": "דיווח שירות קוגול",
+    "subtitle": "התחבר למערכת קוגול",
+    "username": "שם משתמש",
+    "usernamePlaceholder": "הזן שם משתמש",
+    "password": "סיסמא",
+    "passwordPlaceholder": "הזן סיסמא",
+    "submit": "התחבר",
+    "changeLanguage": "שנה שפה"
+  },
+  "dashboard": {
+    "title": "דיווח שירות קוגול",
+    "subtitle": "לוח בקרה ראשי",
+    "chooseAction": "בחר פעולה",
+    "newRequest": "דיווח חדש",
+    "newRequestDesc": "צור דיווח חדש למכונית",
+    "openRequests": "דיווחים פתוחים",
+    "openRequestsDesc": "צפה בדיווחים הפעילים",
+    "history": "היסטוריית דיווחים",
+    "historyDesc": "עיין בדיווחים קודמים"
+  },
+  "settings": {
+    "title": "הגדרות",
+    "account": "חשבון",
+    "connectedUser": "משתמש מחובר",
+    "displayMode": "מצב תצוגה",
+    "language": "שפה",
+    "signOut": "התנתק"
+  },
+  "openRequests": {
+    "title": "דיווחים פתוחים",
+    "empty": "אין דיווחים פתוחים",
+    "searchPlaceholder": "חפש לפי מספר רישוי, מספר פנייה או סיבת דחייה...",
+    "dateFrom": "מתאריך",
+    "dateTo": "עד תאריך"
+  },
+  "requestDetail": {
+    "title": "פרטי דיווח",
+    "wheelsInRequest": "גלגלים בדיווח",
+    "clickWheelHint": "לחץ על גלגל מסומן לצפייה בפרטים",
+    "reason": "סיבה",
+    "confirmTitle": "אישור ביצוע",
+    "confirmQuestion": "האם לאשר את סיום העבודה על דיווח זה?",
+    "notesLabel": "הערות (אופציונלי)",
+    "notesPlaceholder": "פרט את העבודה שבוצעה...",
+    "confirmButton": "אישור ביצוע"
+  },
+  "history": {
+    "title": "היסטוריית דיווחים",
+    "searchPlaceholder": "חפש לפי מספר רישוי או מספר פנייה...",
+    "dateFrom": "מתאריך",
+    "dateTo": "עד תאריך",
+    "empty": "לא נמצאו דיווחים"
+  },
+  "historyDetail": {
+    "title": "פרטי דיווח",
+    "completedPrefix": "הושלם:",
+    "rejectedOnPrefix": "נדחה בתאריך:",
+    "wheelsInRequest": "גלגלים בדיווח",
+    "clickWheelHint": "לחץ על גלגל מסומן לצפייה בפרטים",
+    "reason": "סיבה",
+    "executionNotes": "הערות ביצוע"
+  },
+  "licensePlate": {
+    "line1": "ישראל",
+    "line2": "ISRAEL"
+  },
+  "plateType": {
+    "label": "סוג רכב",
+    "civilian": "אזרחי",
+    "military": "צבאי",
+    "police": "משטרתי"
+  },
+  "carVisualization": {
+    "front": "▲ קדמי",
+    "rear": "▼ אחורי"
+  },
+  "tirePopup": {
+    "issueType": "סוג דיווח",
+    "mode": {
+      "replacement": "החלפה",
+      "repair": "תיקון",
+      "relocation": "שינוי מיקום"
+    },
+    "subtitleReplacement": "בחר סיבת החלפה",
+    "subtitleRepair": "סמן תיקון: תקר, חיישן, איזון",
+    "subtitleRelocation": "בחר לאיזה גלגל הועבר הצמיג",
+    "reasonLabel": "סיבת החלפה",
+    "loadingReasons": "טוען סיבות...",
+    "selectReason": "בחר סיבה...",
+    "movedToLabel": "הועבר ל",
+    "selectTargetWheel": "בחר גלגל…",
+    "continueToCheck": "המשך לבדיקה עם קרול"
+  },
+  "licensePlateModal": {
+    "title": "דיווח חדש",
+    "subtitle": "הזן מספר רישוי של הרכב"
+  },
+  "acceptedRequest": {
+    "title": "דיווח חדש",
+    "selectWheel": "בחר גלגל",
+    "identified": "מזוהה – {{customerName}}"
+  },
+  "declinedRequest": {
+    "title": "דיווח חדש",
+    "noApproval": "אין אישור לביצוע",
+    "rejectionReason": "סיבת דחייה:",
+    "backHome": "חזור לדף הבית"
+  },
+  "caroolCheck": {
+    "title": "בדיקה עם קרול",
+    "cameraPlaceholder": "ממשק מצלמת קרול יופיע כאן"
+  }
+}

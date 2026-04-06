@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { CarVisualization } from "./CarVisualization";
+import { LicensePlate, type PlateType } from "./LicensePlate";
 import { TirePopup, type WheelData } from "./TirePopup";
+import { getVehicleWheelCountFromPlate } from "../vehicleWheelLayout";
 
 function getStoredAffectedWheels(plate: string): Record<string, WheelData> {
   try {
@@ -19,10 +22,26 @@ function storeAffectedWheel(plate: string, wheel: string, data: WheelData) {
   sessionStorage.setItem(`affected-wheels-${plate}`, JSON.stringify(current));
 }
 
+/** Car rental / fleet provider name for civilian plates — replace with API later */
+function getCustomerNameForPlate(_plate: string): string {
+  return "Hertz";
+}
+
+/** Request / case number (digits) — replace with API later */
+function getRequestNumberForPlate(_plate: string): string {
+  return "10048239";
+}
+
 export function AcceptedRequest() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const licensePlate = searchParams.get("plate") || "";
+  const plateType = (searchParams.get("type") || "civilian") as PlateType;
+  const wheelCount = getVehicleWheelCountFromPlate(licensePlate);
+  const [spareTire, setSpareTire] = useState(
+    () => "spare-tire" in getStoredAffectedWheels(licensePlate)
+  );
   const [frontAlignment, setFrontAlignment] = useState(false);
   const [selectedWheel, setSelectedWheel] = useState<string | null>(null);
   const [popupWheel, setPopupWheel] = useState<string | null>(null);
@@ -40,8 +59,23 @@ export function AcceptedRequest() {
     setAffectedWheels((prev) => ({ ...prev, [wheel]: data }));
   };
 
+  const handleSpareTireChange = (enabled: boolean) => {
+    setSpareTire(enabled);
+    if (!enabled) {
+      setAffectedWheels((prev) => {
+        if (!("spare-tire" in prev)) return prev;
+        const next = { ...prev };
+        delete next["spare-tire"];
+        sessionStorage.setItem(`affected-wheels-${licensePlate}`, JSON.stringify(next));
+        return next;
+      });
+      setSelectedWheel((s) => (s === "spare-tire" ? null : s));
+      setPopupWheel((p) => (p === "spare-tire" ? null : p));
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col" dir="rtl">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
@@ -51,7 +85,7 @@ export function AcceptedRequest() {
           >
             <ArrowRight className="w-6 h-6" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">פנייה חדשה</h1>
+          <h1 className="text-xl text-primary-foreground font-semibold">{t("acceptedRequest.title")}</h1>
           <div className="w-6" /> {/* Spacer for alignment */}
         </div>
       </div>
@@ -60,37 +94,30 @@ export function AcceptedRequest() {
       <div className="flex-1 p-4 pb-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* License Plate Display */}
-          <div className="flex justify-center">
-            <div className="w-full max-w-md">
-              <div className="bg-yellow-400 rounded-xl border-4 sm:border-[6px] border-black shadow-2xl flex items-center overflow-hidden w-full" style={{ aspectRatio: '3.8/1' }}>
-                {/* Blue Left Section */}
-                <div className="bg-blue-600 h-full flex flex-col items-center justify-center px-2 sm:px-4 gap-0.5 sm:gap-1 w-[20%] min-w-[60px] max-w-[80px]">
-                  <div className="bg-white rounded-sm p-0.5 sm:p-1 flex items-center justify-center mb-0.5 sm:mb-1">
-                    <svg className="w-6 h-4 sm:w-8 sm:h-6" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg">
-                      <rect width="220" height="160" fill="white"/>
-                      <rect width="220" height="53.33" fill="#0038b8"/>
-                      <rect y="106.67" width="220" height="53.33" fill="#0038b8"/>
-                      <polygon points="110,53.33 120,73.33 142,73.33 124,86.67 132,106.67 110,93.33 88,106.67 96,86.67 78,73.33 100,73.33" fill="#0038b8"/>
-                    </svg>
-                  </div>
-                  <div className="text-white text-sm sm:text-xl font-bold tracking-tight">IL</div>
-                  <div className="text-white text-[8px] sm:text-[10px] leading-tight text-center">ישראל</div>
-                  <div className="text-white text-[6px] sm:text-[8px] leading-tight">isperael</div>
-                </div>
-                
-                {/* Yellow Plate Number Section */}
-                <div className="flex-1 h-full flex items-center justify-center px-3 sm:px-6">
-                  <div className="text-center text-3xl sm:text-5xl font-bold text-black tracking-widest" style={{ fontFamily: 'monospace' }}>
-                    {licensePlate}
-                  </div>
-                </div>
+          <div className="space-y-4">
+            <LicensePlate plateNumber={licensePlate} plateType={plateType} className="w-full max-w-md mx-auto" />
+            {plateType === "civilian" && (
+              <div className="w-full max-w-lg mx-auto rounded-2xl border border-border bg-card px-6 py-4 shadow-sm space-y-2">
+                <p
+                  className="text-center text-xl sm:text-2xl font-semibold text-foreground"
+                  aria-live="polite"
+                >
+                  {t("acceptedRequest.identified", {
+                    customerName: getCustomerNameForPlate(licensePlate),
+                  })}
+                </p>
+                <p className="text-center text-sm text-muted-foreground tabular-nums">
+                  {t("common.requestNumberLine", {
+                    requestNumber: getRequestNumberForPlate(licensePlate),
+                  })}
+                </p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Car View with Clickable Wheels */}
           <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
-            <h3 className="text-lg font-semibold text-foreground mb-6 text-center">בחר גלגל</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-6 text-center">{t("acceptedRequest.selectWheel")}</h3>
             
             {/* Responsive SVG Car Visualization */}
             <div className="relative w-full max-w-3xl mx-auto">
@@ -100,14 +127,38 @@ export function AcceptedRequest() {
                 affectedWheels={new Set(Object.keys(affectedWheels))}
                 frontTireSize="205/55R16"
                 rearTireSize="225/45R17"
+                showSpareTire={spareTire}
+                wheelCount={wheelCount}
+                plateType={plateType}
               />
+            </div>
+          </div>
+
+          {/* Spare tire switch */}
+          <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-semibold text-foreground">{t("common.spareTire")}</span>
+              <button
+                dir="ltr"
+                type="button"
+                onClick={() => handleSpareTireChange(!spareTire)}
+                className={`relative inline-flex h-10 w-20 items-center rounded-full transition-colors duration-300 ${
+                  spareTire ? "bg-primary dark:bg-blue-500" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`inline-block h-8 w-8 rounded-full bg-white shadow-lg transition-transform duration-300 ${
+                    spareTire ? "translate-x-[4px]" : "translate-x-[44px]"
+                  }`}
+                />
+              </button>
             </div>
           </div>
 
           {/* Front Alignment Switch */}
           <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
             <div className="flex items-center justify-between">
-              <span className="text-lg font-semibold text-foreground">כיוון פרונט</span>
+              <span className="text-lg font-semibold text-foreground">{t("common.frontAlignment")}</span>
               <button
                 dir="ltr"
                 onClick={() => setFrontAlignment(!frontAlignment)}
@@ -129,7 +180,7 @@ export function AcceptedRequest() {
             onClick={() => navigate("/dashboard")}
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-4 rounded-xl transition-colors duration-200 shadow-lg hover:shadow-xl font-semibold text-lg"
           >
-            המשך
+            {t("common.continue")}
           </button>
         </div>
       </div>
@@ -140,6 +191,8 @@ export function AcceptedRequest() {
         wheelPosition={popupWheel || ""}
         licensePlate={licensePlate}
         onSubmit={handlePopupSubmit}
+        spareTireEnabled={spareTire}
+        wheelCount={wheelCount}
       />
     </div>
   );

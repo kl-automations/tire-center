@@ -1,17 +1,27 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { ArrowRight, Search } from "lucide-react";
-import { LicensePlate } from "./LicensePlate";
-import { STATUS_CONFIG, type RequestStatus, type WheelWork } from "./OpenRequests";
+import { getDateLocaleForLanguage, useTheme } from "../ThemeContext";
+import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
+import { LicensePlate, type PlateType } from "./LicensePlate";
+import { STATUS_LABEL_KEYS, STATUS_STYLES, type RequestStatus, type WheelWork } from "./OpenRequests";
+import type { VehicleWheelCount } from "../vehicleWheelLayout";
 
-interface HistoryEntry {
+export interface HistoryEntry {
   id: string;
+  /** Business request / case number (digits) — from backend */
+  requestNumber: string;
   licensePlate: string;
+  plateType: PlateType;
   status: RequestStatus;
+  /** When status is `declined` — free text from backend */
+  rejectionReason?: string;
   completedDate: string;
   frontTireSize: string;
   rearTireSize: string;
   frontAlignment: boolean;
+  wheelCount?: VehicleWheelCount;
   wheels: Record<string, WheelWork>;
   notes?: string;
 }
@@ -19,7 +29,9 @@ interface HistoryEntry {
 const MOCK_HISTORY: HistoryEntry[] = [
   {
     id: "h1",
+    requestNumber: "30120401",
     licensePlate: "33-444-55",
+    plateType: "civilian",
     status: "approved",
     completedDate: "2026-04-03",
     frontTireSize: "205/55R16",
@@ -33,7 +45,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
   },
   {
     id: "h2",
+    requestNumber: "30120402",
     licensePlate: "66-777-88",
+    plateType: "military",
     status: "partly-approved",
     completedDate: "2026-04-02",
     frontTireSize: "225/45R17",
@@ -47,7 +61,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
   },
   {
     id: "h3",
+    requestNumber: "30120403",
     licensePlate: "12-345-67",
+    plateType: "civilian",
     status: "approved",
     completedDate: "2026-03-28",
     frontTireSize: "205/55R16",
@@ -59,8 +75,11 @@ const MOCK_HISTORY: HistoryEntry[] = [
   },
   {
     id: "h4",
+    requestNumber: "30120404",
     licensePlate: "99-111-22",
+    plateType: "police",
     status: "declined",
+    rejectionReason: MOCK_REJECTION_REASON_EXAMPLE,
     completedDate: "2026-03-25",
     frontTireSize: "195/65R15",
     rearTireSize: "195/65R15",
@@ -71,7 +90,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
   },
   {
     id: "h5",
+    requestNumber: "30120405",
     licensePlate: "44-555-66",
+    plateType: "civilian",
     status: "approved",
     completedDate: "2026-03-20",
     frontTireSize: "215/60R16",
@@ -85,7 +106,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
   },
   {
     id: "h6",
+    requestNumber: "30120406",
     licensePlate: "77-888-99",
+    plateType: "military",
     status: "partly-approved",
     completedDate: "2026-03-15",
     frontTireSize: "205/55R16",
@@ -98,7 +121,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
   },
   {
     id: "h7",
+    requestNumber: "30120407",
     licensePlate: "55-123-88",
+    plateType: "police",
     status: "approved",
     completedDate: "2026-03-10",
     frontTireSize: "195/65R15",
@@ -110,14 +135,34 @@ const MOCK_HISTORY: HistoryEntry[] = [
     },
     notes: "4 צמיגים + איזון",
   },
+  {
+    id: "h8",
+    requestNumber: "30120408",
+    licensePlate: "123456",
+    plateType: "civilian",
+    status: "approved",
+    completedDate: "2026-04-06",
+    frontTireSize: "235/75R17",
+    rearTireSize: "235/75R17",
+    frontAlignment: false,
+    wheelCount: 6,
+    wheels: {
+      "rear-right-inner": { reason: "סיבה 9", puncture: true, balancing: false, sensor: false, approval: "full" },
+      "rear-left": { reason: "סיבה 2", puncture: false, balancing: true, sensor: false, approval: "full" },
+    },
+    notes: "משאית 6 גלגלים — תיקון פנימי ימני",
+  },
 ];
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, locale: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "numeric" });
+  return d.toLocaleDateString(locale, { day: "numeric", month: "numeric", year: "numeric" });
 }
 
 export function RequestHistory() {
+  const { t } = useTranslation();
+  const { language } = useTheme();
+  const dateLocale = getDateLocaleForLanguage(language);
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -125,7 +170,12 @@ export function RequestHistory() {
 
   const filtered = useMemo(() => {
     return MOCK_HISTORY.filter((entry) => {
-      if (searchQuery && !entry.licensePlate.includes(searchQuery)) return false;
+      if (searchQuery) {
+        const q = searchQuery.trim();
+        const plateMatch = entry.licensePlate.includes(q);
+        const idMatch = entry.requestNumber.includes(q);
+        if (!plateMatch && !idMatch) return false;
+      }
       if (dateFrom && entry.completedDate < dateFrom) return false;
       if (dateTo && entry.completedDate > dateTo) return false;
       return true;
@@ -133,7 +183,7 @@ export function RequestHistory() {
   }, [searchQuery, dateFrom, dateTo]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" dir="rtl">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
@@ -143,7 +193,7 @@ export function RequestHistory() {
           >
             <ArrowRight className="w-6 h-6" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">היסטוריית פניות</h1>
+          <h1 className="text-xl text-primary-foreground font-semibold">{t("history.title")}</h1>
           <div className="w-6" />
         </div>
       </div>
@@ -153,20 +203,20 @@ export function RequestHistory() {
         <div className="max-w-2xl mx-auto space-y-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="חפש לפי מספר רישוי..."
-              className="w-full pr-10 pl-4 py-3 bg-input-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+              placeholder={t("history.searchPlaceholder")}
+              className="w-full ps-10 pe-4 py-3 bg-input-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
           </div>
 
           {/* Date filters */}
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">מתאריך</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">{t("history.dateFrom")}</label>
               <input
                 type="date"
                 value={dateFrom}
@@ -175,7 +225,7 @@ export function RequestHistory() {
               />
             </div>
             <div className="flex-1">
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">עד תאריך</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">{t("history.dateTo")}</label>
               <input
                 type="date"
                 value={dateTo}
@@ -191,28 +241,36 @@ export function RequestHistory() {
       <div className="flex-1 p-4 pb-8 overflow-y-auto">
         <div className="max-w-2xl mx-auto space-y-4">
           {filtered.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">לא נמצאו פניות</p>
+            <p className="text-center text-muted-foreground py-12">{t("history.empty")}</p>
           ) : (
             filtered.map((entry) => {
-              const config = STATUS_CONFIG[entry.status];
+              const styles = STATUS_STYLES[entry.status];
               return (
                 <button
                   key={entry.id}
                   onClick={() => navigate(`/history/detail/${entry.id}`)}
-                  className="w-full bg-card rounded-2xl p-5 shadow-md border border-border space-y-3 hover:shadow-lg hover:border-primary/30 transition-all duration-200 text-right"
+                  className="w-full bg-card rounded-2xl p-5 shadow-md border border-border space-y-3 hover:shadow-lg hover:border-primary/30 transition-all duration-200 text-start"
                 >
-                  <LicensePlate plateNumber={entry.licensePlate} className="w-full max-w-xs mx-auto" />
-                  <div className="flex items-center justify-center gap-3">
+                  <LicensePlate plateNumber={entry.licensePlate} plateType={entry.plateType} className="w-full max-w-xs mx-auto" />
+                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
                     <span
-                      className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${config.bg} ${config.text} border ${config.border}`}
+                      className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${styles.bg} ${styles.text} border ${styles.border}`}
                     >
-                      {config.label}
+                      {t(STATUS_LABEL_KEYS[entry.status])}
+                    </span>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      {t("common.requestNumberLine", { requestNumber: entry.requestNumber })}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      {formatDate(entry.completedDate)}
+                      {formatDate(entry.completedDate, dateLocale)}
                     </span>
                   </div>
-                  {entry.notes && (
+                  {entry.status === "declined" && entry.rejectionReason && (
+                    <p className="text-sm text-foreground text-center leading-snug line-clamp-2 px-1">
+                      {entry.rejectionReason}
+                    </p>
+                  )}
+                  {entry.status !== "declined" && entry.notes && (
                     <p className="text-sm text-muted-foreground text-center truncate">
                       {entry.notes}
                     </p>

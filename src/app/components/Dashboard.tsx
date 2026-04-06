@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { FileText, FolderOpen, History, Menu } from "lucide-react";
 import { LicensePlateModal } from "./LicensePlateModal";
 import { hasOpenRequestUpdates } from "./OpenRequests";
 import { SettingsMenu } from "./SettingsMenu";
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -24,7 +26,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="size-full flex flex-col" dir="rtl">
+    <div className="size-full flex flex-col">
       {/* Header */}
       <header className="bg-primary text-primary-foreground px-6 py-4 shadow-md">
         <div className="flex items-center justify-between">
@@ -47,8 +49,8 @@ export function Dashboard() {
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl">מרכז צמיגים Kogol</h1>
-              <p className="text-sm text-primary-foreground/80">לוח בקרה ראשי</p>
+              <h1 className="text-2xl">{t("dashboard.title")}</h1>
+              <p className="text-sm text-primary-foreground/80">{t("dashboard.subtitle")}</p>
             </div>
           </div>
           <button
@@ -63,7 +65,7 @@ export function Dashboard() {
       {/* Main Content */}
       <main className="flex-1 bg-background p-6">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl text-foreground mb-8">בחר פעולה</h2>
+          <h2 className="text-2xl text-foreground mb-8">{t("dashboard.chooseAction")}</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* New Request Button */}
@@ -76,8 +78,8 @@ export function Dashboard() {
                   <FileText className="w-8 h-8 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-xl text-card-foreground mb-2">פנייה חדשה</h3>
-                  <p className="text-sm text-muted-foreground">צור פנייה חדשה למכונית</p>
+                  <h3 className="text-xl text-card-foreground mb-2">{t("dashboard.newRequest")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("dashboard.newRequestDesc")}</p>
                 </div>
               </div>
             </button>
@@ -88,7 +90,7 @@ export function Dashboard() {
               className="bg-card hover:bg-accent border border-border rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-200 group relative"
             >
               {hasUnreadUpdates && (
-                <div className="absolute top-4 left-4 flex items-center gap-1">
+                <div className="absolute top-4 start-4 flex items-center gap-1">
                   <span className="relative flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
@@ -100,8 +102,8 @@ export function Dashboard() {
                   <FolderOpen className="w-8 h-8 text-secondary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-xl text-card-foreground mb-2">פניות פתוחות</h3>
-                  <p className="text-sm text-muted-foreground">צפה בפניות הפעילות</p>
+                  <h3 className="text-xl text-card-foreground mb-2">{t("dashboard.openRequests")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("dashboard.openRequestsDesc")}</p>
                 </div>
               </div>
             </button>
@@ -116,8 +118,8 @@ export function Dashboard() {
                   <History className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-xl text-card-foreground mb-2">היסטוריית פניות</h3>
-                  <p className="text-sm text-muted-foreground">עיין בפניות קודמות</p>
+                  <h3 className="text-xl text-card-foreground mb-2">{t("dashboard.history")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("dashboard.historyDesc")}</p>
                 </div>
               </div>
             </button>

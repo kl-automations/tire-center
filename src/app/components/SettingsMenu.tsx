@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { X, Sun, Moon, LogOut, User, Globe } from "lucide-react";
 import { useTheme } from "../ThemeContext";
 
@@ -14,6 +15,7 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
 
@@ -25,13 +27,13 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50" dir="rtl">
+    <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="absolute top-0 right-0 h-full w-full max-w-sm bg-card shadow-2xl border-l border-border flex flex-col animate-in slide-in-from-right duration-200">
+      <div className="absolute top-0 end-0 h-full w-full max-w-sm bg-card shadow-2xl border-s border-border flex flex-col animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">הגדרות</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("settings.title")}</h2>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground transition-colors"
@@ -45,10 +47,10 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               <User className="w-4 h-4" />
-              <span>חשבון</span>
+              <span>{t("settings.account")}</span>
             </div>
             <div className="bg-background rounded-xl p-4 border border-border">
-              <p className="font-semibold text-foreground">משתמש מחובר</p>
+              <p className="font-semibold text-foreground">{t("settings.connectedUser")}</p>
               <p className="text-sm text-muted-foreground">admin@kogol.co.il</p>
             </div>
           </div>
@@ -57,7 +59,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-              <span>מצב תצוגה</span>
+              <span>{t("settings.displayMode")}</span>
             </div>
             <div className="bg-background rounded-xl border border-border overflow-hidden">
               <button
@@ -65,7 +67,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
                 className="w-full flex items-center justify-between px-4 py-3"
               >
                 <span className="font-semibold text-foreground">
-                  {theme === "dark" ? "מצב כהה" : "מצב בהיר"}
+                  {theme === "dark" ? t("common.darkMode") : t("common.lightMode")}
                 </span>
                 <div
                   dir="ltr"
@@ -87,7 +89,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               <Globe className="w-4 h-4" />
-              <span>שפה</span>
+              <span>{t("settings.language")}</span>
             </div>
             <div className="bg-background rounded-xl border border-border overflow-hidden divide-y divide-border">
               {LANGUAGE_OPTIONS.map((opt) => (
@@ -119,7 +121,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
             className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground py-3 rounded-xl transition-colors duration-200 font-semibold"
           >
             <LogOut className="w-5 h-5" />
-            התנתק
+            {t("settings.signOut")}
           </button>
         </div>
       </div>
