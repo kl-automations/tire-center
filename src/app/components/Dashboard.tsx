@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { FileText, FolderOpen, History, Menu } from "lucide-react";
 import { LicensePlateModal } from "./LicensePlateModal";
@@ -8,7 +8,7 @@ import { SettingsMenu } from "./SettingsMenu";
 
 export function Dashboard() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { navigate } = useNavigation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const hasUnreadUpdates = hasOpenRequestUpdates();
@@ -18,11 +18,11 @@ export function Dashboard() {
   };
 
   const handleOpenRequests = () => {
-    navigate("/open-requests");
+    navigate({ name: "open-requests" });
   };
 
   const handleHistory = () => {
-    navigate("/history");
+    navigate({ name: "history" });
   };
 
   return (

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Search } from "lucide-react";
 import { getDateLocaleForLanguage, useTheme } from "../ThemeContext";
@@ -187,7 +187,7 @@ export function RequestHistory() {
   const { t } = useTranslation();
   const { language } = useTheme();
   const dateLocale = getDateLocaleForLanguage(language);
-  const navigate = useNavigate();
+  const { navigate } = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -212,7 +212,7 @@ export function RequestHistory() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate({ name: "dashboard" })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />
@@ -272,7 +272,7 @@ export function RequestHistory() {
               return (
                 <button
                   key={entry.id}
-                  onClick={() => navigate(`/history/detail/${entry.id}`)}
+                  onClick={() => navigate({ name: "history-detail", id: entry.id })}
                   className="w-full bg-card rounded-2xl p-5 shadow-md border border-border space-y-3 hover:shadow-lg hover:border-primary/30 transition-all duration-200 text-start"
                 >
                   <LicensePlate plateNumber={entry.licensePlate} plateType={entry.plateType} className="w-full max-w-xs mx-auto" />

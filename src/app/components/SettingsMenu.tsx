@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { X, Sun, Moon, LogOut, User, Globe } from "lucide-react";
 import { useTheme } from "../ThemeContext";
@@ -16,12 +16,12 @@ const LANGUAGE_OPTIONS = [
 
 export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { navigate } = useNavigation();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
 
   const handleSignOut = () => {
     onClose();
-    navigate("/");
+    navigate({ name: "login" });
   };
 
   if (!isOpen) return null;

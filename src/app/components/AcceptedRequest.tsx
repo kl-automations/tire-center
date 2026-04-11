@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { CarVisualization } from "./CarVisualization";
@@ -49,14 +49,10 @@ function getQualityTierForPlate(_plate: string): QualityTier {
 
 export function AcceptedRequest() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const licensePlate = searchParams.get("plate") || "";
-  const plateType = (searchParams.get("type") || "civilian") as PlateType;
-  const wheelCountParam = searchParams.get("wheelCount");
-  const explicitWheelCount: VehicleWheelCount | undefined =
-    wheelCountParam === "6" ? 6 : wheelCountParam === "4" ? 4 : undefined;
-  const wheelCount = resolveVehicleWheelCount(licensePlate, explicitWheelCount);
+  const { screen, navigate } = useNavigation();
+  if (screen.name !== "accepted-request") return null;
+  const { plate: licensePlate, plateType } = screen;
+  const wheelCount = resolveVehicleWheelCount(licensePlate, undefined);
   const [spareTire, setSpareTire] = useState(
     () => "spare-tire" in getStoredAffectedWheels(licensePlate)
   );
@@ -75,6 +71,10 @@ export function AcceptedRequest() {
   const handlePopupSubmit = (wheel: string, data: WheelData) => {
     storeAffectedWheel(licensePlate, wheel, data);
     setAffectedWheels((prev) => ({ ...prev, [wheel]: data }));
+  };
+
+  const handleNavigateToCaroolCheck = () => {
+    navigate({ name: "carool-check", plate: licensePlate, plateType });
   };
 
   const handleSpareTireChange = (enabled: boolean) => {
@@ -98,7 +98,7 @@ export function AcceptedRequest() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate({ name: "dashboard" })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />
@@ -202,7 +202,7 @@ export function AcceptedRequest() {
 
           {/* Continue Button */}
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate({ name: "dashboard" })}
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-4 rounded-xl transition-colors duration-200 shadow-lg hover:shadow-xl font-semibold text-lg"
           >
             {t("common.continue")}
@@ -216,6 +216,7 @@ export function AcceptedRequest() {
         wheelPosition={popupWheel || ""}
         licensePlate={licensePlate}
         onSubmit={handlePopupSubmit}
+        onNavigateToCaroolCheck={handleNavigateToCaroolCheck}
         spareTireEnabled={spareTire}
         wheelCount={wheelCount}
       />

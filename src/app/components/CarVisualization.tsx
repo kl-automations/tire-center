@@ -137,20 +137,20 @@ function dualRearBadgeKey(position: string): "carVisualization.dualRearOuter" | 
 
 function hotspotButtonClass(isSelected: boolean, color: WheelColor): string {
   const base =
-    "absolute z-[15] border-0 p-0 cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+    "absolute z-[15] p-0 cursor-pointer transition-all duration-200 focus-visible:outline-none border border-transparent";
 
   if (isSelected) {
-    return `${base} ring-2 ring-primary ring-offset-2 ring-offset-background shadow-sm`;
+    return `${base} bg-black/30 border-black/40`;
   }
   switch (color) {
     case "green":
-      return `${base} ring-2 ring-green-500/75 ring-offset-1 ring-offset-background`;
+      return `${base} bg-green-500/30 border-green-500/50`;
     case "orange":
-      return `${base} ring-2 ring-orange-400/75 ring-offset-1 ring-offset-background`;
+      return `${base} bg-orange-400/30 border-orange-400/50`;
     case "red":
-      return `${base} ring-2 ring-destructive/85 ring-offset-1 ring-offset-background`;
+      return `${base} bg-destructive/30 border-destructive/50`;
     default:
-      return `${base} ring-1 ring-primary/40 ring-offset-1 ring-offset-background hover:ring-primary/70 hover:bg-primary/8 active:bg-primary/12`;
+      return `${base} hover:bg-black/10`;
   }
 }
 

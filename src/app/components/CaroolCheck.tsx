@@ -1,19 +1,19 @@
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 
 export function CaroolCheck() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const licensePlate = searchParams.get("plate") || "";
+  const { screen, navigate } = useNavigation();
+  if (screen.name !== "carool-check") return null;
+  const { plate: licensePlate, plateType } = screen;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate(`/request/accepted?plate=${licensePlate}`)}
+            onClick={() => navigate({ name: "accepted-request", plate: licensePlate, plateType })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />
@@ -27,7 +27,7 @@ export function CaroolCheck() {
         <p className="text-muted-foreground text-lg">{t("caroolCheck.cameraPlaceholder")}</p>
 
         <button
-          onClick={() => navigate(`/request/accepted?plate=${licensePlate}`)}
+          onClick={() => navigate({ name: "accepted-request", plate: licensePlate, plateType })}
           className="w-full max-w-md bg-primary hover:bg-primary/90 text-primary-foreground py-4 rounded-xl transition-colors duration-200 shadow-lg hover:shadow-xl font-semibold text-lg"
         >
           {t("common.continue")}

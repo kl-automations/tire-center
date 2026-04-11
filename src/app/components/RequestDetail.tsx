@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Check, X as XIcon } from "lucide-react";
 import { CarVisualization, type WheelColor } from "./CarVisualization";
@@ -176,8 +176,9 @@ function ConfirmationPopup({
 
 export function RequestDetail() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { screen, navigate } = useNavigation();
+  if (screen.name !== "request-detail") return null;
+  const { id } = screen;
   const [selectedWheel, setSelectedWheel] = useState<string | null>(null);
   const [detailWheel, setDetailWheel] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -217,7 +218,7 @@ export function RequestDetail() {
     const updated = requests.filter((r) => r.id !== request.id);
     storeRequests(updated);
     setShowConfirmation(false);
-    navigate("/open-requests");
+    navigate({ name: "open-requests" });
   };
 
   return (
@@ -226,7 +227,7 @@ export function RequestDetail() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate("/open-requests")}
+            onClick={() => navigate({ name: "open-requests" })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />

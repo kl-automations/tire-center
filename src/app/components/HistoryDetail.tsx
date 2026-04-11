@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, X as XIcon } from "lucide-react";
 import { getDateLocaleForLanguage, useTheme } from "../ThemeContext";
@@ -114,8 +114,9 @@ export function HistoryDetail() {
   const { t } = useTranslation();
   const { language } = useTheme();
   const dateLocale = getDateLocaleForLanguage(language);
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { screen, navigate } = useNavigation();
+  if (screen.name !== "history-detail") return null;
+  const { id } = screen;
   const [selectedWheel, setSelectedWheel] = useState<string | null>(null);
   const [detailWheel, setDetailWheel] = useState<string | null>(null);
 
@@ -159,7 +160,7 @@ export function HistoryDetail() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate("/history")}
+            onClick={() => navigate({ name: "history" })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />

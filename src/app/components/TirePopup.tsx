@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -22,6 +21,7 @@ interface TirePopupProps {
   wheelPosition: string;
   licensePlate: string;
   onSubmit: (wheelPosition: string, data: WheelData) => void;
+  onNavigateToCaroolCheck: () => void;
   /** Include spare tire in relocation targets (must match CarVisualization spare) */
   spareTireEnabled?: boolean;
   /** From backend; mock uses plate `123456` → 6 */
@@ -96,11 +96,11 @@ export function TirePopup({
   wheelPosition,
   licensePlate,
   onSubmit,
+  onNavigateToCaroolCheck,
   spareTireEnabled = false,
   wheelCount = 4,
 }: TirePopupProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { reasons, loading } = useReasons();
   const [mode, setMode] = useState<TireIssueMode>("replacement");
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -147,13 +147,9 @@ export function TirePopup({
       sensor: mode === "repair" ? sensor : false,
       movedToWheel: mode === "relocation" ? movedToWheel : null,
     });
-    const params = new URLSearchParams({
-      plate: licensePlate,
-      wheel: wheelPosition,
-    });
-    navigate(`/carool-check?${params.toString()}`);
     resetState();
     onClose();
+    onNavigateToCaroolCheck();
   };
 
   if (!isOpen) return null;

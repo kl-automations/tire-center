@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import type { PlateType } from "./LicensePlate";
@@ -48,16 +48,16 @@ interface LicensePlateModalProps {
 
 export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { navigate } = useNavigation();
   const [licensePlate, setLicensePlate] = useState("");
   const [plateType, setPlateType] = useState<PlateType>("civilian");
 
   const handleContinue = () => {
     if (licensePlate.trim()) {
       if (licensePlate === "12345678") {
-        navigate(`/request/declined?plate=${encodeURIComponent(licensePlate)}&type=${plateType}`);
+        navigate({ name: "declined-request", plate: licensePlate, plateType });
       } else {
-        navigate(`/request/accepted?plate=${encodeURIComponent(licensePlate)}&type=${plateType}`);
+        navigate({ name: "accepted-request", plate: licensePlate, plateType });
       }
       onClose();
     }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { Sun, Moon, Globe } from "lucide-react";
 import { useTheme } from "../ThemeContext";
@@ -11,13 +11,13 @@ export function Login() {
   const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const navigate = useNavigate();
+  const { navigate } = useNavigation();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Login attempt:", { username, password });
-    navigate("/dashboard");
+    navigate({ name: "dashboard" });
   };
 
   const cycleLanguage = () => {

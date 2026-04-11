@@ -1,11 +1,10 @@
-import { RouterProvider } from "react-router";
-import { router } from "./routes";
+import { NavigationProvider } from "./NavigationContext";
 import { ThemeProvider } from "./ThemeContext";
 
 export default function App() {
   return (
     <ThemeProvider>
-      <RouterProvider router={router} />
+      <NavigationProvider />
     </ThemeProvider>
   );
 }

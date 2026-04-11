@@ -1,28 +1,16 @@
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, ArrowRight } from "lucide-react";
 import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
-import { LicensePlate, type PlateType } from "./LicensePlate";
-
-function rejectionReasonFromParams(searchParams: URLSearchParams): string {
-  const raw = searchParams.get("reason");
-  if (raw) {
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
-    }
-  }
-  return MOCK_REJECTION_REASON_EXAMPLE;
-}
+import { LicensePlate } from "./LicensePlate";
 
 export function DeclinedRequest() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const licensePlate = searchParams.get("plate") || "";
-  const plateType = (searchParams.get("type") || "civilian") as PlateType;
-  const rejectionReason = rejectionReasonFromParams(searchParams);
+  const { screen, navigate } = useNavigation();
+  if (screen.name !== "declined-request") return null;
+
+  const { plate: licensePlate, plateType, reason } = screen;
+  const rejectionReason = reason ?? MOCK_REJECTION_REASON_EXAMPLE;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -30,7 +18,7 @@ export function DeclinedRequest() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate({ name: "dashboard" })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />
@@ -52,7 +40,7 @@ export function DeclinedRequest() {
               <AlertCircle className="w-8 h-8" />
               <h2 className="text-2xl font-semibold">{t("declinedRequest.noApproval")}</h2>
             </div>
-            
+
             <div className="bg-background rounded-lg p-6 space-y-2">
               <p className="text-muted-foreground font-semibold">{t("declinedRequest.rejectionReason")}</p>
               <p className="text-foreground text-lg leading-relaxed whitespace-pre-wrap">{rejectionReason}</p>
@@ -61,7 +49,7 @@ export function DeclinedRequest() {
 
           {/* Back Button */}
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate({ name: "dashboard" })}
             className="w-full bg-primary hover:bg-secondary text-primary-foreground py-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg font-semibold"
           >
             {t("declinedRequest.backHome")}
