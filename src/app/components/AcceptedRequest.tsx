@@ -5,7 +5,8 @@ import { ArrowRight } from "lucide-react";
 import { CarVisualization } from "./CarVisualization";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 import { TirePopup, type WheelData } from "./TirePopup";
-import { getVehicleWheelCountFromPlate } from "../vehicleWheelLayout";
+import { resolveVehicleWheelCount, type VehicleWheelCount } from "../vehicleWheelLayout";
+import { type QualityTier, translateQualityTier } from "../qualityTier";
 
 function getStoredAffectedWheels(plate: string): Record<string, WheelData> {
   try {
@@ -32,13 +33,30 @@ function getRequestNumberForPlate(_plate: string): string {
   return "10048239";
 }
 
+/** Load index + speed rating e.g. 91V — replace with API later */
+function getFrontTireProfileForPlate(_plate: string): string {
+  return "91V";
+}
+
+function getRearTireProfileForPlate(_plate: string): string {
+  return "94W";
+}
+
+/** Quality tier — one of סיני / משודרג / פרימיום; replace with API later */
+function getQualityTierForPlate(_plate: string): QualityTier {
+  return "premium";
+}
+
 export function AcceptedRequest() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const licensePlate = searchParams.get("plate") || "";
   const plateType = (searchParams.get("type") || "civilian") as PlateType;
-  const wheelCount = getVehicleWheelCountFromPlate(licensePlate);
+  const wheelCountParam = searchParams.get("wheelCount");
+  const explicitWheelCount: VehicleWheelCount | undefined =
+    wheelCountParam === "6" ? 6 : wheelCountParam === "4" ? 4 : undefined;
+  const wheelCount = resolveVehicleWheelCount(licensePlate, explicitWheelCount);
   const [spareTire, setSpareTire] = useState(
     () => "spare-tire" in getStoredAffectedWheels(licensePlate)
   );
@@ -111,6 +129,11 @@ export function AcceptedRequest() {
                     requestNumber: getRequestNumberForPlate(licensePlate),
                   })}
                 </p>
+                <p className="text-center text-sm text-muted-foreground tabular-nums">
+                  {t("common.qualityLine", {
+                    quality: translateQualityTier(t, getQualityTierForPlate(licensePlate)),
+                  })}
+                </p>
               </div>
             )}
           </div>
@@ -127,6 +150,8 @@ export function AcceptedRequest() {
                 affectedWheels={new Set(Object.keys(affectedWheels))}
                 frontTireSize="205/55R16"
                 rearTireSize="225/45R17"
+                frontTireProfile={getFrontTireProfileForPlate(licensePlate)}
+                rearTireProfile={getRearTireProfileForPlate(licensePlate)}
                 showSpareTire={spareTire}
                 wheelCount={wheelCount}
                 plateType={plateType}

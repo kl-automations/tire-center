@@ -10,7 +10,13 @@
     "newRequest": "تقرير جديد",
     "spareTire": "عجلة الاحتياط",
     "frontAlignment": "ضبط الزوايا الأمامية",
-    "requestNumberLine": "رقم الطلب: {{requestNumber}}"
+    "requestNumberLine": "رقم الطلب: {{requestNumber}}",
+    "qualityLine": "الجودة: {{quality}}",
+    "qualityTier": {
+      "chinese": "اقتصادي",
+      "upgraded": "محسّن",
+      "premium": "ممتاز"
+    }
   },
   "wheels": {
     "frontRight": "أمامي أيمن",
@@ -112,7 +118,9 @@
   },
   "carVisualization": {
     "front": "▲ أمامي",
-    "rear": "▼ خلفي"
+    "rear": "▼ خلفي",
+    "dualRearOuter": "خارجي",
+    "dualRearInner": "داخلي"
   },
   "tirePopup": {
     "issueType": "نوع البلاغ",

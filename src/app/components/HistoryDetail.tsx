@@ -8,6 +8,7 @@ import { LicensePlate } from "./LicensePlate";
 import { STATUS_LABEL_KEYS, STATUS_STYLES, type WheelWork } from "./OpenRequests";
 import { getHistoryEntry } from "./RequestHistory";
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
+import { translateQualityTier } from "../qualityTier";
 
 const WHEEL_POS_KEYS: Record<string, string> = {
   "front-right": "wheels.frontRight",
@@ -174,7 +175,7 @@ export function HistoryDetail() {
           {/* License Plate */}
           <LicensePlate plateNumber={entry.licensePlate} plateType={entry.plateType} className="w-full max-w-md mx-auto" />
 
-          {/* Status + request number + date */}
+          {/* Status + request number + optional quality + date */}
           <div className="flex flex-col items-center gap-3">
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
               <span
@@ -186,6 +187,11 @@ export function HistoryDetail() {
                 {t("common.requestNumberLine", { requestNumber: entry.requestNumber })}
               </span>
             </div>
+            {entry.quality != null && entry.quality !== "" && (
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {t("common.qualityLine", { quality: translateQualityTier(t, entry.quality) })}
+              </span>
+            )}
             <span className="text-sm text-muted-foreground">
               {entry.status === "declined"
                 ? t("historyDetail.rejectedOnPrefix")
@@ -217,6 +223,8 @@ export function HistoryDetail() {
                 wheelColors={wheelColors}
                 frontTireSize={entry.frontTireSize}
                 rearTireSize={entry.rearTireSize}
+                frontTireProfile={entry.frontTireProfile}
+                rearTireProfile={entry.rearTireProfile}
                 showSpareTire={Boolean(entry.wheels["spare-tire"])}
                 wheelCount={wheelCount}
                 plateType={entry.plateType}

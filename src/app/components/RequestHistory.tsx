@@ -7,6 +7,7 @@ import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 import { STATUS_LABEL_KEYS, STATUS_STYLES, type RequestStatus, type WheelWork } from "./OpenRequests";
 import type { VehicleWheelCount } from "../vehicleWheelLayout";
+import type { QualityTier } from "../qualityTier";
 
 export interface HistoryEntry {
   id: string;
@@ -20,6 +21,9 @@ export interface HistoryEntry {
   completedDate: string;
   frontTireSize: string;
   rearTireSize: string;
+  frontTireProfile?: string;
+  rearTireProfile?: string;
+  quality?: QualityTier;
   frontAlignment: boolean;
   wheelCount?: VehicleWheelCount;
   wheels: Record<string, WheelWork>;
@@ -36,6 +40,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-04-03",
     frontTireSize: "205/55R16",
     rearTireSize: "205/55R16",
+    frontTireProfile: "91V",
+    rearTireProfile: "91V",
+    quality: "premium",
     frontAlignment: true,
     wheels: {
       "front-left": { reason: "סיבה 1", puncture: true, balancing: true, sensor: false, approval: "full" },
@@ -52,6 +59,8 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-04-02",
     frontTireSize: "225/45R17",
     rearTireSize: "225/45R17",
+    frontTireProfile: "94W",
+    rearTireProfile: "94W",
     frontAlignment: false,
     wheels: {
       "rear-left": { reason: "סיבה 4", puncture: true, balancing: false, sensor: true, approval: "puncture-only" },
@@ -68,6 +77,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-03-28",
     frontTireSize: "205/55R16",
     rearTireSize: "205/55R16",
+    frontTireProfile: "91V",
+    rearTireProfile: "91V",
+    quality: "premium",
     frontAlignment: false,
     wheels: {
       "front-left": { reason: "סיבה 0", puncture: false, balancing: true, sensor: false, approval: "full" },
@@ -83,6 +95,8 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-03-25",
     frontTireSize: "195/65R15",
     rearTireSize: "195/65R15",
+    frontTireProfile: "91H",
+    rearTireProfile: "91H",
     frontAlignment: false,
     wheels: {
       "front-right": { reason: "סיבה 6", puncture: true, balancing: true, sensor: true, approval: "none" },
@@ -97,6 +111,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-03-20",
     frontTireSize: "215/60R16",
     rearTireSize: "215/60R16",
+    frontTireProfile: "96H",
+    rearTireProfile: "96H",
+    quality: "upgraded",
     frontAlignment: true,
     wheels: {
       "front-left": { reason: "סיבה 2", puncture: false, balancing: true, sensor: false, approval: "full" },
@@ -113,6 +130,8 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-03-15",
     frontTireSize: "205/55R16",
     rearTireSize: "225/45R17",
+    frontTireProfile: "91V",
+    rearTireProfile: "94W",
     frontAlignment: false,
     wheels: {
       "front-left": { reason: "סיבה 5", puncture: true, balancing: true, sensor: false, approval: "full" },
@@ -128,6 +147,8 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-03-10",
     frontTireSize: "195/65R15",
     rearTireSize: "195/65R15",
+    frontTireProfile: "91H",
+    rearTireProfile: "91H",
     frontAlignment: true,
     wheels: {
       "front-right": { reason: "סיבה 0", puncture: false, balancing: true, sensor: true, approval: "full" },
@@ -144,6 +165,9 @@ const MOCK_HISTORY: HistoryEntry[] = [
     completedDate: "2026-04-06",
     frontTireSize: "235/75R17",
     rearTireSize: "235/75R17",
+    frontTireProfile: "104S",
+    rearTireProfile: "104S",
+    quality: "premium",
     frontAlignment: false,
     wheelCount: 6,
     wheels: {

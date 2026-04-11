@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight, Search } from "lucide-react";
 import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
 import type { VehicleWheelCount } from "../vehicleWheelLayout";
+import type { QualityTier } from "../qualityTier";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 
 export type RequestStatus = "waiting" | "approved" | "partly-approved" | "declined";
@@ -32,6 +33,11 @@ export interface OpenRequest {
   hasUpdate: boolean;
   frontTireSize: string;
   rearTireSize: string;
+  /** Load index + speed rating e.g. 91V — from backend */
+  frontTireProfile?: string;
+  rearTireProfile?: string;
+  /** Tire quality tier — from backend */
+  quality?: QualityTier;
   frontAlignment: boolean;
   /** From backend; omit = 4 wheels (or derive from plate in UI) */
   wheelCount?: VehicleWheelCount;
@@ -80,6 +86,9 @@ const MOCK_REQUESTS: OpenRequest[] = [
     submittedDate: "2026-04-01",
     frontTireSize: "205/55R16",
     rearTireSize: "205/55R16",
+    frontTireProfile: "91V",
+    rearTireProfile: "91V",
+    quality: "chinese",
     frontAlignment: false,
     wheels: {
       "front-left": { reason: "סיבה 1", puncture: true, balancing: false, sensor: false, approval: "none" },
@@ -96,6 +105,8 @@ const MOCK_REQUESTS: OpenRequest[] = [
     submittedDate: "2026-04-02",
     frontTireSize: "225/45R17",
     rearTireSize: "255/40R17",
+    frontTireProfile: "94W",
+    rearTireProfile: "99Y",
     frontAlignment: true,
     wheels: {
       "front-left": { reason: "סיבה 2", puncture: false, balancing: true, sensor: true, approval: "full" },
@@ -112,6 +123,8 @@ const MOCK_REQUESTS: OpenRequest[] = [
     submittedDate: "2026-04-03",
     frontTireSize: "195/65R15",
     rearTireSize: "195/65R15",
+    frontTireProfile: "91H",
+    rearTireProfile: "91H",
     frontAlignment: false,
     wheels: {
       "front-right": { reason: "סיבה 4", puncture: true, balancing: true, sensor: false, approval: "full" },
@@ -130,6 +143,9 @@ const MOCK_REQUESTS: OpenRequest[] = [
     submittedDate: "2026-04-04",
     frontTireSize: "205/55R16",
     rearTireSize: "225/45R17",
+    frontTireProfile: "91V",
+    rearTireProfile: "94W",
+    quality: "upgraded",
     frontAlignment: false,
     wheels: {
       "front-left": { reason: "סיבה 6", puncture: true, balancing: true, sensor: true, approval: "none" },
@@ -145,6 +161,8 @@ const MOCK_REQUESTS: OpenRequest[] = [
     submittedDate: "2026-04-05",
     frontTireSize: "215/60R16",
     rearTireSize: "215/60R16",
+    frontTireProfile: "96H",
+    rearTireProfile: "96H",
     frontAlignment: true,
     wheels: {
       "front-left": { reason: "סיבה 0", puncture: false, balancing: true, sensor: false, approval: "none" },
@@ -161,6 +179,9 @@ const MOCK_REQUESTS: OpenRequest[] = [
     submittedDate: "2026-04-06",
     frontTireSize: "235/75R17",
     rearTireSize: "235/75R17",
+    frontTireProfile: "104S",
+    rearTireProfile: "104S",
+    quality: "premium",
     frontAlignment: false,
     wheelCount: 6,
     wheels: {

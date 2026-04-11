@@ -13,6 +13,7 @@ import {
   type WheelWork,
 } from "./OpenRequests";
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
+import { translateQualityTier } from "../qualityTier";
 
 const WHEEL_POS_KEYS: Record<string, string> = {
   "front-right": "wheels.frontRight",
@@ -241,16 +242,23 @@ export function RequestDetail() {
           {/* License Plate */}
           <LicensePlate plateNumber={request.licensePlate} plateType={request.plateType} className="w-full max-w-md mx-auto" />
 
-          {/* Status + request number */}
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-            <span
-              className={`inline-block px-4 py-2 rounded-full text-base font-semibold ${statusStyles.bg} ${statusStyles.text} border ${statusStyles.border}`}
-            >
-              {t(STATUS_LABEL_KEYS[request.status])}
-            </span>
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {t("common.requestNumberLine", { requestNumber: request.requestNumber })}
-            </span>
+          {/* Status + request number + optional quality */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <span
+                className={`inline-block px-4 py-2 rounded-full text-base font-semibold ${statusStyles.bg} ${statusStyles.text} border ${statusStyles.border}`}
+              >
+                {t(STATUS_LABEL_KEYS[request.status])}
+              </span>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {t("common.requestNumberLine", { requestNumber: request.requestNumber })}
+              </span>
+            </div>
+            {request.quality != null && request.quality !== "" && (
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {t("common.qualityLine", { quality: translateQualityTier(t, request.quality) })}
+              </span>
+            )}
           </div>
 
           {request.status === "declined" && request.rejectionReason && (
@@ -276,6 +284,8 @@ export function RequestDetail() {
                 wheelColors={wheelColors}
                 frontTireSize={request.frontTireSize}
                 rearTireSize={request.rearTireSize}
+                frontTireProfile={request.frontTireProfile}
+                rearTireProfile={request.rearTireProfile}
                 showSpareTire={Boolean(wheels["spare-tire"])}
                 wheelCount={wheelCount}
                 plateType={request.plateType}

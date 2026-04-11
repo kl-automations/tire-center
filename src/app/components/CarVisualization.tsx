@@ -3,14 +3,18 @@ import { useTranslation } from "react-i18next";
 import type { PlateType } from "./LicensePlate";
 import type { VehicleWheelCount } from "../vehicleWheelLayout";
 
-/** Unicode vehicle emojis are side/profile view; there is no true top-down glyph. */
-function vehicleEmoji(plateType: PlateType, isSixWheel: boolean): string {
-  if (isSixWheel) return "🚛";
-  if (plateType === "police") return "🚔";
-  return "🚘";
-}
-
 export type WheelColor = "green" | "orange" | "red" | "default";
+
+/** Line art + body fill for tire SVGs — black/white normally, full red treatment when `color === "red"`. */
+function tireGraphicPalette(color: WheelColor): { ink: string; body: string } {
+  if (color === "red") {
+    return {
+      ink: "var(--destructive)",
+      body: "color-mix(in srgb, var(--destructive) 18%, white)",
+    };
+  }
+  return { ink: "#000000", body: "#ffffff" };
+}
 
 interface CarVisualizationProps {
   onWheelClick: (wheelPosition: string) => void;
@@ -19,90 +23,223 @@ interface CarVisualizationProps {
   wheelColors?: Record<string, WheelColor>;
   frontTireSize: string;
   rearTireSize: string;
+  /** Load/speed index e.g. 91V — shown after size when set */
+  frontTireProfile?: string;
+  rearTireProfile?: string;
   /** When true, a fifth wheel (spare) is shown centered between the axles */
   showSpareTire?: boolean;
   /** 4 = standard; 6 = dual rear with inner wheels (from backend) */
   wheelCount?: VehicleWheelCount;
-  /** Civilian / military → 🚘; police → 🚔; 6-wheel → 🚛 */
+  /** Reserved for future plate-driven visuals */
   plateType?: PlateType;
 }
 
-function TireIcon({ className }: { className?: string }) {
+type RoadHotspot = {
+  position: string;
+  labelKey: string;
+  style: React.CSSProperties;
+  round?: boolean;
+};
+
+const REAR_ROW = { top: "62.59%", width: "12%", height: "20.6%" } as const;
+
+/** Front + single rear axle (4-wheel) — rear coords match /3.png. */
+const ROAD_WHEEL_HOTSPOTS_4: RoadHotspot[] = [
+  { position: "front-left", labelKey: "wheels.frontLeft", style: { top: "15.1%", left: "9.3%", width: "12%", height: "20.6%" } },
+  { position: "front-right", labelKey: "wheels.frontRight", style: { top: "15.1%", right: "8.9%", width: "12%", height: "20.6%" } },
+  { position: "rear-left", labelKey: "wheels.rearLeft", style: { ...REAR_ROW, left: "12.8%" } },
+  { position: "rear-right", labelKey: "wheels.rearRight", style: { ...REAR_ROW, right: "9.8%" } },
+];
+
+/**
+ * 6-wheel: outer pair at the sides; inner pair inboard (same geometry 4-wheel used for rears).
+ * Position ids stay tied to semantics (rear-left = outer left, etc.).
+ */
+const ROAD_WHEEL_HOTSPOTS_6: RoadHotspot[] = [
+  { position: "front-left", labelKey: "wheels.frontLeft", style: { top: "15.1%", left: "9.3%", width: "12%", height: "20.6%" } },
+  { position: "front-right", labelKey: "wheels.frontRight", style: { top: "15.1%", right: "8.9%", width: "12%", height: "20.6%" } },
+  { position: "rear-left", labelKey: "wheels.rearLeft", style: { ...REAR_ROW, left: "-3%" } },
+  { position: "rear-right", labelKey: "wheels.rearRight", style: { ...REAR_ROW, right: "-5%" } },
+  { position: "rear-left-inner", labelKey: "wheels.rearLeftInner", style: { ...REAR_ROW, left: "12.8%" } },
+  { position: "rear-right-inner", labelKey: "wheels.rearRightInner", style: { ...REAR_ROW, right: "9.8%" } },
+];
+
+function roadHotspotsFor(wheelCount: VehicleWheelCount): RoadHotspot[] {
+  return wheelCount === 6 ? ROAD_WHEEL_HOTSPOTS_6 : ROAD_WHEEL_HOTSPOTS_4;
+}
+
+/** Spare — when showSpareTire (SVG below body image in spare area). */
+const SPARE_HOTSPOT = {
+  position: "spare-tire",
+  labelKey: "wheels.spareTire",
+  style: { top: "65.38%", left: "35.3%", width: "34%", height: "20.3%" },
+  round: true,
+} as const;
+
+/**
+ * Single top-down body image for every vehicle — 4- and 6-wheel use the same asset and layout;
+ * only the clickable tire list adds inner rear positions when `wheelCount === 6`.
+ */
+export const CAR_TOPDOWN_BODY_IMAGE_SRC = "/3.png";
+
+function formatTireSizeLine(size: string, profile?: string): string {
+  const p = profile?.trim();
+  return p ? `${size} · ${p}` : size;
+}
+
+/** Top-down road tire — line-art tread; fills each hotspot cell. */
+function TopDownRoadTireGraphic({ className, color = "default" }: { className?: string; color?: WheelColor }) {
+  const { ink, body } = tireGraphicPalette(color);
   return (
-    <svg
-      className={className}
-      viewBox="0 0 40 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Tire body */}
-      <rect x="2" y="2" width="36" height="60" rx="10" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="3" />
-      {/* Center groove */}
-      <line x1="20" y1="8" x2="20" y2="56" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      {/* Tread grooves - angled left */}
-      <line x1="4" y1="14" x2="18" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="4" y1="24" x2="18" y2="20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="4" y1="34" x2="18" y2="30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="4" y1="44" x2="18" y2="40" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="4" y1="54" x2="18" y2="50" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      {/* Tread grooves - angled right */}
-      <line x1="22" y1="10" x2="36" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="22" y1="20" x2="36" y2="24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="22" y1="30" x2="36" y2="34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="22" y1="40" x2="36" y2="44" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="22" y1="50" x2="36" y2="54" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg className={className} viewBox="0 0 64 100" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+      <rect x="3" y="3" width="58" height="94" rx="11" fill={body} stroke={ink} strokeWidth="2.25" />
+      <line x1="32" y1="9" x2="32" y2="91" stroke={ink} strokeWidth="1.5" strokeLinecap="round" />
+      {[16, 24, 32, 40, 48, 56, 64, 72, 80].map((y) => (
+        <React.Fragment key={y}>
+          <line x1="7" y1={y} x2="22" y2={y - 3} stroke={ink} strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="42" y1={y - 3} x2="57" y2={y} stroke={ink} strokeWidth="1.2" strokeLinecap="round" />
+        </React.Fragment>
+      ))}
     </svg>
   );
 }
 
-const COLOR_STYLES: Record<WheelColor, { border: string; icon: string; label: string }> = {
-  green: {
-    border: "border-green-500 bg-green-50 dark:bg-green-900/30 shadow-md",
-    icon: "text-green-600 dark:text-green-400",
-    label: "text-green-700 dark:text-green-300",
-  },
-  orange: {
-    border: "border-orange-400 bg-orange-50 dark:bg-orange-900/30 shadow-md",
-    icon: "text-orange-500 dark:text-orange-400",
-    label: "text-orange-600 dark:text-orange-300",
-  },
-  red: {
-    border: "border-destructive bg-destructive/10 shadow-md",
-    icon: "text-destructive",
-    label: "text-destructive",
-  },
-  default: {
-    border: "border-border bg-card hover:border-primary/50 hover:bg-muted",
-    icon: "text-foreground/70",
-    label: "text-muted-foreground",
-  },
-};
+/** Spare wheel face (top-down). */
+function TopDownSpareTireGraphic({ className, color = "default" }: { className?: string; color?: WheelColor }) {
+  const { ink, body } = tireGraphicPalette(color);
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="44" fill={body} stroke={ink} strokeWidth="2.25" />
+      <circle cx="50" cy="50" r="30" stroke={ink} strokeWidth="1.5" />
+      <circle cx="50" cy="50" r="14" stroke={ink} strokeWidth="1.2" />
+      {[0, 60, 120, 180, 240, 300].map((deg) => {
+        const r = (deg * Math.PI) / 180;
+        return (
+          <circle
+            key={deg}
+            cx={50 + 21 * Math.cos(r)}
+            cy={50 + 21 * Math.sin(r)}
+            r="2.2"
+            fill={ink}
+          />
+        );
+      })}
+    </svg>
+  );
+}
 
-function WheelButton({
-  label,
-  isSelected,
-  color = "default",
-  onClick,
+/** Short badge on diagram for dual-rear 6-wheel (outer vs inner pair). */
+function dualRearBadgeKey(position: string): "carVisualization.dualRearOuter" | "carVisualization.dualRearInner" | null {
+  if (position === "rear-left" || position === "rear-right") return "carVisualization.dualRearOuter";
+  if (position === "rear-left-inner" || position === "rear-right-inner") return "carVisualization.dualRearInner";
+  return null;
+}
+
+function hotspotButtonClass(isSelected: boolean, color: WheelColor): string {
+  const base =
+    "absolute z-[15] border-0 p-0 cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
+  if (isSelected) {
+    return `${base} ring-2 ring-primary ring-offset-2 ring-offset-background shadow-sm`;
+  }
+  switch (color) {
+    case "green":
+      return `${base} ring-2 ring-green-500/75 ring-offset-1 ring-offset-background`;
+    case "orange":
+      return `${base} ring-2 ring-orange-400/75 ring-offset-1 ring-offset-background`;
+    case "red":
+      return `${base} ring-2 ring-destructive/85 ring-offset-1 ring-offset-background`;
+    default:
+      return `${base} ring-1 ring-primary/40 ring-offset-1 ring-offset-background hover:ring-primary/70 hover:bg-primary/8 active:bg-primary/12`;
+  }
+}
+
+/** Top-down car + tires — identical shell for 4- and 6-wheel; `wheelCount` only extends road hotspots. */
+function VehicleTopDownDiagram({
+  onWheelClick,
+  selectedWheel,
+  getColor,
+  showSpareTire,
+  wheelCount,
 }: {
-  label: string;
-  isSelected: boolean;
-  color?: WheelColor;
-  onClick: () => void;
+  onWheelClick: (wheelPosition: string) => void;
+  selectedWheel?: string | null;
+  getColor: (pos: string) => WheelColor;
+  showSpareTire: boolean;
+  wheelCount: VehicleWheelCount;
 }) {
-  const styles = isSelected
-    ? { border: "border-primary dark:border-blue-400 bg-primary/10 dark:bg-blue-400/15 shadow-md scale-105", icon: "text-primary dark:text-blue-400", label: "text-primary dark:text-blue-400" }
-    : COLOR_STYLES[color];
+  const { t } = useTranslation();
+
+  React.useEffect(() => {
+    const img = new Image();
+    img.src = CAR_TOPDOWN_BODY_IMAGE_SRC;
+  }, []);
+
+  const roadHotspots = roadHotspotsFor(wheelCount);
+  const hotspots = showSpareTire ? [...roadHotspots, SPARE_HOTSPOT] : roadHotspots;
 
   return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center gap-2 px-5 py-4 rounded-2xl border-2 transition-all duration-200 ${styles.border}`}
-    >
-      <TireIcon className={`w-12 h-12 ${styles.icon}`} />
-      <span className={`text-xs sm:text-sm font-semibold text-center whitespace-normal max-w-[10rem] leading-tight ${styles.label}`}>
-        {label}
-      </span>
-    </button>
+    <div className="relative w-full max-w-md mx-auto aspect-[1600/2686] select-none">
+      <div className="absolute inset-0 bg-background">
+        {/* Tire vectors — under body overlay */}
+        {roadHotspots.map(({ position, style }) => (
+          <div
+            key={`tire-${position}`}
+            className="pointer-events-none absolute z-[1]"
+            style={style}
+          >
+            <TopDownRoadTireGraphic className="h-full w-full" color={getColor(position)} />
+          </div>
+        ))}
+
+        <img
+          src={CAR_TOPDOWN_BODY_IMAGE_SRC}
+          alt=""
+          className="absolute inset-0 z-[5] h-full w-full object-contain pointer-events-none"
+          draggable={false}
+        />
+
+        {wheelCount === 6 &&
+          roadHotspots.map(({ position, style }) => {
+            const badgeKey = dualRearBadgeKey(position);
+            if (!badgeKey) return null;
+            return (
+              <div
+                key={`dual-badge-${position}`}
+                className="pointer-events-none absolute z-[12] flex items-end justify-center pb-1"
+                style={style}
+              >
+                <span
+                  className="max-w-[min(100%,5.5rem)] text-center text-[9px] sm:text-[10px] font-bold leading-tight px-1.5 py-0.5 rounded-md bg-background/95 text-foreground border border-border/80 shadow-sm backdrop-blur-[2px]"
+                  aria-hidden
+                >
+                  {t(badgeKey)}
+                </span>
+              </div>
+            );
+          })}
+
+        {showSpareTire && (
+          <div
+            className="pointer-events-none absolute z-[10] overflow-hidden rounded-full"
+            style={SPARE_HOTSPOT.style}
+          >
+            <TopDownSpareTireGraphic className="h-full w-full" color={getColor("spare-tire")} />
+          </div>
+        )}
+
+        {hotspots.map(({ position, labelKey, style, round }) => (
+          <button
+            key={position}
+            type="button"
+            style={style}
+            onClick={() => onWheelClick(position)}
+            className={`${hotspotButtonClass(selectedWheel === position, getColor(position))} ${round ? "rounded-full" : "rounded-xl"}`}
+            aria-label={t(labelKey)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -113,12 +250,13 @@ export function CarVisualization({
   wheelColors = {},
   frontTireSize,
   rearTireSize,
+  frontTireProfile,
+  rearTireProfile,
   showSpareTire = false,
   wheelCount = 4,
   plateType = "civilian",
 }: CarVisualizationProps) {
   const { t } = useTranslation();
-  const isSixWheel = wheelCount === 6;
   const getColor = (pos: string): WheelColor => {
     if (wheelColors[pos]) return wheelColors[pos];
     if (affectedWheels.has(pos)) return "red";
@@ -133,95 +271,17 @@ export function CarVisualization({
           {t("carVisualization.front")}
         </span>
         <span dir="ltr" className="text-sm font-bold text-foreground bg-muted px-3 py-0.5 rounded-full">
-          {frontTireSize}
+          {formatTireSizeLine(frontTireSize, frontTireProfile)}
         </span>
       </div>
 
-      {/* Front wheels */}
-      <div className="flex gap-10 justify-center">
-        <WheelButton
-          label={t("wheels.frontRight")}
-          isSelected={selectedWheel === "front-right"}
-          color={getColor("front-right")}
-          onClick={() => onWheelClick("front-right")}
-        />
-        <WheelButton
-          label={t("wheels.frontLeft")}
-          isSelected={selectedWheel === "front-left"}
-          color={getColor("front-left")}
-          onClick={() => onWheelClick("front-left")}
-        />
-      </div>
-
-      {/* Side/profile emoji, natural orientation (no rotate — avoids “sideways” look). */}
-      <div
-        className="text-7xl leading-none select-none my-1 inline-flex items-center justify-center"
-        role="img"
-        aria-hidden
-      >
-        {vehicleEmoji(plateType, isSixWheel)}
-      </div>
-
-      {/* Spare tire — centered between axles */}
-      {showSpareTire && (
-        <div className="flex justify-center w-full py-1">
-          <WheelButton
-            label={t("wheels.spareTire")}
-            isSelected={selectedWheel === "spare-tire"}
-            color={getColor("spare-tire")}
-            onClick={() => onWheelClick("spare-tire")}
-          />
-        </div>
-      )}
-
-      {/* Rear wheels — dual row when 6-wheel (inner + outer per side) */}
-      {isSixWheel ? (
-        <div className="flex flex-col items-center gap-3 w-full">
-          <div className="flex gap-8 sm:gap-10 justify-center flex-wrap">
-            <WheelButton
-              label={t("wheels.rearRight")}
-              isSelected={selectedWheel === "rear-right"}
-              color={getColor("rear-right")}
-              onClick={() => onWheelClick("rear-right")}
-            />
-            <WheelButton
-              label={t("wheels.rearLeft")}
-              isSelected={selectedWheel === "rear-left"}
-              color={getColor("rear-left")}
-              onClick={() => onWheelClick("rear-left")}
-            />
-          </div>
-          <div className="flex gap-8 sm:gap-10 justify-center flex-wrap">
-            <WheelButton
-              label={t("wheels.rearRightInner")}
-              isSelected={selectedWheel === "rear-right-inner"}
-              color={getColor("rear-right-inner")}
-              onClick={() => onWheelClick("rear-right-inner")}
-            />
-            <WheelButton
-              label={t("wheels.rearLeftInner")}
-              isSelected={selectedWheel === "rear-left-inner"}
-              color={getColor("rear-left-inner")}
-              onClick={() => onWheelClick("rear-left-inner")}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-10 justify-center">
-          <WheelButton
-            label={t("wheels.rearRight")}
-            isSelected={selectedWheel === "rear-right"}
-            color={getColor("rear-right")}
-            onClick={() => onWheelClick("rear-right")}
-          />
-          <WheelButton
-            label={t("wheels.rearLeft")}
-            isSelected={selectedWheel === "rear-left"}
-            color={getColor("rear-left")}
-            onClick={() => onWheelClick("rear-left")}
-          />
-        </div>
-      )}
+      <VehicleTopDownDiagram
+        onWheelClick={onWheelClick}
+        selectedWheel={selectedWheel}
+        getColor={getColor}
+        showSpareTire={showSpareTire}
+        wheelCount={wheelCount}
+      />
 
       {/* Rear label */}
       <div className="flex flex-col items-center gap-1">
@@ -229,7 +289,7 @@ export function CarVisualization({
           {t("carVisualization.rear")}
         </span>
         <span dir="ltr" className="text-sm font-bold text-foreground bg-muted px-3 py-0.5 rounded-full">
-          {rearTireSize}
+          {formatTireSizeLine(rearTireSize, rearTireProfile)}
         </span>
       </div>
     </div>

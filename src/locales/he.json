@@ -10,7 +10,13 @@
     "newRequest": "דיווח חדש",
     "spareTire": "גלגל רזרבי",
     "frontAlignment": "כיוון פרונט",
-    "requestNumberLine": "מספר פנייה: {{requestNumber}}"
+    "requestNumberLine": "מספר פנייה: {{requestNumber}}",
+    "qualityLine": "איכות: {{quality}}",
+    "qualityTier": {
+      "chinese": "סיני",
+      "upgraded": "משודרג",
+      "premium": "פרימיום"
+    }
   },
   "wheels": {
     "frontRight": "ימין קדמי",
@@ -112,7 +118,9 @@
   },
   "carVisualization": {
     "front": "▲ קדמי",
-    "rear": "▼ אחורי"
+    "rear": "▼ אחורי",
+    "dualRearOuter": "חיצוני",
+    "dualRearInner": "פנימי"
   },
   "tirePopup": {
     "issueType": "סוג דיווח",

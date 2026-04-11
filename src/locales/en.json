@@ -10,7 +10,13 @@
     "newRequest": "New Report",
     "spareTire": "Spare tire",
     "frontAlignment": "Front Alignment",
-    "requestNumberLine": "Report no.: {{requestNumber}}"
+    "requestNumberLine": "Report no.: {{requestNumber}}",
+    "qualityLine": "Quality: {{quality}}",
+    "qualityTier": {
+      "chinese": "Economy",
+      "upgraded": "Upgraded",
+      "premium": "Premium"
+    }
   },
   "wheels": {
     "frontRight": "Front Right",
@@ -112,7 +118,9 @@
   },
   "carVisualization": {
     "front": "▲ Front",
-    "rear": "▼ Rear"
+    "rear": "▼ Rear",
+    "dualRearOuter": "Outer",
+    "dualRearInner": "Inner"
   },
   "tirePopup": {
     "issueType": "Issue type",
