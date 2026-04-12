@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
-import { CarVisualization } from "./CarVisualization";
+import { AxlesDiagram } from "./AxlesDiagram";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 import { TirePopup, type WheelData } from "./TirePopup";
-import { resolveVehicleWheelCount, type VehicleWheelCount } from "../vehicleWheelLayout";
+import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 import { type QualityTier, translateQualityTier } from "../qualityTier";
 
 function getStoredAffectedWheels(plate: string): Record<string, WheelData> {
@@ -51,7 +51,7 @@ export function AcceptedRequest() {
   const { t } = useTranslation();
   const { screen, navigate } = useNavigation();
   if (screen.name !== "accepted-request") return null;
-  const { plate: licensePlate, plateType } = screen;
+  const { plate: licensePlate, plateType, mileage } = screen;
   const wheelCount = resolveVehicleWheelCount(licensePlate, undefined);
   const [spareTire, setSpareTire] = useState(
     () => "spare-tire" in getStoredAffectedWheels(licensePlate)
@@ -95,107 +95,96 @@ export function AcceptedRequest() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="bg-primary p-4 shadow-md">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
+      <div className="bg-primary px-4 py-2.5 shadow-md">
+        <div className="flex items-center justify-between">
           <button
             onClick={() => navigate({ name: "dashboard" })}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
-            <ArrowRight className="w-6 h-6" />
+            <ArrowRight className="w-5 h-5" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">{t("acceptedRequest.title")}</h1>
-          <div className="w-6" /> {/* Spacer for alignment */}
+          <h1 className="text-base text-primary-foreground font-semibold">{t("acceptedRequest.title")}</h1>
+          <div className="w-5" />
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-4 pb-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* License Plate Display */}
-          <div className="space-y-4">
-            <LicensePlate plateNumber={licensePlate} plateType={plateType} className="w-full max-w-md mx-auto" />
+      <div className="flex-1 px-3 py-2 overflow-y-auto">
+        <div className="space-y-2">
+
+          {/* License Plate */}
+          <LicensePlate plateNumber={licensePlate} plateType={plateType} className="max-w-[260px] mx-auto" />
+
+          {/* Info chips — single row */}
+          <div className="flex gap-1.5">
             {plateType === "civilian" && (
-              <div className="w-full max-w-lg mx-auto rounded-2xl border border-border bg-card px-6 py-4 shadow-sm space-y-2">
-                <p
-                  className="text-center text-xl sm:text-2xl font-semibold text-foreground"
-                  aria-live="polite"
-                >
-                  {t("acceptedRequest.identified", {
-                    customerName: getCustomerNameForPlate(licensePlate),
-                  })}
-                </p>
-                <p className="text-center text-sm text-muted-foreground tabular-nums">
-                  {t("common.requestNumberLine", {
-                    requestNumber: getRequestNumberForPlate(licensePlate),
-                  })}
-                </p>
-                <p className="text-center text-sm text-muted-foreground tabular-nums">
-                  {t("common.qualityLine", {
-                    quality: translateQualityTier(t, getQualityTierForPlate(licensePlate)),
-                  })}
-                </p>
+              <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
+                <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.customerLabel")}</p>
+                <p className="text-xs font-semibold text-foreground leading-tight truncate">{getCustomerNameForPlate(licensePlate)}</p>
+              </div>
+            )}
+            {plateType === "civilian" && (
+              <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
+                <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("common.requestNumberLabel")}</p>
+                <p className="text-xs font-semibold text-foreground tabular-nums leading-tight truncate">{getRequestNumberForPlate(licensePlate)}</p>
+              </div>
+            )}
+            {plateType === "civilian" && (
+              <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
+                <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
+                <p className="text-xs font-semibold text-foreground leading-tight truncate">{translateQualityTier(t, getQualityTierForPlate(licensePlate))}</p>
+              </div>
+            )}
+            {mileage && (
+              <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
+                <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.mileage")}</p>
+                <p className="text-xs font-semibold text-foreground tabular-nums leading-tight" dir="ltr">{Number(mileage).toLocaleString()} {t("acceptedRequest.km")}</p>
               </div>
             )}
           </div>
 
-          {/* Car View with Clickable Wheels */}
-          <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
-            <h3 className="text-lg font-semibold text-foreground mb-6 text-center">{t("acceptedRequest.selectWheel")}</h3>
-            
-            {/* Responsive SVG Car Visualization */}
-            <div className="relative w-full max-w-3xl mx-auto">
-              <CarVisualization
+          {/* Wheel Selector */}
+          <div className="bg-card rounded-xl p-2 shadow-md border border-border">
+            <p className="text-xs font-semibold text-foreground mb-1 text-center">{t("acceptedRequest.selectWheel")}</p>
+            <TireSizeBadge size="205/55R16" profile={getFrontTireProfileForPlate(licensePlate)} />
+            <div className="max-w-[210px] mx-auto">
+              <AxlesDiagram
                 onWheelClick={handleWheelClick}
                 selectedWheel={selectedWheel}
                 affectedWheels={new Set(Object.keys(affectedWheels))}
-                frontTireSize="205/55R16"
-                rearTireSize="225/45R17"
-                frontTireProfile={getFrontTireProfileForPlate(licensePlate)}
-                rearTireProfile={getRearTireProfileForPlate(licensePlate)}
                 showSpareTire={spareTire}
                 wheelCount={wheelCount}
-                plateType={plateType}
               />
             </div>
+            <TireSizeBadge size="225/45R17" profile={getRearTireProfileForPlate(licensePlate)} />
           </div>
 
-          {/* Spare tire switch */}
-          <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
+          {/* Spare tire + Front Alignment */}
+          <div className="bg-card rounded-xl px-3 py-2 shadow-md border border-border space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-lg font-semibold text-foreground">{t("common.spareTire")}</span>
+              <span className="text-xs font-medium text-foreground">{t("common.spareTire")}</span>
               <button
                 dir="ltr"
                 type="button"
                 onClick={() => handleSpareTireChange(!spareTire)}
-                className={`relative inline-flex h-10 w-20 items-center rounded-full transition-colors duration-300 ${
-                  spareTire ? "bg-primary dark:bg-blue-500" : "bg-muted"
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
+                  spareTire ? "bg-primary" : "bg-muted"
                 }`}
               >
-                <span
-                  className={`inline-block h-8 w-8 rounded-full bg-white shadow-lg transition-transform duration-300 ${
-                    spareTire ? "translate-x-[4px]" : "translate-x-[44px]"
-                  }`}
-                />
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${spareTire ? "translate-x-[3px]" : "translate-x-[27px]"}`} />
               </button>
             </div>
-          </div>
-
-          {/* Front Alignment Switch */}
-          <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
             <div className="flex items-center justify-between">
-              <span className="text-lg font-semibold text-foreground">{t("common.frontAlignment")}</span>
+              <span className="text-xs font-medium text-foreground">{t("common.frontAlignment")}</span>
               <button
                 dir="ltr"
+                type="button"
                 onClick={() => setFrontAlignment(!frontAlignment)}
-                className={`relative inline-flex h-10 w-20 items-center rounded-full transition-colors duration-300 ${
-                  frontAlignment ? 'bg-primary dark:bg-blue-500' : 'bg-muted'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
+                  frontAlignment ? "bg-primary" : "bg-muted"
                 }`}
               >
-                <span
-                  className={`inline-block h-8 w-8 rounded-full bg-white shadow-lg transition-transform duration-300 ${
-                    frontAlignment ? 'translate-x-[4px]' : 'translate-x-[44px]'
-                  }`}
-                />
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${frontAlignment ? "translate-x-[3px]" : "translate-x-[27px]"}`} />
               </button>
             </div>
           </div>
@@ -203,7 +192,7 @@ export function AcceptedRequest() {
           {/* Continue Button */}
           <button
             onClick={() => navigate({ name: "dashboard" })}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-4 rounded-xl transition-colors duration-200 shadow-lg hover:shadow-xl font-semibold text-lg"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded-xl transition-colors duration-200 shadow-lg font-semibold text-sm"
           >
             {t("common.continue")}
           </button>
@@ -221,5 +210,16 @@ export function AcceptedRequest() {
         wheelCount={wheelCount}
       />
     </div>
+  );
+}
+
+function TireSizeBadge({ size, profile }: { size: string; profile?: string }) {
+  const label = profile ? `${size} · ${profile}` : size;
+  return (
+    <p className="text-center my-1">
+      <span className="text-xs font-bold text-foreground bg-muted px-3 py-0.5 rounded-full tabular-nums" dir="ltr">
+        {label}
+      </span>
+    </p>
   );
 }

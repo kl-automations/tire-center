@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Check, X as XIcon } from "lucide-react";
-import { CarVisualization, type WheelColor } from "./CarVisualization";
 import { LicensePlate } from "./LicensePlate";
 import {
   getStoredRequests,
@@ -12,7 +11,6 @@ import {
   type OpenRequest,
   type WheelWork,
 } from "./OpenRequests";
-import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 import { translateQualityTier } from "../qualityTier";
 
 const WHEEL_POS_KEYS: Record<string, string> = {
@@ -179,7 +177,6 @@ export function RequestDetail() {
   const { screen, navigate } = useNavigation();
   if (screen.name !== "request-detail") return null;
   const { id } = screen;
-  const [selectedWheel, setSelectedWheel] = useState<string | null>(null);
   const [detailWheel, setDetailWheel] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -197,21 +194,7 @@ export function RequestDetail() {
   const statusStyles = STATUS_STYLES[request.status];
   const canConfirm = request.status === "approved" || request.status === "partly-approved";
   const wheels = request.wheels || {};
-  const wheelCount = resolveVehicleWheelCount(request.licensePlate, request.wheelCount);
-  const wheelColors: Record<string, WheelColor> = {};
-  for (const [pos, work] of Object.entries(wheels)) {
-    if (work.approval === "full") wheelColors[pos] = "green";
-    else if (work.approval === "puncture-only") wheelColors[pos] = "orange";
-    else wheelColors[pos] = "red";
-  }
   const currentWheelWork = detailWheel ? wheels[detailWheel] : null;
-
-  const handleWheelClick = (wheelPosition: string) => {
-    setSelectedWheel(wheelPosition);
-    if (wheels[wheelPosition]) {
-      setDetailWheel(wheelPosition);
-    }
-  };
 
   const handleConfirm = (notes: string) => {
     console.log("Request confirmed:", request.id, "Notes:", notes);
@@ -272,30 +255,6 @@ export function RequestDetail() {
               </p>
             </div>
           )}
-
-          {/* Car Visualization */}
-          <div className="bg-card rounded-2xl p-6 shadow-md border border-border">
-            <h3 className="text-lg font-semibold text-foreground mb-6 text-center">
-              {t("requestDetail.wheelsInRequest")}
-            </h3>
-            <div className="relative w-full max-w-3xl mx-auto">
-              <CarVisualization
-                onWheelClick={handleWheelClick}
-                selectedWheel={selectedWheel}
-                wheelColors={wheelColors}
-                frontTireSize={request.frontTireSize}
-                rearTireSize={request.rearTireSize}
-                frontTireProfile={request.frontTireProfile}
-                rearTireProfile={request.rearTireProfile}
-                showSpareTire={Boolean(wheels["spare-tire"])}
-                wheelCount={wheelCount}
-                plateType={request.plateType}
-              />
-            </div>
-            <p className="text-center text-sm text-muted-foreground mt-4">
-              {t("requestDetail.clickWheelHint")}
-            </p>
-          </div>
 
           {/* Front Alignment */}
           <div className="bg-card rounded-2xl p-6 shadow-md border border-border">

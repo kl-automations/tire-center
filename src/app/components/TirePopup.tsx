@@ -1,18 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
-import * as XLSX from "xlsx";
+import { ArrowRight } from "lucide-react";
 import { getRoadWheelPositions, type VehicleWheelCount } from "../vehicleWheelLayout";
 
 export type TireIssueMode = "replacement" | "repair" | "relocation";
+export type ReplacementReason = "wear" | "damage" | "fitment";
 
 export interface WheelData {
+  // Replacement
+  replacementReason: ReplacementReason | null;
+  // Repair switches
+  sensor: boolean;
+  tpmsValve: boolean;
+  balancing: boolean;
+  rimRepair: boolean;
+  puncture: boolean;        // disabled when replacementReason is set
+  // Relocation
+  movedToWheel: string | null;
+  // Legacy fields kept for RequestDetail / HistoryDetail display
   mode: TireIssueMode;
   reason: string;
-  puncture: boolean;
-  balancing: boolean;
-  sensor: boolean;
-  movedToWheel: string | null;
 }
 
 interface TirePopupProps {
@@ -22,241 +29,204 @@ interface TirePopupProps {
   licensePlate: string;
   onSubmit: (wheelPosition: string, data: WheelData) => void;
   onNavigateToCaroolCheck: () => void;
-  /** Include spare tire in relocation targets (must match CarVisualization spare) */
   spareTireEnabled?: boolean;
-  /** From backend; mock uses plate `123456` → 6 */
   wheelCount?: VehicleWheelCount;
 }
 
 const WHEEL_POS_KEYS: Record<string, string> = {
-  "front-right": "wheels.frontRight",
-  "front-left": "wheels.frontLeft",
-  "rear-right": "wheels.rearRight",
-  "rear-left": "wheels.rearLeft",
+  "front-right":      "wheels.frontRight",
+  "front-left":       "wheels.frontLeft",
+  "rear-right":       "wheels.rearRight",
+  "rear-left":        "wheels.rearLeft",
   "rear-right-inner": "wheels.rearRightInner",
-  "rear-left-inner": "wheels.rearLeftInner",
-  "spare-tire": "wheels.spareTire",
+  "rear-left-inner":  "wheels.rearLeftInner",
+  "spare-tire":       "wheels.spareTire",
 };
 
-function allWheelPositions(includeSpare: boolean, wheelCount: VehicleWheelCount): string[] {
-  const road = getRoadWheelPositions(wheelCount);
-  return includeSpare ? [...road, "spare-tire"] : road;
-}
+const REPLACEMENT_REASONS: ReplacementReason[] = ["wear", "damage", "fitment"];
 
 function otherWheelPositions(
   current: string,
   spareTireEnabled: boolean,
   wheelCount: VehicleWheelCount
 ): string[] {
-  return allWheelPositions(spareTireEnabled, wheelCount).filter((w) => w !== current);
-}
-
-const MODE_KEYS_ALL: TireIssueMode[] = ["replacement", "repair", "relocation"];
-
-function modeKeysForWheel(wheelPosition: string): TireIssueMode[] {
-  if (wheelPosition === "spare-tire") {
-    return ["replacement", "repair"];
-  }
-  return MODE_KEYS_ALL;
-}
-
-const SUBTITLE_BY_MODE: Record<TireIssueMode, string> = {
-  replacement: "tirePopup.subtitleReplacement",
-  repair: "tirePopup.subtitleRepair",
-  relocation: "tirePopup.subtitleRelocation",
-};
-
-function useReasons() {
-  const [reasons, setReasons] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/סיבות.xlsx")
-      .then((res) => res.arrayBuffer())
-      .then((buffer) => {
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        const values = rows.slice(1).map((row) => row[0]).filter(Boolean);
-        setReasons(values);
-      })
-      .catch((err) => {
-        console.error("Failed to load reasons:", err);
-        setReasons([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  return { reasons, loading };
+  const road = getRoadWheelPositions(wheelCount);
+  const all = spareTireEnabled ? [...road, "spare-tire"] : road;
+  return all.filter((w) => w !== current);
 }
 
 export function TirePopup({
   isOpen,
   onClose,
   wheelPosition,
-  licensePlate,
   onSubmit,
   onNavigateToCaroolCheck,
   spareTireEnabled = false,
   wheelCount = 4,
 }: TirePopupProps) {
   const { t } = useTranslation();
-  const { reasons, loading } = useReasons();
-  const [mode, setMode] = useState<TireIssueMode>("replacement");
-  const [selectedReason, setSelectedReason] = useState<string | null>(null);
-  const [puncture, setPuncture] = useState(false);
-  const [balancing, setBalancing] = useState(false);
+
+  const [replacementReason, setReplacementReason] = useState<ReplacementReason | null>(null);
   const [sensor, setSensor] = useState(false);
+  const [tpmsValve, setTpmsValve] = useState(false);
+  const [balancing, setBalancing] = useState(false);
+  const [rimRepair, setRimRepair] = useState(false);
+  const [puncture, setPuncture] = useState(false);
   const [movedToWheel, setMovedToWheel] = useState<string | null>(null);
 
-  const resetState = useCallback(() => {
-    setMode("replacement");
-    setSelectedReason(null);
-    setPuncture(false);
-    setBalancing(false);
+  const reset = useCallback(() => {
+    setReplacementReason(null);
     setSensor(false);
+    setTpmsValve(false);
+    setBalancing(false);
+    setRimRepair(false);
+    setPuncture(false);
     setMovedToWheel(null);
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      resetState();
-    }
-  }, [isOpen, wheelPosition, resetState]);
+    if (isOpen) reset();
+  }, [isOpen, wheelPosition, reset]);
 
-  const handleClose = () => {
-    resetState();
-    onClose();
-  };
+  if (!isOpen) return null;
+
+  const hasReplacement = replacementReason !== null;
+  const effectivePuncture = puncture && !hasReplacement;
 
   const canContinue =
-    mode === "replacement"
-      ? Boolean(selectedReason) && !loading
-      : mode === "repair"
-        ? puncture || balancing || sensor
-        : Boolean(movedToWheel);
+    hasReplacement ||
+    sensor || tpmsValve || balancing || rimRepair || effectivePuncture ||
+    movedToWheel !== null;
 
   const handleContinue = () => {
     if (!canContinue) return;
+    const mode: TireIssueMode = hasReplacement
+      ? "replacement"
+      : movedToWheel
+        ? "relocation"
+        : "repair";
 
     onSubmit(wheelPosition, {
+      replacementReason,
+      sensor,
+      tpmsValve,
+      balancing,
+      rimRepair,
+      puncture: effectivePuncture,
+      movedToWheel,
       mode,
-      reason: mode === "replacement" ? selectedReason || "" : "",
-      puncture: mode === "repair" ? puncture : false,
-      balancing: mode === "repair" ? balancing : false,
-      sensor: mode === "repair" ? sensor : false,
-      movedToWheel: mode === "relocation" ? movedToWheel : null,
+      reason: replacementReason ?? "",
     });
-    resetState();
+    reset();
     onClose();
     onNavigateToCaroolCheck();
   };
 
-  if (!isOpen) return null;
-
   const title = WHEEL_POS_KEYS[wheelPosition] ? t(WHEEL_POS_KEYS[wheelPosition]) : wheelPosition;
   const relocationTargets = otherWheelPositions(wheelPosition, spareTireEnabled, wheelCount);
-  const modeKeys = modeKeysForWheel(wheelPosition);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      {/* Header */}
+      <div className="bg-primary px-4 py-2.5 shadow-md shrink-0">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-primary-foreground hover:opacity-80 transition-opacity"
+          >
+            <ArrowRight className="w-5 h-5" />
+          </button>
+          <h1 className="text-base text-primary-foreground font-semibold">{title}</h1>
+          <div className="w-5" />
+        </div>
+      </div>
 
-      <div className="relative bg-card rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 border border-border">
-        <button
-          type="button"
-          onClick={handleClose}
-          className="absolute top-4 start-4 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
 
-        <div className="space-y-6">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t(SUBTITLE_BY_MODE[mode])}</p>
+        {/* החלפה */}
+        <section>
+          <SectionLabel>{t("tirePopup.sectionReplacement")}</SectionLabel>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {REPLACEMENT_REASONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setReplacementReason(replacementReason === r ? null : r)}
+                className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                  replacementReason === r
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    : "border-border bg-card text-foreground hover:border-primary/50"
+                }`}
+              >
+                {t(`tirePopup.replacementReason.${r}`)}
+              </button>
+            ))}
           </div>
+        </section>
 
-          <div className="space-y-2">
-            <span className="text-sm font-semibold text-foreground block text-center">{t("tirePopup.issueType")}</span>
-            <div
-              className={`grid grid-cols-1 gap-2 ${modeKeys.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}
-            >
-              {modeKeys.map((m) => (
+        {/* תיקון */}
+        <section>
+          <SectionLabel>{t("tirePopup.sectionRepair")}</SectionLabel>
+          <div className="mt-2 space-y-1.5">
+            <ToggleRow label={t("services.sensor")}   value={sensor}    onChange={setSensor} />
+            <ToggleRow label={t("services.tpmsValve")} value={tpmsValve} onChange={setTpmsValve} />
+            <ToggleRow label={t("services.balancing")} value={balancing} onChange={setBalancing} />
+            <ToggleRow label={t("services.rimRepair")} value={rimRepair} onChange={setRimRepair} />
+            <ToggleRow
+              label={t("services.puncture")}
+              value={effectivePuncture}
+              onChange={setPuncture}
+              disabled={hasReplacement}
+            />
+          </div>
+        </section>
+
+        {/* העברה — not available for spare tire */}
+        {wheelPosition !== "spare-tire" && (
+          <section>
+            <SectionLabel>{t("tirePopup.sectionRelocation")}</SectionLabel>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {relocationTargets.map((pos) => (
                 <button
-                  key={m}
+                  key={pos}
                   type="button"
-                  onClick={() => setMode(m)}
-                  className={`rounded-xl px-3 py-2.5 text-sm font-semibold border-2 transition-all ${
-                    mode === m
-                      ? "border-primary bg-primary text-primary-foreground shadow-md"
-                      : "border-border bg-background text-foreground hover:border-primary/50"
+                  onClick={() => setMovedToWheel(movedToWheel === pos ? null : pos)}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                    movedToWheel === pos
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-card text-foreground hover:border-primary/50"
                   }`}
                 >
-                  {t(`tirePopup.mode.${m}`)}
+                  {WHEEL_POS_KEYS[pos] ? t(WHEEL_POS_KEYS[pos]) : pos}
                 </button>
               ))}
             </div>
-          </div>
-
-          {mode === "replacement" && (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground">{t("tirePopup.reasonLabel")}</label>
-              {loading ? (
-                <div className="text-sm text-muted-foreground text-center py-3">{t("tirePopup.loadingReasons")}</div>
-              ) : (
-                <select
-                  value={selectedReason || ""}
-                  onChange={(e) => setSelectedReason(e.target.value || null)}
-                  className="w-full px-4 py-3 bg-input-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring dark:focus:ring-blue-400 focus:border-transparent transition-all [&>option]:bg-card [&>option]:text-foreground"
-                >
-                  <option value="">{t("tirePopup.selectReason")}</option>
-                  {reasons.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-
-          {mode === "repair" && (
-            <div className="space-y-3">
-              <ToggleRow label={t("services.puncture")} value={puncture} onChange={setPuncture} />
-              <ToggleRow label={t("services.sensor")} value={sensor} onChange={setSensor} />
-              <ToggleRow label={t("services.balancing")} value={balancing} onChange={setBalancing} />
-            </div>
-          )}
-
-          {mode === "relocation" && (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground">{t("tirePopup.movedToLabel")}</label>
-              <select
-                value={movedToWheel || ""}
-                onChange={(e) => setMovedToWheel(e.target.value || null)}
-                className="w-full px-4 py-3 bg-input-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring dark:focus:ring-blue-400 focus:border-transparent transition-all [&>option]:bg-card [&>option]:text-foreground"
-              >
-                <option value="">{t("tirePopup.selectTargetWheel")}</option>
-                {relocationTargets.map((pos) => (
-                  <option key={pos} value={pos}>
-                    {WHEEL_POS_KEYS[pos] ? t(WHEEL_POS_KEYS[pos]) : pos}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={!canContinue}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl transition-colors duration-200 shadow-md hover:shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
-          >
-            {t("tirePopup.continueToCheck")}
-          </button>
-        </div>
+          </section>
+        )}
       </div>
+
+      {/* Continue button */}
+      <div className="shrink-0 px-4 pb-5 pt-2 border-t border-border bg-background">
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={!canContinue}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl font-semibold transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {t("tirePopup.continueToCheck")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm font-bold text-foreground">{children}</span>
+      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }
@@ -265,25 +235,28 @@ function ToggleRow({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between bg-background rounded-xl px-4 py-3 border border-border">
-      <span className="font-semibold text-foreground">{label}</span>
+    <div className={`flex items-center justify-between bg-card rounded-xl px-3 py-2.5 border border-border transition-opacity ${disabled ? "opacity-35" : ""}`}>
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <button
         dir="ltr"
         type="button"
-        onClick={() => onChange(!value)}
-        className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-300 ${
-          value ? "bg-primary dark:bg-blue-500" : "bg-muted"
+        onClick={() => !disabled && onChange(!value)}
+        disabled={disabled}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
+          value ? "bg-primary" : "bg-muted"
         }`}
       >
         <span
-          className={`inline-block h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-300 ${
-            value ? "translate-x-[4px]" : "translate-x-[30px]"
+          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${
+            value ? "translate-x-[3px]" : "translate-x-[27px]"
           }`}
         />
       </button>

@@ -1,5 +1,3 @@
-import { useTranslation } from "react-i18next";
-
 export type PlateType = "civilian" | "military" | "police";
 
 interface LicensePlateProps {
@@ -19,10 +17,9 @@ export const LICENSE_PLATE_FRAME_CLASS =
   "rounded-[10px] border-[3px] border-white/95 shadow-[0_4px_14px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]";
 
 export function LicensePlateBlueStrip() {
-  const { t } = useTranslation();
   return (
-    <div className="bg-[#0038b8] h-full flex flex-col items-center justify-center px-2 sm:px-3 gap-0.5 sm:gap-1 w-[20%] min-w-[56px] max-w-[76px] shrink-0 border-e border-black/20 shadow-[inset_-2px_0_8px_rgba(0,0,0,0.15)]">
-      <div className="bg-white rounded-sm p-0.5 sm:p-1 flex items-center justify-center mb-0.5 sm:mb-1 shadow-sm">
+    <div className="bg-[#0038b8] h-full flex flex-col items-center justify-center px-2 sm:px-3 gap-1 w-[20%] min-w-[56px] max-w-[76px] shrink-0 border-e border-black/20 shadow-[inset_-2px_0_8px_rgba(0,0,0,0.15)]">
+      <div className="bg-white rounded-sm p-0.5 sm:p-1 flex items-center justify-center shadow-sm">
         <svg className="w-6 h-4 sm:w-7 sm:h-5" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <rect width="220" height="160" fill="white" />
           <rect width="220" height="53.33" fill="#0038b8" />
@@ -34,10 +31,6 @@ export function LicensePlateBlueStrip() {
         </svg>
       </div>
       <div className="text-white text-xs sm:text-lg font-black tracking-tight drop-shadow-sm">IL</div>
-      <div className="text-white text-[7px] sm:text-[9px] leading-tight text-center font-semibold opacity-95">
-        {t("licensePlate.line1")}
-      </div>
-      <div className="text-white text-[5px] sm:text-[7px] leading-tight opacity-90">{t("licensePlate.line2")}</div>
     </div>
   );
 }
@@ -73,7 +66,7 @@ export function LicensePlate({ plateNumber, plateType = "civilian", className = 
             <div className="flex-1 min-w-0 bg-gradient-to-b from-[#ffe94a] via-[#f5d20a] to-[#e6bc00] flex items-center justify-center px-2 sm:px-5 border-s border-black/10 shadow-[inset_0_2px_6px_rgba(255,255,255,0.45)]">
               <div
                 className={stampedDarkText(
-                  "text-center text-2xl sm:text-4xl font-black text-neutral-900 tracking-widest tabular-nums"
+                  "text-center text-xl sm:text-3xl font-black text-neutral-900 tracking-wider tabular-nums"
                 )}
                 style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
                 dir="ltr"
@@ -88,7 +81,7 @@ export function LicensePlate({ plateNumber, plateType = "civilian", className = 
           <div className="flex-1 min-w-0 bg-gradient-to-b from-zinc-800 via-neutral-950 to-black flex items-center justify-center px-3 sm:px-8 shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)]">
             <div
               className={embossedLightText(
-                "text-center text-2xl sm:text-4xl font-black text-white tracking-widest tabular-nums"
+                "text-center text-xl sm:text-3xl font-black text-white tracking-wider tabular-nums"
               )}
               style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
               dir="ltr"
@@ -104,7 +97,7 @@ export function LicensePlate({ plateNumber, plateType = "civilian", className = 
             <div className="flex-1 min-w-0 bg-gradient-to-b from-[#dc2626] via-[#b91c1c] to-[#991b1b] flex items-center justify-center px-2 sm:px-5 border-s border-black/15 shadow-[inset_0_2px_6px_rgba(255,255,255,0.12)]">
               <div
                 className={embossedLightText(
-                  "text-center text-2xl sm:text-4xl font-black text-white tracking-widest tabular-nums"
+                  "text-center text-xl sm:text-3xl font-black text-white tracking-wider tabular-nums"
                 )}
                 style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
                 dir="ltr"

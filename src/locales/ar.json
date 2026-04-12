@@ -11,7 +11,9 @@
     "spareTire": "عجلة الاحتياط",
     "frontAlignment": "ضبط الزوايا الأمامية",
     "requestNumberLine": "رقم الطلب: {{requestNumber}}",
+    "requestNumberLabel": "رقم الطلب",
     "qualityLine": "الجودة: {{quality}}",
+    "qualityLabel": "الجودة",
     "qualityTier": {
       "chinese": "اقتصادي",
       "upgraded": "محسّن",
@@ -30,7 +32,9 @@
   "services": {
     "puncture": "ثقب",
     "balancing": "موازنة",
-    "sensor": "حسّاس"
+    "sensor": "حسّاس",
+    "tpmsValve": "صمام TPMS",
+    "rimRepair": "إصلاح الجنط"
   },
   "status": {
     "waiting": "بانتظار الموافقة",
@@ -61,8 +65,7 @@
     "newRequestDesc": "إنشاء تقرير جديد لمركبة",
     "openRequests": "تقارير مفتوحة",
     "openRequestsDesc": "عرض التقارير النشطة",
-    "history": "سجلّ التقارير",
-    "historyDesc": "تصفّح التقارير السابقة"
+    "exportHistory": "تصدير السجل"
   },
   "settings": {
     "title": "الإعدادات",
@@ -77,7 +80,9 @@
     "empty": "لا توجد تقارير مفتوحة",
     "searchPlaceholder": "البحث برقم اللوحة أو رقم الطلب أو سبب الرفض...",
     "dateFrom": "من تاريخ",
-    "dateTo": "إلى تاريخ"
+    "dateTo": "إلى تاريخ",
+    "dismissApproved": "اكتملت المعالجة. احذف التشخيص.",
+    "dismissDeclined": "تم إبلاغ العميل. احذف التشخيص."
   },
   "requestDetail": {
     "title": "تفاصيل التقرير",
@@ -90,22 +95,6 @@
     "notesPlaceholder": "صِف العمل الذي تم تنفيذه...",
     "confirmButton": "تأكيد الإنجاز"
   },
-  "history": {
-    "title": "سجلّ التقارير",
-    "searchPlaceholder": "البحث برقم اللوحة أو رقم الطلب...",
-    "dateFrom": "من تاريخ",
-    "dateTo": "إلى تاريخ",
-    "empty": "لم يتم العثور على تقارير"
-  },
-  "historyDetail": {
-    "title": "تفاصيل التقرير",
-    "completedPrefix": "اكتمل:",
-    "rejectedOnPrefix": "مرفوض في:",
-    "wheelsInRequest": "العجلات في التقرير",
-    "clickWheelHint": "اضغط على عجلة مُعلَّمة لعرض التفاصيل",
-    "reason": "السبب",
-    "executionNotes": "ملاحظات التنفيذ"
-  },
   "licensePlate": {
     "line1": "إسرائيل",
     "line2": "ISRAEL"
@@ -116,28 +105,16 @@
     "military": "عسكري",
     "police": "شرطة"
   },
-  "carVisualization": {
-    "front": "▲ أمامي",
-    "rear": "▼ خلفي",
-    "dualRearOuter": "خارجي",
-    "dualRearInner": "داخلي"
-  },
   "tirePopup": {
-    "issueType": "نوع البلاغ",
-    "mode": {
-      "replacement": "استبدال",
-      "repair": "إصلاح",
-      "relocation": "نقل موضع"
+    "sectionReplacement": "استبدال",
+    "sectionRepair": "إصلاح",
+    "sectionRelocation": "نقل",
+    "replacementReason": {
+      "wear": "تآكل",
+      "damage": "تلف",
+      "fitment": "مقاس"
     },
-    "subtitleReplacement": "اختر سبب الاستبدال",
-    "subtitleRepair": "حدد الإصلاح: ثقب، حساس، موازنة",
-    "subtitleRelocation": "اختر العجلة التي نُقل إليها الإطار",
-    "reasonLabel": "سبب الاستبدال",
-    "loadingReasons": "جارٍ تحميل الأسباب...",
-    "selectReason": "اختر سبباً...",
-    "movedToLabel": "نُقل إلى",
-    "selectTargetWheel": "اختر عجلة…",
-    "continueToCheck": "المتابعة إلى فحص كارول"
+    "continueToCheck": "المتابعة لتصوير الإطار"
   },
   "licensePlateModal": {
     "title": "تقرير جديد",
@@ -146,7 +123,10 @@
   "acceptedRequest": {
     "title": "تقرير جديد",
     "selectWheel": "اختر عجلة",
-    "identified": "مُعرَّف – {{customerName}}"
+    "identified": "مُعرَّف – {{customerName}}",
+    "customerLabel": "العميل",
+    "mileage": "عداد المسافات",
+    "km": "كم"
   },
   "declinedRequest": {
     "title": "تقرير جديد",
@@ -157,5 +137,17 @@
   "caroolCheck": {
     "title": "فحص كارول",
     "cameraPlaceholder": "ستظهر واجهة كاميرا كارول هنا"
+  },
+  "exportHistory": {
+    "title": "تصدير السجل",
+    "explanation": "بعد التصدير، سيُرسل ملف يتضمّن سجل الإجراءات إلى عنوان البريد الذي أدخلته، للفترة الزمنية التي اخترتها.",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "your@email.com",
+    "periodLabel": "الفترة",
+    "period1month": "شهر",
+    "period3months": "3 أشهر",
+    "period6months": "6 أشهر",
+    "exportButton": "تصدير",
+    "sent": "تم الإرسال"
   }
 }

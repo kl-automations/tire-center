@@ -11,7 +11,9 @@
     "spareTire": "גלגל רזרבי",
     "frontAlignment": "כיוון פרונט",
     "requestNumberLine": "מספר פנייה: {{requestNumber}}",
+    "requestNumberLabel": "מספר פנייה",
     "qualityLine": "איכות: {{quality}}",
+    "qualityLabel": "איכות",
     "qualityTier": {
       "chinese": "סיני",
       "upgraded": "משודרג",
@@ -30,7 +32,9 @@
   "services": {
     "puncture": "תקר",
     "balancing": "איזון",
-    "sensor": "חיישן"
+    "sensor": "חיישן",
+    "tpmsValve": "שסתום TPMS",
+    "rimRepair": "תיקון ג'אנט"
   },
   "status": {
     "waiting": "ממתין לאישור",
@@ -61,8 +65,7 @@
     "newRequestDesc": "צור דיווח חדש למכונית",
     "openRequests": "דיווחים פתוחים",
     "openRequestsDesc": "צפה בדיווחים הפעילים",
-    "history": "היסטוריית דיווחים",
-    "historyDesc": "עיין בדיווחים קודמים"
+    "exportHistory": "ייצוא היסטוריה"
   },
   "settings": {
     "title": "הגדרות",
@@ -77,7 +80,9 @@
     "empty": "אין דיווחים פתוחים",
     "searchPlaceholder": "חפש לפי מספר רישוי, מספר פנייה או סיבת דחייה...",
     "dateFrom": "מתאריך",
-    "dateTo": "עד תאריך"
+    "dateTo": "עד תאריך",
+    "dismissApproved": "הטיפול הסתיים. מחק אבחנה.",
+    "dismissDeclined": "לקוח עודכן. מחק אבחנה."
   },
   "requestDetail": {
     "title": "פרטי דיווח",
@@ -90,22 +95,6 @@
     "notesPlaceholder": "פרט את העבודה שבוצעה...",
     "confirmButton": "אישור ביצוע"
   },
-  "history": {
-    "title": "היסטוריית דיווחים",
-    "searchPlaceholder": "חפש לפי מספר רישוי או מספר פנייה...",
-    "dateFrom": "מתאריך",
-    "dateTo": "עד תאריך",
-    "empty": "לא נמצאו דיווחים"
-  },
-  "historyDetail": {
-    "title": "פרטי דיווח",
-    "completedPrefix": "הושלם:",
-    "rejectedOnPrefix": "נדחה בתאריך:",
-    "wheelsInRequest": "גלגלים בדיווח",
-    "clickWheelHint": "לחץ על גלגל מסומן לצפייה בפרטים",
-    "reason": "סיבה",
-    "executionNotes": "הערות ביצוע"
-  },
   "licensePlate": {
     "line1": "ישראל",
     "line2": "ISRAEL"
@@ -116,28 +105,16 @@
     "military": "צבאי",
     "police": "משטרתי"
   },
-  "carVisualization": {
-    "front": "▲ קדמי",
-    "rear": "▼ אחורי",
-    "dualRearOuter": "חיצוני",
-    "dualRearInner": "פנימי"
-  },
   "tirePopup": {
-    "issueType": "סוג דיווח",
-    "mode": {
-      "replacement": "החלפה",
-      "repair": "תיקון",
-      "relocation": "שינוי מיקום"
+    "sectionReplacement": "החלפה",
+    "sectionRepair": "תיקון",
+    "sectionRelocation": "העברה",
+    "replacementReason": {
+      "wear": "בלאי",
+      "damage": "נזק",
+      "fitment": "התאמה"
     },
-    "subtitleReplacement": "בחר סיבת החלפה",
-    "subtitleRepair": "סמן תיקון: תקר, חיישן, איזון",
-    "subtitleRelocation": "בחר לאיזה גלגל הועבר הצמיג",
-    "reasonLabel": "סיבת החלפה",
-    "loadingReasons": "טוען סיבות...",
-    "selectReason": "בחר סיבה...",
-    "movedToLabel": "הועבר ל",
-    "selectTargetWheel": "בחר גלגל…",
-    "continueToCheck": "המשך לבדיקה עם קרול"
+    "continueToCheck": "המשך לצילום צמיג"
   },
   "licensePlateModal": {
     "title": "דיווח חדש",
@@ -146,7 +123,10 @@
   "acceptedRequest": {
     "title": "דיווח חדש",
     "selectWheel": "בחר גלגל",
-    "identified": "מזוהה – {{customerName}}"
+    "identified": "מזוהה – {{customerName}}",
+    "customerLabel": "לקוח",
+    "mileage": "קילומטרז'",
+    "km": "ק\"מ"
   },
   "declinedRequest": {
     "title": "דיווח חדש",
@@ -157,5 +137,17 @@
   "caroolCheck": {
     "title": "בדיקה עם קרול",
     "cameraPlaceholder": "ממשק מצלמת קרול יופיע כאן"
+  },
+  "exportHistory": {
+    "title": "ייצוא היסטוריה",
+    "explanation": "לאחר הייצוא, קובץ היסטוריית הפעולות יישלח לכתובת האימייל שציינת, לפי טווח הזמן שבחרת.",
+    "emailLabel": "אימייל",
+    "emailPlaceholder": "your@email.com",
+    "periodLabel": "טווח זמן",
+    "period1month": "חודש",
+    "period3months": "3 חודשים",
+    "period6months": "6 חודשים",
+    "exportButton": "ייצוא",
+    "sent": "נשלח"
   }
 }

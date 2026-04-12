@@ -17,6 +17,12 @@ export interface WheelWork {
   balancing: boolean;
   sensor: boolean;
   approval: WheelApproval;
+  replacementReason?: "wear" | "damage" | "fitment" | null;
+  tpmsValve?: boolean;
+  rimRepair?: boolean;
+  movedToWheel?: string | null;
+  caroolStatus?: string | null;
+  caroolId?: string | null;
 }
 
 export interface OpenRequest {
@@ -74,6 +80,74 @@ export const STATUS_STYLES: Record<RequestStatus, { bg: string; text: string; bo
     border: "border-red-300 dark:border-red-700",
   },
 };
+
+const WHEEL_POS_KEYS: Record<string, string> = {
+  "front-right": "wheels.frontRight",
+  "front-left": "wheels.frontLeft",
+  "rear-right": "wheels.rearRight",
+  "rear-left": "wheels.rearLeft",
+  "rear-right-inner": "wheels.rearRightInner",
+  "rear-left-inner": "wheels.rearLeftInner",
+  "spare-tire": "wheels.spareTire",
+};
+
+function buildLineItems(
+  request: OpenRequest,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): { text: string; approved: boolean | null }[] {
+  const items: { text: string; approved: boolean | null }[] = [];
+
+  if (request.frontAlignment) {
+    const isWaiting = request.status === "waiting";
+    items.push({
+      text: t("common.frontAlignment"),
+      approved: isWaiting ? null : request.status === "approved" || request.status === "partly-approved",
+    });
+  }
+
+  for (const [pos, work] of Object.entries(request.wheels)) {
+    const wheelLabel = WHEEL_POS_KEYS[pos] ? t(WHEEL_POS_KEYS[pos]) : pos;
+
+    const actionApproved = (action: string): boolean => {
+      if (work.approval === "full") return true;
+      if (work.approval === "puncture-only") return action === "puncture";
+      return false;
+    };
+
+    if (work.replacementReason) {
+      const reasonText = t(`tirePopup.replacementReason.${work.replacementReason}`);
+      const caroolPart = work.caroolId ? ` | ${[work.caroolStatus, work.caroolId].filter(Boolean).join(" ")}` : "";
+      items.push({
+        text: `${wheelLabel} | ${t("tirePopup.sectionReplacement")} | ${reasonText}${caroolPart}`,
+        approved: actionApproved("replacement"),
+      });
+    } else if (work.reason) {
+      // legacy reason without explicit replacementReason — skip (shown per-action below)
+    }
+
+    if (work.puncture) {
+      items.push({ text: `${wheelLabel} | ${t("services.puncture")}`, approved: actionApproved("puncture") });
+    }
+    if (work.sensor) {
+      items.push({ text: `${wheelLabel} | ${t("services.sensor")}`, approved: actionApproved("sensor") });
+    }
+    if (work.tpmsValve) {
+      items.push({ text: `${wheelLabel} | ${t("services.tpmsValve")}`, approved: actionApproved("tpmsValve") });
+    }
+    if (work.balancing) {
+      items.push({ text: `${wheelLabel} | ${t("services.balancing")}`, approved: actionApproved("balancing") });
+    }
+    if (work.rimRepair) {
+      items.push({ text: `${wheelLabel} | ${t("services.rimRepair")}`, approved: actionApproved("rimRepair") });
+    }
+    if (work.movedToWheel) {
+      const targetLabel = WHEEL_POS_KEYS[work.movedToWheel] ? t(WHEEL_POS_KEYS[work.movedToWheel]) : work.movedToWheel;
+      items.push({ text: `${wheelLabel} | ${t("tirePopup.sectionRelocation")} → ${targetLabel}`, approved: actionApproved("relocation") });
+    }
+  }
+
+  return items;
+}
 
 const MOCK_REQUESTS: OpenRequest[] = [
   {
@@ -225,6 +299,23 @@ export function storeRequests(requests: OpenRequest[]) {
   sessionStorage.setItem("open-requests", JSON.stringify(requests));
 }
 
+/** Same rules as the status filters on this screen (approved includes partly-approved). */
+export function countOpenRequestStatuses(requests: OpenRequest[]): {
+  approved: number;
+  waiting: number;
+  declined: number;
+} {
+  return {
+    approved: requests.filter((r) => r.status === "approved" || r.status === "partly-approved").length,
+    waiting: requests.filter((r) => r.status === "waiting").length,
+    declined: requests.filter((r) => r.status === "declined").length,
+  };
+}
+
+export function getOpenRequestStatusCounts() {
+  return countOpenRequestStatuses(getStoredRequests());
+}
+
 function markAllSeen(requests: OpenRequest[]): OpenRequest[] {
   return requests.map((r) => ({ ...r, hasUpdate: false }));
 }
@@ -234,21 +325,34 @@ export function hasOpenRequestUpdates(): boolean {
   return requests.some((r) => r.hasUpdate);
 }
 
+type StatusFilter = "approved" | "waiting" | "declined";
+
 export function OpenRequests() {
   const { t } = useTranslation();
   const { navigate } = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const requests = getStoredRequests();
+  // Mark all as seen on mount and keep as reactive state so deletions re-render
+  const [requests, setRequests] = useState<OpenRequest[]>(() => {
+    const r = markAllSeen(getStoredRequests());
+    storeRequests(r);
+    return r;
+  });
 
-  // Mark all as seen when viewing the page
-  const seenRequests = markAllSeen(requests);
-  storeRequests(seenRequests);
+  const dismissRequest = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = requests.filter((r) => r.id !== id);
+    storeRequests(updated);
+    setRequests(updated);
+    setExpandedId(null);
+  };
+
+  const counts = useMemo(() => countOpenRequestStatuses(requests), [requests]);
 
   const filtered = useMemo(() => {
-    return seenRequests.filter((request) => {
+    return requests.filter((request) => {
       if (searchQuery) {
         const q = searchQuery.trim();
         const plateMatch = request.licensePlate.includes(q);
@@ -256,11 +360,12 @@ export function OpenRequests() {
         const reasonMatch = request.rejectionReason?.includes(q) ?? false;
         if (!plateMatch && !idMatch && !reasonMatch) return false;
       }
-      if (dateFrom && request.submittedDate < dateFrom) return false;
-      if (dateTo && request.submittedDate > dateTo) return false;
+      if (statusFilter === "approved" && request.status !== "approved" && request.status !== "partly-approved") return false;
+      if (statusFilter === "waiting" && request.status !== "waiting") return false;
+      if (statusFilter === "declined" && request.status !== "declined") return false;
       return true;
     });
-  }, [seenRequests, searchQuery, dateFrom, dateTo]);
+  }, [requests, searchQuery, statusFilter]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -292,24 +397,39 @@ export function OpenRequests() {
             />
           </div>
           <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">{t("openRequests.dateFrom")}</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 bg-input-background border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">{t("openRequests.dateTo")}</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 bg-input-background border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-              />
-            </div>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "approved" ? null : "approved")}
+              className={`flex-1 rounded-xl border-2 py-2 px-2 text-center transition-all duration-150 ${
+                statusFilter === "approved"
+                  ? "bg-green-500 border-green-600 text-white"
+                  : "bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300"
+              }`}
+            >
+              <div className="text-2xl font-bold tabular-nums leading-none">{counts.approved}</div>
+              <div className="text-[11px] font-semibold mt-0.5 leading-tight">{t("status.approved")}</div>
+            </button>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "waiting" ? null : "waiting")}
+              className={`flex-1 rounded-xl border-2 py-2 px-2 text-center transition-all duration-150 ${
+                statusFilter === "waiting"
+                  ? "bg-amber-500 border-amber-600 text-white"
+                  : "bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+              }`}
+            >
+              <div className="text-2xl font-bold tabular-nums leading-none">{counts.waiting}</div>
+              <div className="text-[11px] font-semibold mt-0.5 leading-tight">{t("status.waiting")}</div>
+            </button>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "declined" ? null : "declined")}
+              className={`flex-1 rounded-xl border-2 py-2 px-2 text-center transition-all duration-150 ${
+                statusFilter === "declined"
+                  ? "bg-red-500 border-red-600 text-white"
+                  : "bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300"
+              }`}
+            >
+              <div className="text-2xl font-bold tabular-nums leading-none">{counts.declined}</div>
+              <div className="text-[11px] font-semibold mt-0.5 leading-tight">{t("status.declined")}</div>
+            </button>
           </div>
         </div>
       </div>
@@ -322,11 +442,13 @@ export function OpenRequests() {
           ) : (
             filtered.map((request) => {
               const styles = STATUS_STYLES[request.status];
+              const isExpanded = expandedId === request.id;
+              const lineItems = isExpanded ? buildLineItems(request, t) : [];
               return (
-                <button
+                <div
                   key={request.id}
-                  onClick={() => navigate({ name: "request-detail", id: request.id })}
-                  className="w-full bg-card rounded-2xl p-5 shadow-md border border-border space-y-3 hover:shadow-lg hover:border-primary/30 transition-all duration-200 text-start"
+                  onClick={() => setExpandedId(isExpanded ? null : request.id)}
+                  className="w-full bg-card rounded-2xl p-5 shadow-md border border-border space-y-3 cursor-pointer hover:shadow-lg hover:border-primary/30 transition-all duration-200 text-start select-none"
                 >
                   <LicensePlate plateNumber={request.licensePlate} plateType={request.plateType} className="w-full max-w-xs mx-auto" />
                   <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
@@ -347,7 +469,58 @@ export function OpenRequests() {
                       <p className="text-sm text-foreground leading-snug line-clamp-4">{request.rejectionReason}</p>
                     </div>
                   )}
-                </button>
+                  {isExpanded && (
+                    <div className="pt-3 border-t border-border space-y-2" onClick={(e) => e.stopPropagation()}>
+                      {lineItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-1">—</p>
+                      ) : (
+                        lineItems.map((item, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3">
+                            <span
+                              className={`text-sm leading-snug ${
+                                item.approved === true
+                                  ? "text-green-700 dark:text-green-400"
+                                  : item.approved === false
+                                    ? "text-red-700 dark:text-red-400"
+                                    : "text-muted-foreground"
+                              }`}
+                            >
+                              {item.text}
+                            </span>
+                            {item.approved !== null && (
+                              <span
+                                className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 border ${
+                                  item.approved
+                                    ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"
+                                    : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-300 dark:border-red-700"
+                                }`}
+                              >
+                                {item.approved ? t("approval.full") : t("approval.none")}
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                      {/* Action button */}
+                      {(request.status === "approved" || request.status === "partly-approved") && (
+                        <button
+                          onClick={(e) => dismissRequest(request.id, e)}
+                          className="w-full mt-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 rounded-xl transition-colors duration-150 shadow-sm"
+                        >
+                          {t("openRequests.dismissApproved")}
+                        </button>
+                      )}
+                      {request.status === "declined" && (
+                        <button
+                          onClick={(e) => dismissRequest(request.id, e)}
+                          className="w-full mt-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold py-3 rounded-xl transition-colors duration-150 shadow-sm"
+                        >
+                          {t("openRequests.dismissDeclined")}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })
           )}

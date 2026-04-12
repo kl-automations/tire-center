@@ -51,13 +51,14 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const { navigate } = useNavigation();
   const [licensePlate, setLicensePlate] = useState("");
   const [plateType, setPlateType] = useState<PlateType>("civilian");
+  const [mileage, setMileage] = useState("");
 
   const handleContinue = () => {
     if (licensePlate.trim()) {
       if (licensePlate === "12345678") {
         navigate({ name: "declined-request", plate: licensePlate, plateType });
       } else {
-        navigate({ name: "accepted-request", plate: licensePlate, plateType });
+        navigate({ name: "accepted-request", plate: licensePlate, plateType, mileage: mileage.trim() });
       }
       onClose();
     }
@@ -184,6 +185,22 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Mileage input */}
+          <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-3">
+            <label className="text-sm font-medium text-foreground shrink-0">
+              {t("acceptedRequest.mileage")}
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={mileage}
+              onChange={(e) => setMileage(e.target.value)}
+              placeholder="0"
+              className="flex-1 min-w-0 text-center rounded-lg border border-border bg-input-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <span className="text-sm text-muted-foreground shrink-0">{t("acceptedRequest.km")}</span>
           </div>
 
           <button

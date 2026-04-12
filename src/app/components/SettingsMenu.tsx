@@ -1,18 +1,12 @@
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { X, Sun, Moon, LogOut, User, Globe } from "lucide-react";
-import { useTheme } from "../ThemeContext";
+import { APP_LANGUAGES, useTheme } from "../ThemeContext";
 
 interface SettingsMenuProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const LANGUAGE_OPTIONS = [
-  { code: "he" as const, label: "עברית" },
-  { code: "en" as const, label: "English" },
-  { code: "ar" as const, label: "العربية" },
-];
 
 export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   const { t } = useTranslation();
@@ -92,7 +86,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
               <span>{t("settings.language")}</span>
             </div>
             <div className="bg-background rounded-xl border border-border overflow-hidden divide-y divide-border">
-              {LANGUAGE_OPTIONS.map((opt) => (
+              {APP_LANGUAGES.map((opt) => (
                 <button
                   key={opt.code}
                   onClick={() => setLanguage(opt.code)}

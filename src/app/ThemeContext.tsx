@@ -2,15 +2,23 @@ import { createContext, useContext, useState, useEffect, useLayoutEffect, type R
 import i18n from "i18next";
 
 type Theme = "light" | "dark";
-export type Language = "he" | "en" | "ar";
+
+/** Must match `resources` in `i18n.ts` */
+export const APP_LANGUAGES = [
+  { code: "he" as const, label: "עברית" },
+  { code: "ru" as const, label: "Русский" },
+  { code: "ar" as const, label: "العربية" },
+] as const;
+
+export type Language = (typeof APP_LANGUAGES)[number]["code"];
 
 /** BCP 47 locale for Date formatting — matches app language from ThemeContext */
 export function getDateLocaleForLanguage(language: Language): string {
   switch (language) {
     case "he":
       return "he-IL";
-    case "en":
-      return "en-US";
+    case "ru":
+      return "ru-RU";
     case "ar":
       return "ar-SA";
     default:
@@ -40,7 +48,8 @@ function getStoredTheme(): Theme {
 function getStoredLanguage(): Language {
   try {
     const stored = localStorage.getItem("language");
-    if (stored === "he" || stored === "en" || stored === "ar") return stored;
+    if (stored === "he" || stored === "ru" || stored === "ar") return stored;
+    if (stored === "en") return "he";
   } catch {}
   return "he";
 }
@@ -61,10 +70,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setLanguage = (l: Language) => {
     setLanguageState(l);
     localStorage.setItem("language", l);
-    i18n.changeLanguage(l);
   };
 
-  const dir = language === "en" ? "ltr" : "rtl";
+  const dir = language === "ru" ? "ltr" : "rtl";
 
   useEffect(() => {
     const root = document.documentElement;
@@ -79,6 +87,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dir = dir;
     document.documentElement.lang = language;
   }, [language, dir]);
+
+  useEffect(() => {
+    void i18n.changeLanguage(language);
+  }, [language]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, language, setLanguage, dir }}>

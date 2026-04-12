@@ -1,28 +1,47 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { Sun, Moon, Globe } from "lucide-react";
-import { useTheme } from "../ThemeContext";
+import { APP_LANGUAGES, type Language, useTheme } from "../ThemeContext";
 
-const LANG_LABELS: Record<string, string> = { he: "עב", en: "EN", ar: "عر" };
-const LANG_ORDER = ["he", "en", "ar"] as const;
+/** Short labels for the language pill — same idea as the original עב / عر style */
+const LANG_ABBREV: Record<Language, string> = {
+  he: "עב",
+  ru: "РУ",
+  ar: "عر",
+};
 
 export function Login() {
   const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const langMenuRef = useRef<HTMLDivElement>(null);
   const { navigate } = useNavigation();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
+
+  useEffect(() => {
+    if (!langMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setLangMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLangMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [langMenuOpen]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Login attempt:", { username, password });
     navigate({ name: "dashboard" });
-  };
-
-  const cycleLanguage = () => {
-    const idx = LANG_ORDER.indexOf(language);
-    setLanguage(LANG_ORDER[(idx + 1) % LANG_ORDER.length]);
   };
 
   return (
@@ -36,14 +55,49 @@ export function Login() {
         >
           {theme === "dark" ? <Sun className="w-5 h-5 text-foreground" /> : <Moon className="w-5 h-5 text-foreground" />}
         </button>
-        <button
-          onClick={cycleLanguage}
-          className="flex items-center justify-center gap-1 h-10 px-3 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
-          title={t("login.changeLanguage")}
-        >
-          <Globe className="w-4 h-4 text-foreground" />
-          <span className="text-sm font-bold text-foreground">{LANG_LABELS[language]}</span>
-        </button>
+        <div className="relative" ref={langMenuRef}>
+          <button
+            type="button"
+            onClick={() => setLangMenuOpen((o) => !o)}
+            className="flex items-center justify-center gap-1 h-10 px-3 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
+            title={t("login.changeLanguage")}
+            aria-label={t("login.changeLanguage")}
+            aria-expanded={langMenuOpen}
+            aria-haspopup="listbox"
+          >
+            <Globe className="w-4 h-4 text-foreground" aria-hidden />
+            <span className="text-sm font-bold text-foreground tabular-nums">{LANG_ABBREV[language]}</span>
+          </button>
+          {langMenuOpen && (
+            <ul
+              role="listbox"
+              className="absolute top-full start-0 mt-1 z-50 flex flex-col gap-1 p-1 rounded-2xl bg-card border border-border shadow-lg min-w-full"
+              aria-label={t("login.changeLanguage")}
+            >
+              {APP_LANGUAGES.map((opt) => (
+                <li key={opt.code} role="none">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={language === opt.code}
+                    onClick={() => {
+                      setLanguage(opt.code);
+                      setLangMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-center gap-1 h-10 px-3 rounded-full text-sm font-bold transition-colors border ${
+                      language === opt.code
+                        ? "bg-muted border-primary/40 text-foreground"
+                        : "border-transparent hover:bg-muted text-foreground"
+                    }`}
+                  >
+                    <Globe className="w-4 h-4 shrink-0 opacity-90" aria-hidden />
+                    <span className="tabular-nums">{LANG_ABBREV[opt.code]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       <div className="w-full max-w-md px-6">

@@ -7,19 +7,15 @@ import { AcceptedRequest } from "./components/AcceptedRequest";
 import { CaroolCheck } from "./components/CaroolCheck";
 import { OpenRequests } from "./components/OpenRequests";
 import { RequestDetail } from "./components/RequestDetail";
-import { RequestHistory } from "./components/RequestHistory";
-import { HistoryDetail } from "./components/HistoryDetail";
 
 export type Screen =
   | { name: "login" }
   | { name: "dashboard" }
-  | { name: "accepted-request"; plate: string; plateType: PlateType }
+  | { name: "accepted-request"; plate: string; plateType: PlateType; mileage?: string }
   | { name: "declined-request"; plate: string; plateType: PlateType; reason?: string }
   | { name: "carool-check"; plate: string; plateType: PlateType }
   | { name: "open-requests" }
-  | { name: "request-detail"; id: string }
-  | { name: "history" }
-  | { name: "history-detail"; id: string };
+  | { name: "request-detail"; id: string };
 
 interface NavigationContextValue {
   screen: Screen;
@@ -43,8 +39,6 @@ function ScreenRenderer({ screen }: { screen: Screen }) {
     case "carool-check":     return <CaroolCheck />;
     case "open-requests":    return <OpenRequests />;
     case "request-detail":   return <RequestDetail />;
-    case "history":          return <RequestHistory />;
-    case "history-detail":   return <HistoryDetail />;
   }
 }
 
