@@ -126,7 +126,10 @@
     "identified": "مُعرَّف – {{customerName}}",
     "customerLabel": "العميل",
     "mileage": "عداد المسافات",
-    "km": "كم"
+    "km": "كم",
+    "mileageWarningTitle": "قراءة العداد لا تتطابق مع السجل",
+    "mileageWarningLastReported": "آخر قراءة مسجّلة في النظام: {{lastMileage}} كم",
+    "mileageWarningEditButton": "تصحيح قراءة العداد الحالية"
   },
   "declinedRequest": {
     "title": "تقرير جديد",

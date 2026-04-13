@@ -126,7 +126,10 @@
     "identified": "Идентифицировано – {{customerName}}",
     "customerLabel": "Клиент",
     "mileage": "Пробег",
-    "km": "км"
+    "km": "км",
+    "mileageWarningTitle": "Пробег не соответствует истории",
+    "mileageWarningLastReported": "Последний зафиксированный пробег: {{lastMileage}} км",
+    "mileageWarningEditButton": "Исправить актуальный пробег"
   },
   "declinedRequest": {
     "title": "Новый отчет",

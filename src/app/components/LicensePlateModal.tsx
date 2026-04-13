@@ -129,6 +129,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                         className={`w-full min-w-0 bg-transparent text-center text-2xl sm:text-4xl font-black outline-none ${text.main} ${text.placeholder} tracking-widest tabular-nums [text-shadow:0_2px_0_rgba(0,0,0,0.12),0_1px_0_rgba(255,255,255,0.08)]`}
                         style={mono}
                         dir="ltr"
+                        inputMode="numeric"
                         autoFocus
                       />
                     </div>
@@ -145,6 +146,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                         placeholder="123456"
                         className={`min-w-0 flex-1 bg-transparent text-end text-2xl sm:text-4xl font-black outline-none ${text.main} ${text.placeholder} tracking-widest tabular-nums`}
                         style={mono}
+                        inputMode="numeric"
                         autoFocus
                       />
                       <span
@@ -171,6 +173,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                           placeholder="12-345"
                           className={`min-w-0 flex-1 bg-transparent text-end text-2xl sm:text-4xl font-black outline-none ${text.main} ${text.placeholder} tracking-widest tabular-nums`}
                           style={mono}
+                          inputMode="numeric"
                           autoFocus
                         />
                         <span
@@ -206,7 +209,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           <button
             type="button"
             onClick={handleContinue}
-            disabled={!licensePlate.trim()}
+            disabled={!licensePlate.trim() || !mileage.trim()}
             className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
           >
             {t("common.continue")}

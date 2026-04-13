@@ -65,10 +65,11 @@ const LEFT_X = 2.5;
 const RIGHT_X = 100 - LEFT_X - TIRE_W;    // = 83.5
 
 const FRONT_Y = 4;
-const REAR_Y_NO_SPARE = 74 - TIRE_H;      // = 52
-const REAR_Y_WITH_SPARE = 62 - TIRE_H;    // = 40
+const REAR_Y = 74 - TIRE_H;               // = 52, fixed regardless of spare
 
-const SPARE_LEFT = (100 - SPARE_W) / 2;   // centered
+const SPARE_LEFT = (100 - SPARE_W) / 2;   // centered horizontally
+// Spare vertically centered on the rear axle, overlaid between rear tires
+const SPARE_TOP = REAR_Y + (TIRE_H - SPARE_W) / 2;  // = 51
 
 // Tire center X (for axle lines, % of container)
 const TIRE_CX_LEFT = LEFT_X + TIRE_W / 2;   // = 9.5
@@ -76,16 +77,7 @@ const TIRE_CX_RIGHT = RIGHT_X + TIRE_W / 2; // = 90.5
 
 // Front tire center Y
 const FRONT_CY = FRONT_Y + TIRE_H / 2;      // = 15
-
-function rearCY(showSpare: boolean) {
-  const ry = showSpare ? REAR_Y_WITH_SPARE : REAR_Y_NO_SPARE;
-  return ry + TIRE_H / 2;
-}
-
-function spareCY(showSpare: boolean) {
-  const ry = showSpare ? REAR_Y_WITH_SPARE : REAR_Y_NO_SPARE;
-  return ry + TIRE_H + 4 + SPARE_W / 2;
-}
+const REAR_CY = REAR_Y + TIRE_H / 2;        // = 63
 
 function getWheelColor(
   id: string,
@@ -120,11 +112,6 @@ export function AxlesDiagram({
 }: AxlesDiagramProps) {
   const { t } = useTranslation();
   const is6 = wheelCount === 6;
-
-  const rearY = showSpareTire ? REAR_Y_WITH_SPARE : REAR_Y_NO_SPARE;
-  const rearCenterY = rearCY(showSpareTire);
-  const spareCenterY = spareCY(showSpareTire);
-  const spareTop = rearY + TIRE_H + 4;
 
   // Inner rear positions for 6-wheel (slightly inset from outer)
   const INNER_W = TIRE_W * 0.85;
@@ -178,24 +165,16 @@ export function AxlesDiagram({
         />
         {/* Rear axle */}
         <line
-          x1={is6 ? INNER_TIRE_CX_LEFT : TIRE_CX_LEFT} y1={rearCenterY}
-          x2={is6 ? INNER_TIRE_CX_RIGHT : TIRE_CX_RIGHT} y2={rearCenterY}
+          x1={is6 ? INNER_TIRE_CX_LEFT : TIRE_CX_LEFT} y1={REAR_CY}
+          x2={is6 ? INNER_TIRE_CX_RIGHT : TIRE_CX_RIGHT} y2={REAR_CY}
           style={{ stroke: "var(--border)", strokeWidth: 0.8 }}
         />
         {/* Chassis center line */}
         <line
           x1={50} y1={FRONT_CY}
-          x2={50} y2={rearCenterY}
+          x2={50} y2={REAR_CY}
           style={{ stroke: "var(--border)", strokeWidth: 0.8 }}
         />
-        {/* Spare connector (dashed) */}
-        {showSpareTire && (
-          <line
-            x1={50} y1={rearCenterY}
-            x2={50} y2={spareCenterY - SPARE_W / 2}
-            style={{ stroke: "var(--border)", strokeWidth: 0.6, strokeDasharray: "2 2" }}
-          />
-        )}
       </svg>
 
       {/* Front-left tire */}
@@ -204,18 +183,18 @@ export function AxlesDiagram({
       {tireButton("front-right", { left: `${RIGHT_X}%`, top: `${FRONT_Y}%`, width: `${TIRE_W}%`, height: `${TIRE_H}%` })}
 
       {/* Rear-left tire */}
-      {tireButton("rear-left", { left: `${LEFT_X}%`, top: `${rearY}%`, width: `${TIRE_W}%`, height: `${TIRE_H}%` })}
+      {tireButton("rear-left", { left: `${LEFT_X}%`, top: `${REAR_Y}%`, width: `${TIRE_W}%`, height: `${TIRE_H}%` })}
       {/* Rear-right tire */}
-      {tireButton("rear-right", { left: `${RIGHT_X}%`, top: `${rearY}%`, width: `${TIRE_W}%`, height: `${TIRE_H}%` })}
+      {tireButton("rear-right", { left: `${RIGHT_X}%`, top: `${REAR_Y}%`, width: `${TIRE_W}%`, height: `${TIRE_H}%` })}
 
       {/* 6-wheel inner rear pair */}
-      {is6 && tireButton("rear-left-inner",  { left: `${INNER_LEFT_X}%`,  top: `${rearY}%`, width: `${INNER_W}%`, height: `${TIRE_H}%` })}
-      {is6 && tireButton("rear-right-inner", { left: `${INNER_RIGHT_X}%`, top: `${rearY}%`, width: `${INNER_W}%`, height: `${TIRE_H}%` })}
+      {is6 && tireButton("rear-left-inner",  { left: `${INNER_LEFT_X}%`,  top: `${REAR_Y}%`, width: `${INNER_W}%`, height: `${TIRE_H}%` })}
+      {is6 && tireButton("rear-right-inner", { left: `${INNER_RIGHT_X}%`, top: `${REAR_Y}%`, width: `${INNER_W}%`, height: `${TIRE_H}%` })}
 
-      {/* Spare tire */}
+      {/* Spare tire — overlaid between rear wheels, centered on rear axle */}
       {showSpareTire && tireButton(
         "spare-tire",
-        { left: `${SPARE_LEFT}%`, top: `${spareTop}%`, width: `${SPARE_W}%`, height: `${SPARE_W}%` },
+        { left: `${SPARE_LEFT}%`, top: `${SPARE_TOP}%`, width: `${SPARE_W}%`, height: `${SPARE_W}%`, zIndex: 1 },
         true
       )}
     </div>

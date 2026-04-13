@@ -135,36 +135,36 @@ export function AcceptedRequest() {
 
           {/* Mileage mismatch warning */}
           {showMileageWarning && (
-            <div className="bg-red-50 dark:bg-red-950/40 border border-red-500 rounded-lg px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-500 rounded-lg px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-red-600 dark:text-red-400 leading-tight">
-                    ⚠️ קילומטרז' לא תואם היסטוריה! ⚠️
+                  <p className="text-sm font-bold text-red-600 dark:text-red-400 leading-tight">
+                    ⚠️ {t("acceptedRequest.mileageWarningTitle")}
                   </p>
-                  <p className="text-[10px] text-red-500 dark:text-red-400 leading-tight mt-0.5">
-                    נמוך ב־{mileageDiff!.toLocaleString()} קמ מהדיווח האחרון
+                  <p className="text-xs text-red-500 dark:text-red-400 leading-tight mt-1">
+                    {t("acceptedRequest.mileageWarningLastReported", { lastMileage: lastMileage!.toLocaleString() })}
                   </p>
                 </div>
                 {editingMileage ? (
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex gap-1.5 shrink-0">
                     <input
                       type="number"
                       value={mileageInput}
                       onChange={(e) => setMileageInput(e.target.value)}
-                      className="w-24 text-xs rounded border border-red-400 bg-white dark:bg-red-950/60 text-foreground px-2 py-1 focus:outline-none"
+                      className="w-24 text-xs rounded border border-red-400 bg-white dark:bg-red-950/60 text-foreground px-2 py-1.5 focus:outline-none"
                       dir="ltr"
                     />
                     <button
                       type="button"
                       onClick={() => navigate({ name: "accepted-request", plate: licensePlate, plateType, mileage: mileageInput })}
-                      className="px-2 py-1 rounded bg-red-500 text-white text-[10px] font-semibold hover:bg-red-600 transition-colors"
+                      className="px-2.5 py-1.5 rounded bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
                     >
                       עדכן
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingMileage(false)}
-                      className="px-2 py-1 rounded border border-red-400 text-red-600 dark:text-red-400 text-[10px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      className="px-2.5 py-1.5 rounded border border-red-400 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                     >
                       ביטול
                     </button>
@@ -173,9 +173,9 @@ export function AcceptedRequest() {
                   <button
                     type="button"
                     onClick={() => setEditingMileage(true)}
-                    className="shrink-0 px-2 py-1 rounded border border-red-500 text-red-600 dark:text-red-400 text-[10px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    className="shrink-0 px-3 py-1.5 rounded border border-red-500 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                   >
-                    עריכה
+                    {t("acceptedRequest.mileageWarningEditButton")}
                   </button>
                 )}
               </div>
@@ -185,32 +185,31 @@ export function AcceptedRequest() {
           {/* Info chips — single row */}
           <div className="flex gap-1.5">
             {plateType === "civilian" && (
-              <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
-                <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.customerLabel")}</p>
-                <p className="text-xs font-semibold text-foreground leading-tight truncate">{getCustomerNameForPlate(licensePlate)}</p>
+              <div className="flex-1 bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
+                <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.customerLabel")}</p>
+                <p className="text-sm font-semibold text-foreground leading-tight truncate">{getCustomerNameForPlate(licensePlate)}</p>
               </div>
             )}
-            <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
-              <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("common.requestNumberLabel")}</p>
-              <p className="text-xs font-semibold text-foreground tabular-nums leading-tight truncate">{getRequestNumberForPlate(licensePlate)}</p>
+            <div className="flex-1 bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
+              <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.requestNumberLabel")}</p>
+              <p className="text-sm font-semibold text-foreground tabular-nums leading-tight truncate">{getRequestNumberForPlate(licensePlate)}</p>
             </div>
-            <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
-              <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
-              <p className="text-xs font-semibold text-foreground leading-tight truncate">{translateQualityTier(t, getQualityTierForPlate(licensePlate))}</p>
+            <div className="flex-1 bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
+              <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
+              <p className="text-sm font-semibold text-foreground leading-tight truncate">{translateQualityTier(t, getQualityTierForPlate(licensePlate))}</p>
             </div>
             {mileage && (
-              <div className="flex-1 bg-card rounded-lg border border-border px-1.5 py-1 text-center min-w-0">
-                <p className="text-[9px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.mileage")}</p>
-                <p className="text-xs font-semibold text-foreground tabular-nums leading-tight" dir="ltr">{Number(mileage).toLocaleString()} {t("acceptedRequest.km")}</p>
+              <div className="flex-1 bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
+                <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.mileage")}</p>
+                <p className="text-sm font-semibold text-foreground tabular-nums leading-tight" dir="ltr">{Number(mileage).toLocaleString()} {t("acceptedRequest.km")}</p>
               </div>
             )}
           </div>
 
           {/* Wheel Selector */}
-          <div className="bg-card rounded-xl p-2 shadow-md border border-border">
-            <p className="text-xs font-semibold text-foreground mb-1 text-center">{t("acceptedRequest.selectWheel")}</p>
-            <TireSizeBadge size="205/55R16" profile={getFrontTireProfileForPlate(licensePlate)} />
-            <div className="max-w-[210px] mx-auto">
+          <div className="bg-card rounded-xl p-1.5 shadow-md border border-border">
+            <p className="text-xs font-semibold text-foreground mb-0.5 text-center">{t("acceptedRequest.selectWheel")}</p>
+            <div className="relative mx-auto max-w-[240px]">
               <AxlesDiagram
                 onWheelClick={handleWheelClick}
                 selectedWheel={selectedWheel}
@@ -218,36 +217,42 @@ export function AcceptedRequest() {
                 showSpareTire={spareTire}
                 wheelCount={wheelCount}
               />
+              {/* Tire size badges overlaid — top edge (above front tires) and bottom edge (below rear tires) */}
+              <div className="absolute inset-x-0 top-0 flex justify-center pointer-events-none">
+                <TireSizeBadge size="205/55R16" profile={getFrontTireProfileForPlate(licensePlate)} />
+              </div>
+              <div className="absolute inset-x-0 flex justify-center pointer-events-none" style={{ top: "76%" }}>
+                <TireSizeBadge size="225/45R17" profile={getRearTireProfileForPlate(licensePlate)} />
+              </div>
             </div>
-            <TireSizeBadge size="225/45R17" profile={getRearTireProfileForPlate(licensePlate)} />
           </div>
 
           {/* Spare tire + Front Alignment */}
-          <div className="bg-card rounded-xl px-3 py-2 shadow-md border border-border space-y-1.5">
+          <div className="bg-card rounded-xl px-4 py-3 shadow-md border border-border space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">{t("common.spareTire")}</span>
+              <span className="text-sm font-medium text-foreground">{t("common.spareTire")}</span>
               <button
                 dir="ltr"
                 type="button"
                 onClick={() => handleSpareTireChange(!spareTire)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 ${
                   spareTire ? "bg-primary" : "bg-muted"
                 }`}
               >
-                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${spareTire ? "translate-x-[3px]" : "translate-x-[27px]"}`} />
+                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-300 ${spareTire ? "translate-x-[3px]" : "translate-x-[28px]"}`} />
               </button>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">{t("common.frontAlignment")}</span>
+              <span className="text-sm font-medium text-foreground">{t("common.frontAlignment")}</span>
               <button
                 dir="ltr"
                 type="button"
                 onClick={() => setFrontAlignment(!frontAlignment)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 ${
                   frontAlignment ? "bg-primary" : "bg-muted"
                 }`}
               >
-                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${frontAlignment ? "translate-x-[3px]" : "translate-x-[27px]"}`} />
+                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-300 ${frontAlignment ? "translate-x-[3px]" : "translate-x-[28px]"}`} />
               </button>
             </div>
           </div>
@@ -300,8 +305,8 @@ export function AcceptedRequest() {
 function TireSizeBadge({ size, profile }: { size: string; profile?: string }) {
   const label = profile ? `${size} · ${profile}` : size;
   return (
-    <p className="text-center my-1">
-      <span className="text-xs font-bold text-foreground bg-muted px-3 py-0.5 rounded-full tabular-nums" dir="ltr">
+    <p className="text-center">
+      <span className="text-[10px] font-bold text-foreground bg-muted/90 px-2 py-px rounded-full tabular-nums shadow-sm" dir="ltr">
         {label}
       </span>
     </p>
