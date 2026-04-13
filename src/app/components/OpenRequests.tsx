@@ -368,9 +368,9 @@ export function OpenRequests() {
   }, [requests, searchQuery, statusFilter]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col" style={{ height: "100dvh" }}>
       {/* Header */}
-      <div className="bg-primary p-4 shadow-md">
+      <div className="bg-primary p-4 shadow-md shrink-0">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
             onClick={() => navigate({ name: "dashboard" })}
@@ -384,7 +384,7 @@ export function OpenRequests() {
       </div>
 
       {/* Filters */}
-      <div className="bg-card border-b border-border p-4 shadow-sm">
+      <div className="bg-card border-b border-border p-4 shadow-sm shrink-0">
         <div className="max-w-2xl mx-auto space-y-3">
           <div className="relative">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />

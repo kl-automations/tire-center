@@ -111,7 +111,7 @@ export function AcceptedRequest() {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col relative overflow-hidden">
+    <div className="h-screen bg-background flex flex-col relative overflow-hidden" style={{ height: "100dvh" }}>
       {/* Header */}
       <div className="bg-primary px-4 py-2.5 shadow-md">
         <div className="flex items-center justify-between">
