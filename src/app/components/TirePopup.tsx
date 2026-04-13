@@ -169,17 +169,30 @@ export function TirePopup({
         {/* תיקון */}
         <section>
           <SectionLabel>{t("tirePopup.sectionRepair")}</SectionLabel>
-          <div className="mt-2 space-y-1.5">
-            <ToggleRow label={t("services.sensor")}   value={sensor}    onChange={setSensor} />
-            <ToggleRow label={t("services.tpmsValve")} value={tpmsValve} onChange={setTpmsValve} />
-            <ToggleRow label={t("services.balancing")} value={balancing} onChange={setBalancing} />
-            <ToggleRow label={t("services.rimRepair")} value={rimRepair} onChange={setRimRepair} />
-            <ToggleRow
-              label={t("services.puncture")}
-              value={effectivePuncture}
-              onChange={setPuncture}
-              disabled={hasReplacement}
-            />
+          <div className="flex flex-col gap-2 mt-2">
+            {([
+              { key: "sensor",    label: t("services.sensor"),    value: sensor,    set: setSensor },
+              { key: "tpmsValve", label: t("services.tpmsValve"), value: tpmsValve, set: setTpmsValve },
+              { key: "balancing", label: t("services.balancing"), value: balancing, set: setBalancing },
+              { key: "rimRepair", label: t("services.rimRepair"), value: rimRepair, set: setRimRepair },
+              { key: "puncture",  label: t("services.puncture"),  value: effectivePuncture, set: setPuncture, disabled: hasReplacement },
+            ] as const).map(({ key, label, value, set, disabled }) => (
+              <button
+                key={key}
+                type="button"
+                disabled={disabled}
+                onClick={() => !disabled && set(!value)}
+                className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                  disabled
+                    ? "opacity-35 border-border bg-card text-foreground cursor-not-allowed"
+                    : value
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-card text-foreground hover:border-primary/50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </section>
 
@@ -187,7 +200,7 @@ export function TirePopup({
         {wheelPosition !== "spare-tire" && (
           <section>
             <SectionLabel>{t("tirePopup.sectionRelocation")}</SectionLabel>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-2">
               {relocationTargets.map((pos) => (
                 <button
                   key={pos}
@@ -218,6 +231,7 @@ export function TirePopup({
           {t("tirePopup.continueToCheck")}
         </button>
       </div>
+
     </div>
   );
 }
@@ -231,35 +245,3 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ToggleRow({
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className={`flex items-center justify-between bg-card rounded-xl px-3 py-2.5 border border-border transition-opacity ${disabled ? "opacity-35" : ""}`}>
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      <button
-        dir="ltr"
-        type="button"
-        onClick={() => !disabled && onChange(!value)}
-        disabled={disabled}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
-          value ? "bg-primary" : "bg-muted"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${
-            value ? "translate-x-[3px]" : "translate-x-[27px]"
-          }`}
-        />
-      </button>
-    </div>
-  );
-}

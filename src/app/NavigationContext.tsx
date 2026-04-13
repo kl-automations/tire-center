@@ -45,8 +45,13 @@ function ScreenRenderer({ screen }: { screen: Screen }) {
 export function NavigationProvider({ children: _children }: { children?: React.ReactNode }) {
   const [screen, setScreen] = useState<Screen>({ name: "login" });
 
+  function navigate(screen: Screen) {
+    window.scrollTo(0, 0);
+    setScreen(screen);
+  }
+
   return (
-    <NavigationContext.Provider value={{ screen, navigate: setScreen }}>
+    <NavigationContext.Provider value={{ screen, navigate }}>
       <ScreenRenderer screen={screen} />
     </NavigationContext.Provider>
   );

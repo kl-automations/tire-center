@@ -56,7 +56,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const handleContinue = () => {
     if (licensePlate.trim()) {
       if (licensePlate === "12345678") {
-        navigate({ name: "declined-request", plate: licensePlate, plateType });
+        navigate({ name: "declined-request", plate: licensePlate, plateType, reason: "קיימת פנייה פתוחה עבור רכב זה" });
       } else {
         navigate({ name: "accepted-request", plate: licensePlate, plateType, mileage: mileage.trim() });
       }

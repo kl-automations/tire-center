@@ -45,7 +45,7 @@ export function Login() {
   };
 
   return (
-    <div className="size-full flex items-center justify-center relative">
+    <div className="min-h-screen flex items-center justify-center relative">
       {/* Top bar controls */}
       <div className="absolute top-4 start-4 flex items-center gap-2">
         <button

@@ -106,15 +106,15 @@
     "police": "משטרתי"
   },
   "tirePopup": {
-    "sectionReplacement": "החלפה",
+    "sectionReplacement": "החלפה בגין",
     "sectionRepair": "תיקון",
-    "sectionRelocation": "העברה",
+    "sectionRelocation": "העברה ל",
     "replacementReason": {
       "wear": "בלאי",
       "damage": "נזק",
       "fitment": "התאמה"
     },
-    "continueToCheck": "המשך לצילום צמיג"
+    "continueToCheck": "המשך לצילום📸"
   },
   "licensePlateModal": {
     "title": "דיווח חדש",

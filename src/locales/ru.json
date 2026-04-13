@@ -106,15 +106,15 @@
     "police": "Полиция"
   },
   "tirePopup": {
-    "sectionReplacement": "Замена",
+    "sectionReplacement": "Замена по причине",
     "sectionRepair": "Ремонт",
-    "sectionRelocation": "Перестановка",
+    "sectionRelocation": "Перестановка на",
     "replacementReason": {
       "wear": "Износ",
       "damage": "Повреждение",
       "fitment": "Размер"
     },
-    "continueToCheck": "Перейти к фото шины"
+    "continueToCheck": "Перейти к фото шины📸"
   },
   "licensePlateModal": {
     "title": "Новый отчет",

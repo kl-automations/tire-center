@@ -106,15 +106,15 @@
     "police": "شرطة"
   },
   "tirePopup": {
-    "sectionReplacement": "استبدال",
+    "sectionReplacement": "استبدال بسبب",
     "sectionRepair": "إصلاح",
-    "sectionRelocation": "نقل",
+    "sectionRelocation": "نقل إلى",
     "replacementReason": {
       "wear": "تآكل",
       "damage": "تلف",
       "fitment": "مقاس"
     },
-    "continueToCheck": "المتابعة لتصوير الإطار"
+    "continueToCheck": "المتابعة لتصوير الإطار📸"
   },
   "licensePlateModal": {
     "title": "تقرير جديد",
