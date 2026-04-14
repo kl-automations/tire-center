@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
-import { Sun, Moon, Globe } from "lucide-react";
+import { Sun, Moon, Globe, ArrowLeft } from "lucide-react";
 import { APP_LANGUAGES, type Language, useTheme } from "../ThemeContext";
 
-/** Short labels for the language pill — same idea as the original עב / عر style */
+/** Short labels for the language pill */
 const LANG_ABBREV: Record<Language, string> = {
   he: "עב",
   ru: "РУ",
   ar: "عر",
 };
 
+type Step = "email" | "code";
+
 export function Login() {
   const { t } = useTranslation();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [step, setStep] = useState<Step>("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [emailError, setEmailError] = useState(false);
+  const [codeError, setCodeError] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const langMenuRef = useRef<HTMLDivElement>(null);
   const { navigate } = useNavigation();
@@ -38,10 +43,32 @@ export function Login() {
     };
   }, [langMenuOpen]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login attempt:", { username, password });
+    setEmailError(false);
+    if (email === "roi.krn@gmail.com") {
+      setEmailError(true);
+      return;
+    }
+    // TODO: call ERP to validate email and trigger SMS code
+    setStep("code");
+  };
+
+  const handleCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCodeError(false);
+    if (email === "memlamed2004@gmail.com") {
+      setCodeError(true);
+      return;
+    }
+    // TODO: call ERP to verify the code
     navigate({ name: "dashboard" });
+  };
+
+  const handleBackToEmail = () => {
+    setStep("email");
+    setCode("");
+    setCodeError(false);
   };
 
   return (
@@ -121,52 +148,87 @@ export function Login() {
             </svg>
           </div>
           <h1 className="text-3xl text-foreground mb-2">{t("login.title")}</h1>
-          <p className="text-muted-foreground">{t("login.subtitle")}</p>
+          <p className="text-muted-foreground">
+            {step === "email" ? t("login.subtitleEmail") : t("login.subtitleCode")}
+          </p>
         </div>
 
-        {/* Login Form Card */}
+        {/* Form Card */}
         <div className="bg-card rounded-2xl shadow-xl p-8 border border-border">
-          <form onSubmit={handleLogin} className="space-y-6">
-            {/* Username Field */}
-            <div className="space-y-2">
-              <label htmlFor="username" className="block text-card-foreground">
-                {t("login.username")}
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                placeholder={t("login.usernamePlaceholder")}
-                required
-              />
-            </div>
-
-            {/* Password Field */}
-            <div className="space-y-2">
-              <label htmlFor="password" className="block text-card-foreground">
-                {t("login.password")}
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                placeholder={t("login.passwordPlaceholder")}
-                required
-              />
-            </div>
-
-            {/* Login Button */}
-            <button
-              type="submit"
-              className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
-            >
-              {t("login.submit")}
-            </button>
-          </form>
+          {step === "email" ? (
+            <form onSubmit={handleEmailSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label htmlFor="email" className="block text-card-foreground">
+                  {t("login.emailLabel")}
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError(false);
+                  }}
+                  className={`w-full px-4 py-3 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
+                    emailError ? "border-red-500" : "border-border"
+                  }`}
+                  placeholder={t("login.emailPlaceholder")}
+                  required
+                  autoComplete="email"
+                />
+                {emailError && (
+                  <p className="text-red-500 text-sm mt-1">{t("login.emailError")}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+              >
+                {t("login.submitEmail")}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleCodeSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label htmlFor="code" className="block text-card-foreground">
+                  {t("login.codeLabel")}
+                </label>
+                <input
+                  id="code"
+                  type="text"
+                  inputMode="numeric"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    setCodeError(false);
+                  }}
+                  className={`w-full px-4 py-3 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all tracking-widest text-center text-lg ${
+                    codeError ? "border-red-500" : "border-border"
+                  }`}
+                  placeholder={t("login.codePlaceholder")}
+                  required
+                  autoComplete="one-time-code"
+                />
+                {codeError && (
+                  <p className="text-red-500 text-sm mt-1">{t("login.codeError")}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+              >
+                {t("login.submitCode")}
+              </button>
+              <button
+                type="button"
+                onClick={handleBackToEmail}
+                className="w-full flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {t("login.backToEmail")}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

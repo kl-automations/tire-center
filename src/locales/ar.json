@@ -49,12 +49,17 @@
   },
   "login": {
     "title": "تقرير خدمة كوغل",
-    "subtitle": "تسجيل الدخول إلى نظام كوغل",
-    "username": "اسم المستخدم",
-    "usernamePlaceholder": "أدخل اسم المستخدم",
-    "password": "كلمة المرور",
-    "passwordPlaceholder": "أدخل كلمة المرور",
-    "submit": "تسجيل الدخول",
+    "subtitleEmail": "أدخل عنوان بريدك الإلكتروني",
+    "subtitleCode": "أدخل رمز التحقق المُرسَل إلى هاتفك",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "your@email.com",
+    "emailError": "البريد الإلكتروني غير معروف في النظام",
+    "codeLabel": "رمز التحقق",
+    "codePlaceholder": "أدخل الرمز",
+    "codeError": "الرمز غير صحيح، حاول مجدداً",
+    "submitEmail": "إرسال الرمز",
+    "submitCode": "دخول",
+    "backToEmail": "رجوع",
     "changeLanguage": "تغيير اللغة"
   },
   "dashboard": {
