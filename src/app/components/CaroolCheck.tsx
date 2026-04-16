@@ -117,11 +117,11 @@ export function CaroolCheck() {
 
       {/* Mask overlay — only while live, fills space between header and shutter */}
       {!preview && (
-        <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none z-10 px-6"
+        <div className="absolute inset-x-0 pointer-events-none z-10 px-6"
           style={{ top: "64px", bottom: "160px" }}>
           {photoStep === "sidewall"
-            ? <ReferenceMask className="w-full" />
-            : <WearMask className="w-full" />
+            ? <ReferenceMask className="w-full h-full" />
+            : <WearMask className="w-full h-full" />
           }
         </div>
       )}

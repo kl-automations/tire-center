@@ -28,7 +28,7 @@ interface TirePopupProps {
   wheelPosition: string;
   licensePlate: string;
   onSubmit: (wheelPosition: string, data: WheelData) => void;
-  onNavigateToCaroolCheck: () => void;
+  onNavigateToCaroolCheck: (wheel: string) => void;
   spareTireEnabled?: boolean;
   wheelCount?: VehicleWheelCount;
   initialData?: WheelData;
@@ -121,7 +121,7 @@ export function TirePopup({
     });
     reset();
     onClose();
-    onNavigateToCaroolCheck();
+    onNavigateToCaroolCheck(wheelPosition);
   };
 
   const title = WHEEL_POS_KEYS[wheelPosition] ? t(WHEEL_POS_KEYS[wheelPosition]) : wheelPosition;

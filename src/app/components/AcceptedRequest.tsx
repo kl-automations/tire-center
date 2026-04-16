@@ -97,10 +97,8 @@ export function AcceptedRequest() {
     setAffectedWheels((prev) => ({ ...prev, [wheel]: data }));
   };
 
-  const handleNavigateToCaroolCheck = () => {
-    // Read from sessionStorage — affectedWheels React state may still be stale
-    // at this point because setAffectedWheels is async.
-    navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: Object.keys(getStoredAffectedWheels(licensePlate)) });
+  const handleNavigateToCaroolCheck = (wheel: string) => {
+    navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: [wheel] });
   };
 
   const handleSpareTireChange = (enabled: boolean) => {
