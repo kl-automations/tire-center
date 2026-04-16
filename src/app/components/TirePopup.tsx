@@ -31,6 +31,7 @@ interface TirePopupProps {
   onNavigateToCaroolCheck: () => void;
   spareTireEnabled?: boolean;
   wheelCount?: VehicleWheelCount;
+  initialData?: WheelData;
 }
 
 const WHEEL_POS_KEYS: Record<string, string> = {
@@ -63,6 +64,7 @@ export function TirePopup({
   onNavigateToCaroolCheck,
   spareTireEnabled = false,
   wheelCount = 4,
+  initialData,
 }: TirePopupProps) {
   const { t } = useTranslation();
 
@@ -75,14 +77,14 @@ export function TirePopup({
   const [movedToWheel, setMovedToWheel] = useState<string | null>(null);
 
   const reset = useCallback(() => {
-    setReplacementReason(null);
-    setSensor(false);
-    setTpmsValve(false);
-    setBalancing(false);
-    setRimRepair(false);
-    setPuncture(false);
-    setMovedToWheel(null);
-  }, []);
+    setReplacementReason(initialData?.replacementReason ?? null);
+    setSensor(initialData?.sensor ?? false);
+    setTpmsValve(initialData?.tpmsValve ?? false);
+    setBalancing(initialData?.balancing ?? false);
+    setRimRepair(initialData?.rimRepair ?? false);
+    setPuncture(initialData?.puncture ?? false);
+    setMovedToWheel(initialData?.movedToWheel ?? null);
+  }, [initialData]);
 
   useEffect(() => {
     if (isOpen) reset();

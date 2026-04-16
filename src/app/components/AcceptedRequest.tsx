@@ -98,7 +98,9 @@ export function AcceptedRequest() {
   };
 
   const handleNavigateToCaroolCheck = () => {
-    navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: Object.keys(affectedWheels) });
+    // Read from sessionStorage — affectedWheels React state may still be stale
+    // at this point because setAffectedWheels is async.
+    navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: Object.keys(getStoredAffectedWheels(licensePlate)) });
   };
 
   const handleSpareTireChange = (enabled: boolean) => {
@@ -303,6 +305,7 @@ export function AcceptedRequest() {
         onNavigateToCaroolCheck={handleNavigateToCaroolCheck}
         spareTireEnabled={spareTire}
         wheelCount={wheelCount}
+        initialData={popupWheel ? affectedWheels[popupWheel] : undefined}
       />
     </div>
   );

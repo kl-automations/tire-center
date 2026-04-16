@@ -68,12 +68,8 @@ export function CaroolCheck() {
   const stepLabel = t(`caroolCheck.${photoStep}`);
 
   const handleBack = () => {
-    if (preview) {
-      setPreview(null);
-    } else {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      navigate({ name: "accepted-request", plate, plateType });
-    }
+    // In preview: back = retake. In live: no escape back to AcceptedRequest — photos are required.
+    if (preview) setPreview(null);
   };
 
   const handleCapture = () => {
@@ -119,13 +115,13 @@ export function CaroolCheck() {
         <img src={preview} alt="" className="absolute inset-0 w-full h-full object-cover" />
       )}
 
-      {/* Mask overlay — only while live */}
+      {/* Mask overlay — only while live, fills space between header and shutter */}
       {!preview && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
-          style={{ paddingBottom: "160px", paddingTop: "80px" }}>
+        <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none z-10 px-6"
+          style={{ top: "64px", bottom: "160px" }}>
           {photoStep === "sidewall"
-            ? <ReferenceMask className="w-4/5 max-w-[300px]" />
-            : <WearMask className="w-3/5 max-w-[220px]" />
+            ? <ReferenceMask className="w-full" />
+            : <WearMask className="w-full" />
           }
         </div>
       )}
@@ -133,9 +129,11 @@ export function CaroolCheck() {
       {/* Header */}
       <div className="absolute top-0 inset-x-0 z-20 bg-gradient-to-b from-black/75 to-transparent pb-8">
         <div className="flex items-center justify-between px-4 pt-4">
-          <button onClick={handleBack} className="text-white hover:opacity-75 transition-opacity p-1">
-            <ArrowRight className="w-6 h-6" />
-          </button>
+          {/* Back only shown in preview mode (acts as retake) */}
+          {preview
+            ? <button onClick={handleBack} className="text-white hover:opacity-75 transition-opacity p-1"><ArrowRight className="w-6 h-6" /></button>
+            : <div className="w-8" />
+          }
           <div className="text-center">
             <p className="text-white font-semibold text-sm leading-tight">{wheelLabel}</p>
             <p className="text-white/70 text-xs mt-0.5">{stepLabel}</p>
