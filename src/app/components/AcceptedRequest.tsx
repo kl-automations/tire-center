@@ -98,7 +98,10 @@ export function AcceptedRequest() {
   };
 
   const handleNavigateToCaroolCheck = (wheel: string) => {
-    navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: [wheel] });
+    const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
+    if (!noCarool) {
+      navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: [wheel] });
+    }
   };
 
   const handleSpareTireChange = (enabled: boolean) => {
