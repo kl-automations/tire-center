@@ -143,8 +143,16 @@
     "backHome": "Вернуться на главную"
   },
   "caroolCheck": {
-    "title": "Проверка Carool",
-    "cameraPlaceholder": "Здесь появится интерфейс камеры Carool"
+    "title": "Фото колёс",
+    "sidewall": "Боковина",
+    "tread": "Протектор",
+    "capture": "Снять",
+    "done": "Фото сделаны",
+    "capture": "Снять",
+    "approve": "Принять",
+    "retake": "Переснять",
+    "cameraError": "Нет доступа к камере",
+    "cameraErrorHint": "Разрешите доступ к камере в настройках браузера"
   },
   "exportHistory": {
     "title": "Экспорт истории",

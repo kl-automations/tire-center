@@ -1,0 +1,58 @@
+{
+  "dateAnalysis": "2025-02-02",
+  "externalId": "your-own-id",
+  "vehicle": {
+    "license": "12-222-34",
+    "licenseCountry": "IL",
+    "vin": "MF3PB8121SJ153664"
+  },
+  "prediction": {
+    "sidewalls": [
+      {
+        "position": "FRONT_LEFT",
+        "brand": "Michelin",
+        "pattern": "Primacy 4",
+        "season": "SUMMER | WINTER | ALL_SEASONS",
+        "dimension": {
+          "width": 205,
+          "ratio": 55,
+          "diameter": 16,
+          "loadIndex": 91,
+          "speedIndex": "V"
+        },
+        "dot": {
+          "date": 1221
+        }
+      }
+    ],
+    "treads": [
+      {
+        "position": "FRONT_LEFT",
+        "wearPercent": 20.7,
+        "confidence": 12
+      }
+    ]
+  },
+  "recommendations": [
+    {
+      "axle": "FRONT",
+      "dimension": {
+        "width": 205,
+        "ratio": 55,
+        "diameter": 16,
+        "loadIndex": 91,
+        "speedIndex": "V"
+      }
+    },
+    {
+      "axle": "REAR",
+      "dimension": {
+        "width": 205,
+        "ratio": 55,
+        "diameter": 16,
+        "loadIndex": 91,
+        "speedIndex": "V"
+      }
+    }
+  ]
+}

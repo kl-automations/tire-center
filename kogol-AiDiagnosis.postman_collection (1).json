@@ -1,0 +1,207 @@
+{
+	"info": {
+		"_postman_id": "33beecdb-2b9b-4482-8d46-56d369bd4236",
+		"name": "AiDiagnosis",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "874180"
+	},
+	"item": [
+		{
+			"name": "CreateAiDiagVal",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-KEY",
+						"value": "{{x-api-key}}",
+						"type": "text"
+					},
+					{
+						"key": "X-Page-origin",
+						"value": "{{x-page-origin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"vehicleMileage\": 1000,\n    \"externalId\": \"Your-own-key\",\n    \"license\": \"12-322-34\",\n    \"licenseCountry\": \"il\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://val.rolling.ca-rool.com/api/external/v1/ai-diagnoses",
+					"protocol": "https",
+					"host": [
+						"val",
+						"rolling",
+						"ca-rool",
+						"com"
+					],
+					"path": [
+						"api",
+						"external",
+						"v1",
+						"ai-diagnoses"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "CreateAiDiagSidewallPictureVal",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-KEY",
+						"value": "{{x-api-key}}",
+						"type": "text"
+					},
+					{
+						"key": "X-Page-origin",
+						"value": "{{x-page-origin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "sidewallPicture",
+							"type": "file",
+							"src": "/Users/ivan/Downloads/295176.jpg"
+						},
+						{
+							"key": "body",
+							"type": "file",
+							"src": "/Users/ivan/Downloads/api/rear_left.json"
+						}
+					]
+				},
+				"url": {
+					"raw": "https://val.rolling.ca-rool.com/api/external/v1/ai-diagnoses/6756/sidewall-picture",
+					"protocol": "https",
+					"host": [
+						"val",
+						"rolling",
+						"ca-rool",
+						"com"
+					],
+					"path": [
+						"api",
+						"external",
+						"v1",
+						"ai-diagnoses",
+						"6756",
+						"sidewall-picture"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "CreateAiDiagTreadPictureVal",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-KEY",
+						"value": "{{x-api-key}}",
+						"type": "text"
+					},
+					{
+						"key": "X-Page-origin",
+						"value": "{{x-page-origin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "treadPicture",
+							"type": "file",
+							"src": "/Users/ivan/Downloads/295176.jpg"
+						},
+						{
+							"key": "body",
+							"type": "file",
+							"src": "/Users/ivan/Downloads/api/front_right.json"
+						}
+					]
+				},
+				"url": {
+					"raw": "https://val.rolling.ca-rool.com/api/external/v1/ai-diagnoses/6756/tread-picture",
+					"protocol": "https",
+					"host": [
+						"val",
+						"rolling",
+						"ca-rool",
+						"com"
+					],
+					"path": [
+						"api",
+						"external",
+						"v1",
+						"ai-diagnoses",
+						"6756",
+						"tread-picture"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "UploadedAiDiagVal",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-KEY",
+						"value": "{{x-api-key}}",
+						"type": "text"
+					},
+					{
+						"key": "X-Page-origin",
+						"value": "{{x-page-origin}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://val.rolling.ca-rool.com/api/external/v1/ai-diagnoses/6756/uploaded",
+					"protocol": "https",
+					"host": [
+						"val",
+						"rolling",
+						"ca-rool",
+						"com"
+					],
+					"path": [
+						"api",
+						"external",
+						"v1",
+						"ai-diagnoses",
+						"6756",
+						"uploaded"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

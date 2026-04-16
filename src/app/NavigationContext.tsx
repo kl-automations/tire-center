@@ -13,7 +13,7 @@ export type Screen =
   | { name: "dashboard" }
   | { name: "accepted-request"; plate: string; plateType: PlateType; mileage?: string }
   | { name: "declined-request"; plate: string; plateType: PlateType; reason?: string }
-  | { name: "carool-check"; plate: string; plateType: PlateType }
+  | { name: "carool-check"; plate: string; plateType: PlateType; wheels: string[] }
   | { name: "open-requests" }
   | { name: "request-detail"; id: string };
 

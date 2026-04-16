@@ -143,8 +143,16 @@
     "backHome": "חזור לדף הבית"
   },
   "caroolCheck": {
-    "title": "בדיקה עם קרול",
-    "cameraPlaceholder": "ממשק מצלמת קרול יופיע כאן"
+    "title": "תצלום גלגלים",
+    "sidewall": "דופן",
+    "tread": "סוליה",
+    "capture": "צלם",
+    "done": "הצילומים הושלמו",
+    "capture": "צלם",
+    "approve": "אשר",
+    "retake": "צלם שוב",
+    "cameraError": "לא ניתן לגשת למצלמה",
+    "cameraErrorHint": "אפשר גישה למצלמה בהגדרות הדפדפן"
   },
   "exportHistory": {
     "title": "ייצוא היסטוריה",

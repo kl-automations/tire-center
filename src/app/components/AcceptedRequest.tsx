@@ -92,7 +92,7 @@ export function AcceptedRequest() {
   };
 
   const handleNavigateToCaroolCheck = () => {
-    navigate({ name: "carool-check", plate: licensePlate, plateType });
+    navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: Object.keys(affectedWheels) });
   };
 
   const handleSpareTireChange = (enabled: boolean) => {
