@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, RotateCcw, Check } from "lucide-react";
@@ -20,11 +20,37 @@ export function CaroolCheck() {
   const { t } = useTranslation();
   const { screen, navigate } = useNavigation();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
   const [wheelIndex, setWheelIndex] = useState(0);
   const [photoStep, setPhotoStep] = useState<PhotoStep>("sidewall");
   const [preview, setPreview] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
+
+  useEffect(() => {
+    if (screen.name !== "carool-check") return;
+    let cancelled = false;
+
+    navigator.mediaDevices
+      .getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      })
+      .then((s) => {
+        if (cancelled) { s.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = s;
+        if (videoRef.current) videoRef.current.srcObject = s;
+        setCameraReady(true);
+      })
+      .catch(() => { if (!cancelled) setCameraError(true); });
+
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, [screen.name]);
 
   if (screen.name !== "carool-check") return null;
   const { plate, plateType, wheels } = screen;
@@ -38,31 +64,32 @@ export function CaroolCheck() {
   const isLastWheel = wheelIndex === wheels.length - 1;
   const totalSteps = wheels.length * 2;
   const completedSteps = wheelIndex * 2 + (photoStep === "tread" ? 1 : 0);
-
   const wheelLabel = WHEEL_LABEL_KEYS[currentWheel] ? t(WHEEL_LABEL_KEYS[currentWheel]) : currentWheel;
   const stepLabel = t(`caroolCheck.${photoStep}`);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    // Reset so the same step can be retaken
-    e.target.value = "";
+  const handleBack = () => {
+    if (preview) {
+      setPreview(null);
+    } else {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      navigate({ name: "accepted-request", plate, plateType });
+    }
   };
 
-  const handleTakePhoto = () => {
-    fileInputRef.current?.click();
+  const handleCapture = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext("2d")!.drawImage(video, 0, 0);
+    setPreview(canvas.toDataURL("image/jpeg", 0.9));
   };
 
-  const handleRetake = () => {
-    if (preview) { URL.revokeObjectURL(preview); setPreview(null); }
-    fileInputRef.current?.click();
-  };
+  const handleRetake = () => setPreview(null);
 
   const handleApprove = () => {
-    if (preview) { URL.revokeObjectURL(preview); setPreview(null); }
-
+    setPreview(null);
     if (photoStep === "sidewall") {
       setPhotoStep("tread");
     } else if (!isLastWheel) {
@@ -70,116 +97,111 @@ export function CaroolCheck() {
       setWheelIndex((i) => i + 1);
     } else {
       setShowDone(true);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
       setTimeout(() => navigate({ name: "accepted-request", plate, plateType }), 1500);
     }
   };
 
-  const handleBack = () => {
-    if (preview) {
-      URL.revokeObjectURL(preview);
-      setPreview(null);
-    } else {
-      navigate({ name: "accepted-request", plate, plateType });
-    }
-  };
-
   return (
-    <div className="h-screen bg-background flex flex-col" style={{ height: "100dvh" }}>
+    <div className="bg-black flex flex-col relative overflow-hidden" style={{ height: "100dvh" }}>
 
-      {/* Hidden native camera input — rear camera, environment facing */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFileChange}
+      {/* Live camera — always mounted so stream stays alive during preview */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className={`absolute inset-0 w-full h-full object-cover ${preview ? "invisible" : ""}`}
       />
 
+      {/* Captured photo preview */}
+      {preview && (
+        <img src={preview} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      )}
+
+      {/* Mask overlay — only while live */}
+      {!preview && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+          style={{ paddingBottom: "160px", paddingTop: "80px" }}>
+          {photoStep === "sidewall"
+            ? <ReferenceMask className="w-4/5 max-w-[300px]" />
+            : <WearMask className="w-3/5 max-w-[220px]" />
+          }
+        </div>
+      )}
+
       {/* Header */}
-      <div className="bg-primary shrink-0">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={handleBack} className="text-primary-foreground hover:opacity-75 transition-opacity p-1">
+      <div className="absolute top-0 inset-x-0 z-20 bg-gradient-to-b from-black/75 to-transparent pb-8">
+        <div className="flex items-center justify-between px-4 pt-4">
+          <button onClick={handleBack} className="text-white hover:opacity-75 transition-opacity p-1">
             <ArrowRight className="w-6 h-6" />
           </button>
           <div className="text-center">
-            <p className="text-primary-foreground font-semibold text-sm leading-tight">{wheelLabel}</p>
-            <p className="text-primary-foreground/70 text-xs mt-0.5">{stepLabel}</p>
+            <p className="text-white font-semibold text-sm leading-tight">{wheelLabel}</p>
+            <p className="text-white/70 text-xs mt-0.5">{stepLabel}</p>
           </div>
-          <p className="text-primary-foreground/60 text-xs tabular-nums">{completedSteps + 1}/{totalSteps}</p>
+          <p className="text-white/60 text-xs tabular-nums">{completedSteps + 1}/{totalSteps}</p>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col min-h-0">
+      {/* Camera error */}
+      {cameraError && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 px-8 text-center">
+          <p className="text-white font-semibold text-base">{t("caroolCheck.cameraError")}</p>
+          <p className="text-white/60 text-sm leading-snug">{t("caroolCheck.cameraErrorHint")}</p>
+        </div>
+      )}
 
-        {/* PREVIEW state */}
-        {preview ? (
-          <>
-            <div className="flex-1 min-h-0 bg-black flex items-center justify-center overflow-hidden">
-              <img src={preview} alt="" className="w-full h-full object-contain" />
-            </div>
-            <div className="shrink-0 bg-background border-t border-border p-4 flex gap-3">
-              <button
-                onClick={handleRetake}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-border text-foreground font-semibold text-base active:opacity-70 transition-opacity"
-              >
-                <RotateCcw className="w-5 h-5" />
-                {t("caroolCheck.retake")}
-              </button>
-              <button
-                onClick={handleApprove}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-base active:opacity-70 transition-opacity"
-              >
-                <Check className="w-5 h-5" />
-                {t("caroolCheck.approve")}
-              </button>
-            </div>
-          </>
-        ) : (
+      {/* Bottom controls — LIVE */}
+      {!preview && !cameraError && (
+        <div className="absolute bottom-0 inset-x-0 z-20 bg-gradient-to-t from-black/80 to-transparent pt-12 pb-10">
+          <div className="flex justify-center items-center gap-2 mb-8">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div key={i} className={`rounded-full transition-all duration-200 ${
+                i < completedSteps ? "w-2 h-2 bg-white/60"
+                : i === completedSteps ? "w-3 h-3 bg-white"
+                : "w-2 h-2 bg-white/25"
+              }`} />
+            ))}
+          </div>
+          <div className="flex justify-center">
+            <button
+              onClick={handleCapture}
+              disabled={!cameraReady}
+              className="w-20 h-20 rounded-full border-[3px] border-white flex items-center justify-center active:scale-90 transition-transform duration-100 disabled:opacity-40"
+              aria-label={t("caroolCheck.capture")}
+            >
+              <div className="w-[62px] h-[62px] rounded-full bg-white" />
+            </button>
+          </div>
+        </div>
+      )}
 
-          /* CAPTURE state */
-          <>
-            {/* Mask guide */}
-            <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/30 p-8">
-              {photoStep === "sidewall" ? (
-                <ReferenceMask className="w-full max-w-[280px]" />
-              ) : (
-                <WearMask className="w-3/5 max-w-[200px]" />
-              )}
-            </div>
-
-            {/* Progress + button */}
-            <div className="shrink-0 bg-background border-t border-border px-4 pt-4 pb-8 space-y-4">
-              {/* Progress dots */}
-              <div className="flex justify-center items-center gap-2">
-                {Array.from({ length: totalSteps }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-full transition-all duration-200 ${
-                      i < completedSteps
-                        ? "w-2 h-2 bg-primary/50"
-                        : i === completedSteps
-                        ? "w-3 h-3 bg-primary"
-                        : "w-2 h-2 bg-muted-foreground/30"
-                    }`}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={handleTakePhoto}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-4 rounded-xl font-semibold text-base shadow-md transition-colors"
-              >
-                {t("caroolCheck.capture")}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      {/* Bottom controls — PREVIEW */}
+      {preview && (
+        <div className="absolute bottom-0 inset-x-0 z-20 bg-gradient-to-t from-black/90 to-transparent pt-16 pb-10 px-6">
+          <div className="flex gap-4">
+            <button
+              onClick={handleRetake}
+              className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-white/60 text-white font-semibold text-base active:opacity-70 transition-opacity"
+            >
+              <RotateCcw className="w-5 h-5" />
+              {t("caroolCheck.retake")}
+            </button>
+            <button
+              onClick={handleApprove}
+              className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-white text-black font-semibold text-base active:opacity-70 transition-opacity"
+            >
+              <Check className="w-5 h-5" />
+              {t("caroolCheck.approve")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Done overlay */}
       {showDone && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4 bg-card border border-border rounded-2xl px-10 py-8 shadow-xl">
             <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
               <svg className="w-9 h-9 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

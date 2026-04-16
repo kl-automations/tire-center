@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
@@ -69,6 +69,12 @@ export function AcceptedRequest() {
     () => getStoredAffectedWheels(licensePlate)
   );
   const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    navigator.mediaDevices?.getUserMedia({ video: true })
+      .then((s) => s.getTracks().forEach((t) => t.stop()))
+      .catch(() => {});
+  }, []);
 
   const lastMileage = getLastRecordedMileage(licensePlate);
   const reportedMileageNum = mileage ? Number(mileage) : null;
