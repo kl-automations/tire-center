@@ -4,10 +4,10 @@ Usage in a route:  shop = Depends(get_current_shop)
 Returns:           { "shop_id": str, "erp_hash": str }
 """
 
-import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
+from config import JWT_SECRET
 
 _bearer = HTTPBearer()
 
@@ -21,7 +21,7 @@ def get_current_shop(
     try:
         payload = jwt.decode(
             token,
-            os.environ["JWT_SECRET"],
+            JWT_SECRET,
             algorithms=[ALGORITHM],
         )
         shop_id: str = payload.get("shop_id")

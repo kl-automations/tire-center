@@ -1,7 +1,7 @@
-import os
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from jose import jwt
+from config import JWT_SECRET
 from models.schemas import RequestCodeRequest, RequestCodeResponse, VerifyOtpRequest, VerifyOtpResponse
 from adapters import erp
 
@@ -17,7 +17,7 @@ def _make_token(user_code: str) -> str:
         "erp_hash": user_code,  # kept for router compatibility; replace when ERP sessions are defined
         "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_TTL_HOURS),
     }
-    return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=ALGORITHM)
+    return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
 
 
 @router.post("/request-code", response_model=RequestCodeResponse)
