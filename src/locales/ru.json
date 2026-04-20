@@ -49,17 +49,17 @@
   },
   "login": {
     "title": "Сервисный отчет Когель",
-    "subtitleEmail": "Введите вашу электронную почту",
+    "subtitleUserCode": "Введите ваш код пользователя",
     "subtitleCode": "Введите код подтверждения, отправленный на ваш телефон",
-    "emailLabel": "Эл. почта",
-    "emailPlaceholder": "your@email.com",
-    "emailError": "Адрес электронной почты не найден в системе",
+    "userCodeLabel": "Код пользователя",
+    "userCodePlaceholder": "Например: MAAYAN",
+    "userCodeError": "Код пользователя не найден в системе",
     "codeLabel": "Код подтверждения",
     "codePlaceholder": "Введите код",
     "codeError": "Неверный код, попробуйте снова",
-    "submitEmail": "Отправить код",
+    "submitUserCode": "Отправить код",
     "submitCode": "Войти",
-    "backToEmail": "Назад",
+    "backToUserCode": "Назад",
     "changeLanguage": "Изменить язык"
   },
   "dashboard": {

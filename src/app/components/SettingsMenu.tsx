@@ -13,7 +13,10 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   const { navigate } = useNavigation();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
 
+  const userCode = localStorage.getItem("userCode") ?? "—";
+
   const handleSignOut = () => {
+    localStorage.removeItem("userCode");
     onClose();
     navigate({ name: "login" });
   };
@@ -45,7 +48,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
             </div>
             <div className="bg-background rounded-xl p-4 border border-border">
               <p className="font-semibold text-foreground">{t("settings.connectedUser")}</p>
-              <p className="text-sm text-muted-foreground">admin@kogol.co.il</p>
+              <p className="text-sm text-muted-foreground">{userCode}</p>
             </div>
           </div>
 

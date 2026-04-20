@@ -49,17 +49,17 @@
   },
   "login": {
     "title": "דיווח שירות קוגול",
-    "subtitleEmail": "הזן את כתובת האימייל שלך",
+    "subtitleUserCode": "הזן את קוד המשתמש שלך",
     "subtitleCode": "הזן את קוד האימות שנשלח לטלפון שלך",
-    "emailLabel": "אימייל",
-    "emailPlaceholder": "your@email.com",
-    "emailError": "האימייל לא מזוהה במערכת",
+    "userCodeLabel": "קוד משתמש",
+    "userCodePlaceholder": "לדוגמה: MAAYAN",
+    "userCodeError": "קוד המשתמש לא מזוהה במערכת",
     "codeLabel": "קוד אימות",
     "codePlaceholder": "הזן את הקוד",
     "codeError": "קוד שגוי, נסה שנית",
-    "submitEmail": "שלח קוד",
+    "submitUserCode": "שלח קוד",
     "submitCode": "כניסה",
-    "backToEmail": "חזרה",
+    "backToUserCode": "חזרה",
     "changeLanguage": "שנה שפה"
   },
   "dashboard": {

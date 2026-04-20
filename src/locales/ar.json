@@ -49,17 +49,17 @@
   },
   "login": {
     "title": "تقرير خدمة كوغل",
-    "subtitleEmail": "أدخل عنوان بريدك الإلكتروني",
+    "subtitleUserCode": "أدخل رمز المستخدم الخاص بك",
     "subtitleCode": "أدخل رمز التحقق المُرسَل إلى هاتفك",
-    "emailLabel": "البريد الإلكتروني",
-    "emailPlaceholder": "your@email.com",
-    "emailError": "البريد الإلكتروني غير معروف في النظام",
+    "userCodeLabel": "رمز المستخدم",
+    "userCodePlaceholder": "مثال: MAAYAN",
+    "userCodeError": "رمز المستخدم غير معروف في النظام",
     "codeLabel": "رمز التحقق",
     "codePlaceholder": "أدخل الرمز",
     "codeError": "الرمز غير صحيح، حاول مجدداً",
-    "submitEmail": "إرسال الرمز",
+    "submitUserCode": "إرسال الرمز",
     "submitCode": "دخول",
-    "backToEmail": "رجوع",
+    "backToUserCode": "رجوع",
     "changeLanguage": "تغيير اللغة"
   },
   "dashboard": {

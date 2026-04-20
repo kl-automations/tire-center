@@ -11,14 +11,14 @@ const LANG_ABBREV: Record<Language, string> = {
   ar: "عر",
 };
 
-type Step = "email" | "code";
+type Step = "userCode" | "code";
 
 export function Login() {
   const { t } = useTranslation();
-  const [step, setStep] = useState<Step>("email");
-  const [email, setEmail] = useState("");
+  const [step, setStep] = useState<Step>("userCode");
+  const [userCode, setUserCode] = useState("");
   const [code, setCode] = useState("");
-  const [emailError, setEmailError] = useState(false);
+  const [userCodeError, setUserCodeError] = useState(false);
   const [codeError, setCodeError] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const langMenuRef = useRef<HTMLDivElement>(null);
@@ -43,30 +43,23 @@ export function Login() {
     };
   }, [langMenuOpen]);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleUserCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setEmailError(false);
-    if (email === "roi.krn@gmail.com") {
-      setEmailError(true);
-      return;
-    }
-    // TODO: call ERP to validate email and trigger SMS code
+    setUserCodeError(false);
+    // TODO: call POST /api/auth/request-code with { userCode }
     setStep("code");
   };
 
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCodeError(false);
-    if (email === "memlamed2004@gmail.com") {
-      setCodeError(true);
-      return;
-    }
-    // TODO: call ERP to verify the code
+    // TODO: call POST /api/auth/verify with { userCode, otp: code }, store returned token
+    localStorage.setItem("userCode", userCode);
     navigate({ name: "dashboard" });
   };
 
-  const handleBackToEmail = () => {
-    setStep("email");
+  const handleBackToUserCode = () => {
+    setStep("userCode");
     setCode("");
     setCodeError(false);
   };
@@ -149,42 +142,43 @@ export function Login() {
           </div>
           <h1 className="text-3xl text-foreground mb-2">{t("login.title")}</h1>
           <p className="text-muted-foreground">
-            {step === "email" ? t("login.subtitleEmail") : t("login.subtitleCode")}
+            {step === "userCode" ? t("login.subtitleUserCode") : t("login.subtitleCode")}
           </p>
         </div>
 
         {/* Form Card */}
         <div className="bg-card rounded-2xl shadow-xl p-8 border border-border">
-          {step === "email" ? (
-            <form onSubmit={handleEmailSubmit} className="space-y-6">
+          {step === "userCode" ? (
+            <form onSubmit={handleUserCodeSubmit} className="space-y-6">
               <div className="space-y-2">
-                <label htmlFor="email" className="block text-card-foreground">
-                  {t("login.emailLabel")}
+                <label htmlFor="userCode" className="block text-card-foreground">
+                  {t("login.userCodeLabel")}
                 </label>
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
+                  id="userCode"
+                  type="text"
+                  value={userCode}
                   onChange={(e) => {
-                    setEmail(e.target.value);
-                    setEmailError(false);
+                    setUserCode(e.target.value);
+                    setUserCodeError(false);
                   }}
                   className={`w-full px-4 py-3 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
-                    emailError ? "border-red-500" : "border-border"
+                    userCodeError ? "border-red-500" : "border-border"
                   }`}
-                  placeholder={t("login.emailPlaceholder")}
+                  placeholder={t("login.userCodePlaceholder")}
                   required
-                  autoComplete="email"
+                  autoComplete="username"
+                  autoCapitalize="characters"
                 />
-                {emailError && (
-                  <p className="text-red-500 text-sm mt-1">{t("login.emailError")}</p>
+                {userCodeError && (
+                  <p className="text-red-500 text-sm mt-1">{t("login.userCodeError")}</p>
                 )}
               </div>
               <button
                 type="submit"
                 className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
               >
-                {t("login.submitEmail")}
+                {t("login.submitUserCode")}
               </button>
             </form>
           ) : (
@@ -221,11 +215,11 @@ export function Login() {
               </button>
               <button
                 type="button"
-                onClick={handleBackToEmail}
+                onClick={handleBackToUserCode}
                 className="w-full flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
               >
                 <ArrowLeft className="w-4 h-4" />
-                {t("login.backToEmail")}
+                {t("login.backToUserCode")}
               </button>
             </form>
           )}
