@@ -1,0 +1,109 @@
+---
+title: Diagnosis & Wheel Data
+description: The shape of open_orders.diagnosis JSONB and the per-wheel action types.
+---
+
+## diagnosis JSONB structure
+
+The `open_orders.diagnosis` column accumulates data from three sources over the lifetime of an order:
+
+```json
+{
+  "request_id":     "req_erp_12345",
+  "mileage":        85200,
+  "front_alignment": true,
+  "carool_id":      "carool_abc123",
+  "tires": {
+    "front-left": [
+      { "action": "replacement", "reason": "wear" },
+      { "action": "balancing" }
+    ],
+    "rear-right": [
+      { "action": "puncture" }
+    ]
+  },
+  "erp_response": {
+    "request_id": "req_erp_12345",
+    "status": "partly-approved",
+    "tires": { "front-left": { "approval": "full" }, "rear-right": { "approval": "none" } }
+  },
+  "carool_result": {
+    "externalId": "carool_abc123",
+    "prediction": {
+      "FRONT_LEFT": { "condition": "worn", "tread_depth_mm": 2.1 }
+    },
+    "recommendations": [{ "wheel": "FRONT_LEFT", "action": "replace_immediately" }]
+  }
+}
+```
+
+| Key | Set by | Description |
+|-----|--------|-------------|
+| `request_id` | `POST /api/diagnosis` | ERP visit reference ID |
+| `mileage` | `POST /api/diagnosis` | Updated odometer reading |
+| `front_alignment` | `POST /api/diagnosis` | Whether alignment was performed |
+| `carool_id` | `POST /api/diagnosis` | Carool session ID |
+| `tires` | `POST /api/diagnosis` | Per-wheel mechanic actions (see below) |
+| `erp_response` | `POST /api/webhook/erp` | Full ERP approval payload, merged in |
+| `carool_result` | `POST /api/webhook/carool` | Full Carool analysis payload, merged in |
+
+---
+
+## TireAction
+
+Each entry in `diagnosis.tires[position]` is a `TireAction` object:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | `string` | Yes | Action code (see table below) |
+| `reason` | `string` | Conditional | Required when `action = "replacement"` |
+| `transfer_target` | `string` | Conditional | Required when `action = "relocation"` |
+
+### Action codes
+
+| Code | Description |
+|------|-------------|
+| `replacement` | Tyre replaced. Requires `reason`: `wear`, `damage`, or `fitment`. |
+| `repair` | General repair (use more specific codes below where possible). |
+| `relocation` | Tyre moved to another wheel. Requires `transfer_target` (e.g. `"rear-left"`). |
+| `balancing` | Wheel balancing performed. |
+| `sensor` | TPMS sensor replaced. |
+| `tpms_valve` | TPMS valve stem replaced. |
+| `rim_repair` | Rim repair performed. |
+| `puncture` | Puncture repair performed. |
+
+---
+
+## Wheel positions
+
+Valid wheel position keys used in `diagnosis.tires` and `WheelWork`:
+
+| Key | Applies to |
+|-----|-----------|
+| `front-left` | All vehicles |
+| `front-right` | All vehicles |
+| `rear-left` | All vehicles |
+| `rear-right` | All vehicles |
+| `rear-left-inner` | 6-wheel vehicles only |
+| `rear-right-inner` | 6-wheel vehicles only |
+| `spare-tire` | When spare tyre is included |
+
+---
+
+## Frontend WheelWork type
+
+The frontend `WheelWork` interface (in `src/app/components/OpenRequests.tsx`) is the read/display representation of a wheel's state. It is derived from `TireAction` data after the diagnosis is submitted.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reason` | `string` | Human-readable work summary |
+| `puncture` | `boolean` | Puncture repair performed |
+| `balancing` | `boolean` | Balancing performed |
+| `sensor` | `boolean` | TPMS sensor replaced |
+| `approval` | `WheelApproval` | ERP approval: `full`, `puncture-only`, or `none` |
+| `replacementReason` | `string \| null` | `wear`, `damage`, or `fitment` if replaced |
+| `tpmsValve` | `boolean` | TPMS valve replaced |
+| `rimRepair` | `boolean` | Rim repair performed |
+| `movedToWheel` | `string \| null` | Relocation target position |
+| `caroolStatus` | `string \| null` | Carool AI condition status for this wheel |
+| `caroolId` | `string \| null` | Carool session ID |

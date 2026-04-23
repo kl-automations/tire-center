@@ -1,0 +1,139 @@
+---
+title: Carool AI
+description: Photo-based tyre analysis powered by Carool AI (Wave 1.5).
+---
+
+The Carool flow is optional and runs alongside the `AcceptedRequest` screen. The mechanic photographs each tyre (sidewall + tread) for AI condition analysis. Carool processes the images asynchronously and returns results via webhook.
+
+**All endpoints require:** `Authorization: Bearer <token>`
+
+---
+
+## POST /api/carool/session
+
+Opens a new Carool AI diagnosis session for a service order.
+
+### Request body
+
+<ParamField body="order_id" type="string" required>
+  UUID of the `open_orders` row to associate the Carool session with.
+</ParamField>
+
+### Response
+
+<ResponseField name="carool_id" type="string">
+  The Carool platform's session identifier. Supply this to all subsequent photo upload and finalize calls.
+  Also stored in `open_orders.carool_diagnosis_id`.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/carool/session \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"order_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}'
+```
+
+```json Response
+{
+  "carool_id": "carool_abc123xyz"
+}
+```
+</CodeGroup>
+
+---
+
+## POST /api/carool/photo
+
+Uploads a single tyre photo to an active Carool session. Uses `multipart/form-data`.
+
+Each wheel supports up to two photos: one `sidewall` and one `tread`.
+
+### Form fields
+
+<ParamField body="order_id" type="string" required>
+  UUID of the service order.
+</ParamField>
+
+<ParamField body="wheel" type="string" required>
+  Wheel position. One of: `FRONT_LEFT`, `FRONT_RIGHT`, `REAR_LEFT`, `REAR_RIGHT`.
+</ParamField>
+
+<ParamField body="photo_type" type="string" required>
+  Photo type. One of: `sidewall`, `tread`.
+</ParamField>
+
+<ParamField body="file" type="file" required>
+  The image file (JPEG recommended). Max size determined by Carool's API.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploaded" type="boolean">
+  `true` when the photo was successfully forwarded to Carool.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/carool/photo \
+  -H "Authorization: Bearer <token>" \
+  -F "order_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890" \
+  -F "wheel=FRONT_LEFT" \
+  -F "photo_type=sidewall" \
+  -F "file=@/path/to/photo.jpg"
+```
+
+```json Response
+{
+  "uploaded": true
+}
+```
+</CodeGroup>
+
+---
+
+## POST /api/carool/finalize
+
+Signals Carool that all photos have been uploaded and AI analysis should begin.
+
+After this call, Carool processes the images asynchronously. When done it fires `POST /api/webhook/carool` with the results.
+
+### Request body
+
+<ParamField body="order_id" type="string" required>
+  UUID of the service order whose Carool session should be finalised.
+</ParamField>
+
+### Response
+
+<ResponseField name="finalized" type="boolean">
+  `true` when Carool was notified to start analysis.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/carool/finalize \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"order_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}'
+```
+
+```json Response
+{
+  "finalized": true
+}
+```
+</CodeGroup>
+
+### Error responses (all three endpoints)
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `Invalid or expired token` | Missing or invalid JWT |
+| `404` | `Order or Carool session not found` | Order not found, wrong shop, or no active session |

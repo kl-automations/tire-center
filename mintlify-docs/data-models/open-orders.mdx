@@ -1,0 +1,71 @@
+---
+title: open_orders
+description: The primary database table — one row per service visit.
+---
+
+## Schema
+
+```sql
+CREATE TABLE open_orders (
+  id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id              text        NOT NULL,
+  license_plate        text        NOT NULL,
+  plate_type           text        NOT NULL,
+  mileage              integer,
+  car_data             jsonb,
+  diagnosis            jsonb,
+  status               text        NOT NULL DEFAULT 'waiting',
+  request_id           text,
+  carool_diagnosis_id  text,
+  erp_hash             text        NOT NULL,
+  declined_at          timestamptz,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now()
+);
+```
+
+An `update_updated_at` trigger keeps `updated_at` in sync automatically.
+
+## Column reference
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `uuid` | Primary key. Returned as `order_id` by `POST /api/car`. |
+| `shop_id` | `text` | Identifier of the shop that owns this order. Read from the JWT `shop_id` claim. All queries filter by this column. |
+| `license_plate` | `text` | Vehicle licence plate as entered by the mechanic. |
+| `plate_type` | `text` | `civilian`, `military`, or `police`. |
+| `mileage` | `integer` | Odometer reading in km at time of lookup. May be updated by `POST /api/diagnosis`. |
+| `car_data` | `jsonb` | Full ERP response from `GetCarData` — tyre sizes, quality tier, wheel count, etc. |
+| `diagnosis` | `jsonb` | Mechanic's submitted work + ERP/Carool results merged in over time. See [Diagnosis data model](/data-models/diagnosis). |
+| `status` | `text` | Current lifecycle status. See the status lifecycle below. |
+| `request_id` | `text` | ERP's own reference ID for this service visit. Used in `POST /api/diagnosis` and `POST /api/webhook/erp`. |
+| `carool_diagnosis_id` | `text` | Carool session ID. Set by `POST /api/carool/session`. |
+| `erp_hash` | `text` | ERP session hash from the JWT. Forwarded as auth header on SOAP calls. |
+| `declined_at` | `timestamptz` | Set when `status` transitions to `declined`. Used by the nightly cleanup job. |
+| `created_at` | `timestamptz` | When the order was opened (plate lookup). |
+| `updated_at` | `timestamptz` | Auto-updated on every row change by the trigger. |
+
+## Status lifecycle
+
+```
+open  ──► waiting  ──► approved
+                   ├──► partly-approved
+                   └──► declined ──► [deleted by nightly cleanup]
+```
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `open` | `POST /api/car` | Order created; mechanic is recording work. |
+| `waiting` | `POST /api/diagnosis` | Diagnosis submitted; awaiting manager approval in ERP. |
+| `approved` | `POST /api/webhook/erp` | Manager approved all work. |
+| `partly-approved` | `POST /api/webhook/erp` | Manager approved some wheels/actions, declined others. |
+| `declined` | `POST /api/webhook/erp` | Manager declined the entire order. |
+
+## Indexes
+
+```sql
+CREATE INDEX idx_open_orders_shop_id     ON open_orders (shop_id);
+CREATE INDEX idx_open_orders_status      ON open_orders (status);
+CREATE INDEX idx_open_orders_declined_at ON open_orders (declined_at)
+  WHERE declined_at IS NOT NULL;
+```

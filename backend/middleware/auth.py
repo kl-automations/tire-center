@@ -17,6 +17,19 @@ ALGORITHM = "HS256"
 def get_current_shop(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> dict:
+    """
+    FastAPI dependency that validates the Bearer JWT and returns the shop context.
+
+    Decodes the HS256 JWT from the Authorization header, verifies the signature
+    against JWT_SECRET, and checks that both shop_id and erp_hash claims are present.
+
+    Returns:
+        { "shop_id": str, "erp_hash": str }
+
+    Raises:
+        401 Unauthorized: Token is missing, expired, has an invalid signature,
+                          or is missing required claims.
+    """
     token = credentials.credentials
     try:
         payload = jwt.decode(

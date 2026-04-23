@@ -1,0 +1,85 @@
+---
+title: Quickstart
+description: Run the backend locally and make your first API call.
+---
+
+## Prerequisites
+
+- Python 3.12+
+- Docker (optional but recommended)
+- Access to the GCP project (`GCP_PROJECT_ID` env var)
+- SSH tunnel to the dev VM (see `docs/backend-manual.md` for provisioning steps)
+
+## 1. Clone and install
+
+```bash
+git clone https://github.com/your-org/tire-center-ui.git
+cd tire-center-ui/backend
+pip install -r requirements.txt
+```
+
+## 2. Configure environment
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GCP_PROJECT_ID` | Yes | GCP project ID — used by Secret Manager |
+| `CLOUD_SQL_CONNECTION_NAME` | Yes | Cloud SQL instance connection name |
+| `DB_NAME` | Yes | PostgreSQL database name |
+| `DB_USER` | Yes | PostgreSQL user |
+| `ALLOWED_ORIGINS` | Yes | CORS origin (e.g. `http://localhost:5173`) |
+| `ERP_WSDL_URL` | Yes | ERP SOAP WSDL URL |
+| `ERP_ENDPOINT_URL` | Yes | ERP SOAP endpoint URL |
+| `ERP_TEST_MODE` | No | Set `true` to receive OTP in API response |
+| `ERP_SSL_VERIFY` | No | Set `true` in production (self-signed cert in dev) |
+
+Secrets (`JWT_SECRET`, `DB_PASSWORD`, `CAROOL_API_KEY`, etc.) are loaded from **GCP Secret Manager** at startup. Make sure the service account running the app has `roles/secretmanager.secretAccessor`.
+
+## 3. Start the server
+
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+Or with Docker:
+
+```bash
+docker build -t tire-center-backend .
+docker run -p 8000:8000 --env-file .env tire-center-backend
+```
+
+## 4. Verify health
+
+```bash
+curl http://localhost:8000/health
+# → {"status":"ok"}
+```
+
+## 5. Explore the API
+
+Open **http://localhost:8000/docs** in your browser for the interactive Swagger UI.
+All endpoints, request/response schemas, and try-it-out forms are available there.
+
+## 6. Run the login flow
+
+```bash
+# Step 1 — send OTP (set ERP_TEST_MODE=true to get otp_debug back)
+curl -X POST http://localhost:8000/api/auth/request-code \
+  -H "Content-Type: application/json" \
+  -d '{"userCode": "your_erp_code"}'
+
+# Step 2 — verify OTP
+curl -X POST http://localhost:8000/api/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"userCode": "your_erp_code", "otp": "123456"}'
+# → {"success": true, "token": "<JWT>"}
+```
+
+Save the `token` — you'll pass it as `Authorization: Bearer <token>` on every subsequent call.

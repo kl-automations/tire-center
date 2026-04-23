@@ -7,50 +7,121 @@ import type { VehicleWheelCount } from "../vehicleWheelLayout";
 import type { QualityTier } from "../qualityTier";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 
+/**
+ * Lifecycle status of a service order.
+ *
+ * - `waiting`        — diagnosis submitted; pending manager approval in the ERP.
+ * - `approved`       — all requested work approved by the manager.
+ * - `partly-approved`— some wheels/actions approved, others declined.
+ * - `declined`       — entire order declined; shown in red, cleaned up nightly.
+ *
+ * Mirrors `open_orders.status` in the database.
+ */
 export type RequestStatus = "waiting" | "approved" | "partly-approved" | "declined";
 
+/**
+ * Per-wheel approval decision returned by the ERP after the manager reviews
+ * a submitted diagnosis.
+ *
+ * - `full`          — full replacement/repair approved.
+ * - `puncture-only` — only puncture repair approved (not full replacement).
+ * - `none`          — no work approved for this wheel.
+ */
 export type WheelApproval = "full" | "puncture-only" | "none";
 
+/**
+ * All work recorded for a single wheel position during one service visit.
+ *
+ * This shape lives inside `OpenRequest.wheels` keyed by position string
+ * (e.g. `"front-left"`, `"rear-right-inner"`).
+ * It is persisted in `open_orders.diagnosis` JSONB and kept in sync with
+ * `WheelData` from TirePopup.tsx (which is the edit-time representation).
+ */
 export interface WheelWork {
+  /** Human-readable summary of the work performed on this wheel. */
   reason: string;
+  /** Whether a puncture repair was performed. */
   puncture: boolean;
+  /** Whether wheel balancing was performed. */
   balancing: boolean;
+  /** Whether a TPMS sensor was replaced. */
   sensor: boolean;
+  /** Manager's approval decision for this wheel, filled after ERP webhook fires. */
   approval: WheelApproval;
+  /** Reason for tyre replacement. `null` when no replacement was done. */
   replacementReason?: "wear" | "damage" | "fitment" | null;
+  /** Whether a TPMS valve was replaced (separate from the sensor itself). */
   tpmsValve?: boolean;
+  /** Whether rim repair was performed. */
   rimRepair?: boolean;
+  /** Target wheel position when a tyre was relocated. `null` if not relocated. */
   movedToWheel?: string | null;
+  /**
+   * Carool AI tyre-condition status for this wheel.
+   * Populated after the Carool webhook fires with analysis results.
+   */
   caroolStatus?: string | null;
+  /** Carool session ID linked to this wheel's photo analysis. */
   caroolId?: string | null;
 }
 
+/**
+ * A single open service order as displayed in the Open Requests screen.
+ *
+ * This is the primary UI data model. It mirrors `open_orders` DB columns
+ * plus denormalised tyre and wheel data that currently comes from mock data
+ * but will be sourced from `GET /api/orders` once the frontend is wired.
+ *
+ * All fields marked "from backend" will be populated from the API response.
+ * Fields without that note are derived or set client-side in the interim.
+ */
 export interface OpenRequest {
+  /** UUID matching `open_orders.id` — from backend. */
   id: string;
-  /** Business request / case number (digits) — from backend */
+  /** Business request / case number (digits) — from backend. */
   requestNumber: string;
+  /** Vehicle licence plate string — from backend. */
   licensePlate: string;
+  /** Plate type (civilian, military, police) — from backend. */
   plateType: PlateType;
+  /** Current lifecycle status — from backend, updated via Firestore signals. */
   status: RequestStatus;
-  /** When status is `declined` — free text from backend */
+  /** Free-text reason shown when `status === "declined"` — from backend. */
   rejectionReason?: string;
-  /** Date the request was opened (ISO `YYYY-MM-DD`) — from backend */
+  /** ISO date the order was opened (`YYYY-MM-DD`) — from backend. */
   submittedDate: string;
+  /** True when the order status changed since the mechanic last viewed it. */
   hasUpdate: boolean;
+  /** Front-axle tyre size string (e.g. `"205/55R16"`) — from backend. */
   frontTireSize: string;
+  /** Rear-axle tyre size string (e.g. `"225/45R17"`) — from backend. */
   rearTireSize: string;
-  /** Load index + speed rating e.g. 91V — from backend */
+  /** Front tyre load index + speed rating (e.g. `"91V"`) — from backend. */
   frontTireProfile?: string;
+  /** Rear tyre load index + speed rating (e.g. `"94W"`) — from backend. */
   rearTireProfile?: string;
-  /** Tire quality tier — from backend */
+  /** Tyre quality tier selected for this order — from backend. */
   quality?: QualityTier;
+  /** Whether front-axle wheel alignment was performed during this visit. */
   frontAlignment: boolean;
-  /** From backend; omit = 4 wheels (or derive from plate in UI) */
+  /**
+   * Total number of road wheels on this vehicle.
+   * Defaults to 4 when omitted; 6 for heavy vehicles — from backend or
+   * derived from the licence plate via `getVehicleWheelCountFromPlate`.
+   */
   wheelCount?: VehicleWheelCount;
+  /**
+   * Per-wheel work record keyed by wheel position string.
+   * Keys: `"front-left"`, `"front-right"`, `"rear-left"`, `"rear-right"`,
+   *       `"rear-left-inner"`, `"rear-right-inner"`, `"spare-tire"`.
+   */
   wheels: Record<string, WheelWork>;
 }
 
-/** i18n keys under `status.*` — use with t() */
+/**
+ * Maps each `RequestStatus` to its i18n translation key (under the `status.*` namespace).
+ * Use with `t(STATUS_LABEL_KEYS[status])` to get the localised label.
+ */
 export const STATUS_LABEL_KEYS: Record<RequestStatus, string> = {
   waiting: "status.waiting",
   approved: "status.approved",
@@ -327,6 +398,20 @@ export function hasOpenRequestUpdates(): boolean {
 
 type StatusFilter = "approved" | "waiting" | "declined";
 
+/**
+ * List screen showing all open service orders for the authenticated shop.
+ *
+ * Features: search by plate / request number, filter by status, expandable
+ * inline detail rows, and swipe-to-delete (confirmed via long-press/swipe).
+ * Status badges update in real time via Firestore `onSnapshot` (not yet wired).
+ *
+ * Data source: currently `sessionStorage` + `MOCK_REQUESTS` fallback.
+ * Replace with `GET /api/orders` once the frontend API client is built
+ * (see backend-plan.md Phase 6, task F3/F5).
+ *
+ * Navigation: reached from `dashboard`; navigates to `{ name: "request-detail" }`
+ * on row tap.
+ */
 export function OpenRequests() {
   const { t } = useTranslation();
   const { navigate } = useNavigation();

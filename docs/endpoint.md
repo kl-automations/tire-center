@@ -1,5 +1,18 @@
 # API Endpoint Specification — Tire Center UI
 
+> ⚠️ **SUPERSEDED — DO NOT USE FOR DEVELOPMENT**
+>
+> This document describes an earlier design based on **Supabase Edge Functions**.
+> The backend has since been rebuilt as a **FastAPI** service.
+>
+> **Current API documentation:** see `mintlify-docs/` in the repository root
+> (rendered at your Mintlify site), or `docs/backend-structure.md` for the
+> up-to-date architecture.
+>
+> This file is kept for historical reference only.
+
+---
+
 All communication between the React app and the ERP passes through Supabase Edge Functions acting as a secure proxy.
 
 **Base URL (Edge Functions):** `https://<project>.supabase.co/functions/v1`

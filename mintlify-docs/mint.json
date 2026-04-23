@@ -1,0 +1,48 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Tire Center",
+  "logo": {
+    "light": "/logo.svg",
+    "dark": "/logo-dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0066CC",
+    "light": "#3399FF",
+    "dark": "#003D7A"
+  },
+  "topbarLinks": [
+    {
+      "name": "Backend Repo",
+      "url": "https://github.com/your-org/tire-center-ui"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": ["introduction", "quickstart", "architecture"]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/overview",
+        "api-reference/auth",
+        "api-reference/car",
+        "api-reference/orders",
+        "api-reference/diagnosis",
+        "api-reference/history",
+        "api-reference/carool",
+        "api-reference/webhooks"
+      ]
+    },
+    {
+      "group": "Data Models",
+      "pages": ["data-models/open-orders", "data-models/diagnosis"]
+    },
+    {
+      "group": "Guides",
+      "pages": ["guides/new-service-order", "guides/realtime-updates"]
+    }
+  ],
+  "footerSocials": {}
+}

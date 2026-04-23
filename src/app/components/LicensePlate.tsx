@@ -1,3 +1,10 @@
+/**
+ * Israeli vehicle licence plate category.
+ *
+ * - `civilian` — standard yellow plate.
+ * - `military` — black plate with `צ` suffix.
+ * - `police`   — red plate with `מ` suffix.
+ */
 export type PlateType = "civilian" | "military" | "police";
 
 interface LicensePlateProps {
@@ -16,6 +23,10 @@ const PLATE_SUFFIX: Record<Exclude<PlateType, "civilian">, string> = {
 export const LICENSE_PLATE_FRAME_CLASS =
   "rounded-[10px] border-[3px] border-white/95 shadow-[0_4px_14px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]";
 
+/**
+ * Blue Israeli flag strip shown on the left edge of every licence plate.
+ * Renders the Israeli flag miniature with the country code "IL" below it.
+ */
 export function LicensePlateBlueStrip() {
   return (
     <div className="bg-[#0038b8] h-full flex flex-col items-center justify-center px-2 sm:px-3 gap-1 w-[20%] min-w-[56px] max-w-[76px] shrink-0 border-e border-black/20 shadow-[inset_-2px_0_8px_rgba(0,0,0,0.15)]">
@@ -51,6 +62,16 @@ function formatPlateDisplay(plateNumber: string, plateType: PlateType): string {
   return `${n}-${suf}`;
 }
 
+/**
+ * Realistic Israeli licence plate component with correct colours and typography.
+ *
+ * Renders the blue Israel strip, the plate number, and a type-appropriate suffix
+ * (`צ` for military, `מ` for police). Adapts background and text colour per `plateType`.
+ *
+ * @param plateNumber - Raw plate digits/letters (without the suffix).
+ * @param plateType   - Visual style; defaults to `"civilian"`.
+ * @param className   - Additional Tailwind classes applied to the outer wrapper.
+ */
 export function LicensePlate({ plateNumber, plateType = "civilian", className = "" }: LicensePlateProps) {
   const display = formatPlateDisplay(plateNumber, plateType);
 

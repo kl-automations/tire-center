@@ -4,6 +4,15 @@ import { AlertCircle, ArrowRight } from "lucide-react";
 import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
 import { LicensePlate } from "./LicensePlate";
 
+/**
+ * Screen shown when the ERP rejects a licence-plate lookup (vehicle not recognised
+ * or service not approved at the time of lookup).
+ *
+ * Displays the licence plate, plate type, and the rejection reason from the ERP.
+ * Provides a button to return to the dashboard.
+ *
+ * Navigation: reached from `LicensePlateModal` via `{ name: "declined-request" }`.
+ */
 export function DeclinedRequest() {
   const { t } = useTranslation();
   const { screen, navigate } = useNavigation();

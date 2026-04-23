@@ -16,6 +16,24 @@ const WHEEL_LABEL_KEYS: Record<string, string> = {
   "rear-left-inner": "wheels.rearLeftInner",
 };
 
+/**
+ * Guided camera flow for capturing Carool AI tyre-analysis photos.
+ *
+ * Activated from `AcceptedRequest` when the mechanic taps the Carool button
+ * for a wheel. Walks through the selected wheel positions step-by-step,
+ * prompting for a sidewall photo then a tread photo per wheel.
+ *
+ * Photo upload flow:
+ *  1. On first photo, calls `POST /api/carool/session` to open a Carool session.
+ *  2. Each photo is sent via `POST /api/carool/photo` (multipart form).
+ *  3. After the last wheel's tread photo, calls `POST /api/carool/finalize`.
+ *
+ * Uses the device camera via `getUserMedia`. Falls back gracefully if camera
+ * access is denied or unavailable.
+ *
+ * Navigation: reached from `accepted-request` via `{ name: "carool-check" }`;
+ * navigates back to `accepted-request` when complete.
+ */
 export function CaroolCheck() {
   const { t } = useTranslation();
   const { screen, navigate } = useNavigation();

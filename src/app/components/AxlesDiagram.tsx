@@ -2,6 +2,14 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import type { VehicleWheelCount } from "../vehicleWheelLayout";
 
+/**
+ * Visual state of a wheel hotspot in the axle diagram.
+ *
+ * - `green`   — wheel is currently selected by the mechanic.
+ * - `orange`  — wheel has a partial or in-progress action.
+ * - `red`     — wheel has work recorded (affected) or is declined.
+ * - `default` — no state; renders with a hover outline only.
+ */
 export type WheelColor = "green" | "orange" | "red" | "default";
 
 function tireGraphicPalette(color: WheelColor): { ink: string; body: string } {
@@ -14,6 +22,10 @@ function tireGraphicPalette(color: WheelColor): { ink: string; body: string } {
   return { ink: "#000000", body: "#ffffff" };
 }
 
+/**
+ * SVG top-down illustration of a single road tyre.
+ * Used as the clickable wheel hotspot inside `AxlesDiagram`.
+ */
 export function TopDownRoadTireGraphic({ className, color = "default" }: { className?: string; color?: WheelColor }) {
   const { ink, body } = tireGraphicPalette(color);
   return (
@@ -30,6 +42,10 @@ export function TopDownRoadTireGraphic({ className, color = "default" }: { class
   );
 }
 
+/**
+ * SVG top-down illustration of a spare tyre (circular profile).
+ * Rendered at the rear-centre position in `AxlesDiagram` when `showSpareTire` is true.
+ */
 export function TopDownSpareTireGraphic({ className, color = "default" }: { className?: string; color?: WheelColor }) {
   const { ink, body } = tireGraphicPalette(color);
   return (
@@ -102,6 +118,20 @@ function hotspotRing(selected: boolean, color: WheelColor): string {
   }
 }
 
+/**
+ * Interactive top-down vehicle diagram showing all wheel positions as clickable hotspots.
+ *
+ * Supports 4-wheel (standard) and 6-wheel (dual rear-axle) layouts.
+ * Each wheel is coloured according to `wheelColors` or `affectedWheels` state.
+ * Tapping a wheel calls `onWheelClick(wheelPosition)` to open the `TirePopup`.
+ *
+ * @param onWheelClick   - Called with the position string when a wheel is tapped.
+ * @param selectedWheel  - Position of the currently active wheel (highlighted green).
+ * @param affectedWheels - Set of positions that have work recorded (highlighted red).
+ * @param wheelColors    - Explicit colour overrides per position (takes priority over affectedWheels).
+ * @param showSpareTire  - When true, renders the spare tyre hotspot at rear centre.
+ * @param wheelCount     - 4 or 6; controls whether inner rear wheels are shown.
+ */
 export function AxlesDiagram({
   onWheelClick,
   selectedWheel,

@@ -1,0 +1,103 @@
+---
+title: Authentication
+description: Two-step OTP login backed by the ERP SOAP service.
+---
+
+## POST /api/auth/request-code
+
+**Step 1 of login.** Validates the mechanic's user code with the ERP and triggers an OTP SMS.
+
+### Request body
+
+<ParamField body="userCode" type="string" required>
+  The mechanic's unique user code as registered in the ERP system.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  `true` when the ERP accepted the code and dispatched an OTP SMS.
+</ResponseField>
+
+<ResponseField name="otp_debug" type="string | null">
+  The raw OTP value. Only populated when `ERP_TEST_MODE=true`. Never present in production.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/auth/request-code \
+  -H "Content-Type: application/json" \
+  -d '{"userCode": "mechanic01"}'
+```
+
+```json Response (test mode)
+{
+  "success": true,
+  "otp_debug": "483920"
+}
+```
+
+```json Response (production)
+{
+  "success": true,
+  "otp_debug": null
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `400` | `erp_rejected_user` | User code not found in the ERP |
+
+---
+
+## POST /api/auth/verify
+
+**Step 2 of login.** Verifies the OTP and returns a signed JWT on success.
+
+### Request body
+
+<ParamField body="userCode" type="string" required>
+  The same user code supplied in step 1.
+</ParamField>
+
+<ParamField body="otp" type="string" required>
+  The one-time password received by the mechanic via SMS.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  `true` when the OTP matched and the JWT was issued.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  Signed JWT (HS256, 12-hour TTL). Send this as `Authorization: Bearer <token>` on all protected endpoints.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/auth/verify \
+  -H "Content-Type: application/json" \
+  -d '{"userCode": "mechanic01", "otp": "483920"}'
+```
+
+```json Response
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `invalid_otp` | OTP did not match or has expired |

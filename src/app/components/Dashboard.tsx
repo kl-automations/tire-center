@@ -7,6 +7,18 @@ import { ExportHistoryModal } from "./ExportHistoryModal";
 import { getOpenRequestStatusCounts, hasOpenRequestUpdates } from "./OpenRequests";
 import { SettingsMenu } from "./SettingsMenu";
 
+/**
+ * Main hub screen shown after a successful login.
+ *
+ * Provides four primary actions:
+ *  - New service order (opens `LicensePlateModal`)
+ *  - Open requests (navigates to `open-requests` with an update badge if new statuses exist)
+ *  - Export history (opens `ExportHistoryModal`)
+ *  - Settings (opens `SettingsMenu` overlay)
+ *
+ * Navigation: reached from `login` on success; navigates to `open-requests`,
+ * `accepted-request`, or `declined-request` via child modals.
+ */
 export function Dashboard() {
   const { t } = useTranslation();
   const { navigate } = useNavigation();

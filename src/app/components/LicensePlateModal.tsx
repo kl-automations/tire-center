@@ -46,6 +46,19 @@ interface LicensePlateModalProps {
   onClose: () => void;
 }
 
+/**
+ * Modal for entering a vehicle licence plate to open a new service order.
+ *
+ * Accepts: plate number (free text), plate type (civilian/military/police),
+ * and current mileage. On submit, calls `POST /api/car` (currently mocked
+ * via hardcoded demo routing: plate `12345678` → declined, others → accepted).
+ *
+ * On ERP approval, navigates to `{ name: "accepted-request" }`.
+ * On ERP rejection, navigates to `{ name: "declined-request" }`.
+ *
+ * @param isOpen  - Controls modal visibility.
+ * @param onClose - Callback invoked when the modal is dismissed.
+ */
 export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const { t } = useTranslation();
   const { navigate } = useNavigation();

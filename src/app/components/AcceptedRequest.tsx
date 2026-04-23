@@ -53,6 +53,22 @@ function getLastRecordedMileage(plate: string): number | null {
   return null;
 }
 
+/**
+ * Primary service-order screen shown after the ERP accepts a licence-plate lookup.
+ *
+ * Displays the axle diagram for the vehicle. The mechanic taps each wheel to open
+ * `TirePopup` and record the work performed (replacement, repair, relocation, etc.).
+ * Optionally launches the Carool AI photo flow via `CaroolCheck`.
+ * On completion, submits the diagnosis via `POST /api/diagnosis` (currently mocked)
+ * and navigates back to `dashboard`.
+ *
+ * Per-wheel data is persisted in `sessionStorage` (key `affected-wheels-{plate}`)
+ * so work is not lost if the user navigates away and returns mid-session.
+ *
+ * Navigation: reached from `LicensePlateModal` via `{ name: "accepted-request" }`.
+ *
+ * @todo Replace all hardcoded customer/tire data getters with `POST /api/car` response.
+ */
 export function AcceptedRequest() {
   const { t } = useTranslation();
   const { screen, navigate } = useNavigation();

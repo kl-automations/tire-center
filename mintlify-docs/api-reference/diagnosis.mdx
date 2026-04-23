@@ -1,0 +1,96 @@
+---
+title: Diagnosis
+description: Submit a completed tyre-service diagnosis for manager approval.
+---
+
+## POST /api/diagnosis
+
+Accepts the mechanic's full diagnosis for a service visit and submits it to the ERP for manager approval (Wave 2 of the service flow).
+
+After a successful call:
+- `open_orders.status` transitions to `'waiting'`
+- `open_orders.diagnosis` is populated with the full payload (JSONB)
+- The ERP will asynchronously fire `POST /api/webhook/erp` with the approval decision
+
+**Requires:** `Authorization: Bearer <token>`
+
+> **Current status:** The ERP `submit_diagnosis` adapter is a **stub** that always returns `true`. It will be replaced with the real `SubmitDiagnosis` SOAP call once the ERP team confirms the method signature.
+
+### Request body
+
+<ParamField body="order_id" type="string" required>
+  UUID of the `open_orders` row being diagnosed. Must belong to the authenticated shop.
+</ParamField>
+
+<ParamField body="mileage_update" type="integer">
+  Updated odometer reading in km if the mechanic corrected the value entered at plate lookup.
+</ParamField>
+
+<ParamField body="front_alignment" type="boolean" default="false">
+  `true` when front-axle wheel alignment was performed during this visit.
+</ParamField>
+
+<ParamField body="tires" type="object">
+  Map of wheel position to an ordered list of `TireAction` objects.
+  Keys are position strings: `"front-left"`, `"front-right"`, `"rear-left"`, `"rear-right"`,
+  `"rear-left-inner"`, `"rear-right-inner"`, `"spare-tire"`.
+</ParamField>
+
+#### TireAction object
+
+<ParamField body="tires[position][].action" type="string" required>
+  Action code. One of: `replacement`, `repair`, `relocation`, `balancing`, `sensor`, `tpms_valve`, `rim_repair`, `puncture`.
+</ParamField>
+
+<ParamField body="tires[position][].reason" type="string">
+  Reason for the action. Required when `action = "replacement"`.
+  One of: `wear`, `damage`, `fitment`.
+</ParamField>
+
+<ParamField body="tires[position][].transfer_target" type="string">
+  Target wheel position when `action = "relocation"` (e.g. `"rear-left"`).
+</ParamField>
+
+### Response
+
+<ResponseField name="ack" type="boolean">
+  `true` when the diagnosis was accepted by the ERP and persisted to the database.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/diagnosis \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "mileage_update": 85200,
+    "front_alignment": true,
+    "tires": {
+      "front-left": [
+        { "action": "replacement", "reason": "wear" },
+        { "action": "balancing" }
+      ],
+      "rear-right": [
+        { "action": "puncture" }
+      ]
+    }
+  }'
+```
+
+```json Response
+{
+  "ack": true
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `Invalid or expired token` | Missing or invalid JWT |
+| `404` | `Order not found` | Order not found or belongs to a different shop |
+| `502` | `ERP rejected diagnosis` | ERP SOAP call returned a failure response |

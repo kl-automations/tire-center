@@ -1,0 +1,115 @@
+---
+title: Real-time Updates
+description: How Firestore onSnapshot keeps the mechanic's screen up to date.
+---
+
+When a manager approves or declines an order in the ERP, the mechanic's browser needs to show the updated status immediately — without requiring a page refresh or polling.
+
+This is achieved using **Firebase Firestore** as a real-time signalling layer.
+
+## How it works
+
+```
+ERP manager decides
+      │
+      ▼
+POST /api/webhook/erp  (or /api/webhook/carool)
+      │
+      ├── UPDATE open_orders SET status = '...'
+      │
+      └── _firestore_signal(shop_id, order_id, status)
+              │
+              ▼
+    Firestore: orders/{shop_id}/updates/{order_id}
+              │
+              ▼
+    Browser onSnapshot fires
+              │
+              ▼
+    Re-fetch GET /api/orders/{order_id}
+              │
+              ▼
+    UI updates (badge, status colour, approval indicators)
+```
+
+## Firestore document
+
+Each signal is written to:
+
+```
+orders/{shop_id}/updates/{order_id}
+```
+
+With the shape:
+
+```json
+{
+  "status": "approved",
+  "updated_at": "2026-04-20T11:05:00.000000+00:00"
+}
+```
+
+## Frontend implementation (to be built)
+
+The frontend needs to:
+
+1. **Initialise Firebase** — `src/lib/firebase.ts` (not yet created):
+
+```typescript
+import { initializeApp } from 'firebase/app'
+import { getFirestore } from 'firebase/firestore'
+
+const app = initializeApp({
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  // add other config values from GCP Firebase console
+})
+
+export const db = getFirestore(app)
+```
+
+2. **Listen for signals** — in `src/lib/hooks/useOpenOrders.ts` (not yet created):
+
+```typescript
+import { collection, onSnapshot } from 'firebase/firestore'
+import { db } from '../firebase'
+
+onSnapshot(
+  collection(db, 'orders', shopId, 'updates'),
+  (snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === 'modified' || change.type === 'added') {
+        // Re-fetch the updated order from the REST API
+        refetchOrder(change.doc.id)
+      }
+    })
+  }
+)
+```
+
+3. **Environment variables** required in `.env`:
+
+```
+VITE_FIREBASE_PROJECT_ID=your-gcp-project-id
+```
+
+## Backend implementation (already done)
+
+The `_firestore_signal` helper in `backend/routers/webhooks.py` writes the document after every status change. It swallows exceptions so a Firestore outage never causes the webhook response to fail.
+
+## Firestore security rules
+
+The browser should only be able to **read** documents scoped to its own `shop_id`. Add the following rules in the Firebase Console:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /orders/{shopId}/updates/{orderId} {
+      allow read: if request.auth != null && request.auth.uid == shopId;
+      allow write: if false; // only backend writes via Admin SDK
+    }
+  }
+}
+```
+
+> **Note:** The React app would need to be signed into Firebase with a custom token (generated from the JWT) for these rules to work. Coordinate with the frontend team on the auth integration.

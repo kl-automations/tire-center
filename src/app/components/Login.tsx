@@ -13,6 +13,17 @@ const LANG_ABBREV: Record<Language, string> = {
 
 type Step = "userCode" | "code";
 
+/**
+ * Two-step login screen for mechanics.
+ *
+ * Step 1: The mechanic enters their user code → calls `POST /api/auth/request-code`.
+ * Step 2: The mechanic enters the OTP received via SMS → calls `POST /api/auth/verify`.
+ * On success, the JWT is stored in `localStorage` and the app navigates to `dashboard`.
+ *
+ * Also renders the language selector and theme toggle (accessible before login).
+ *
+ * Navigation: entry point — navigates to `{ name: "dashboard" }` on success.
+ */
 export function Login() {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>("userCode");

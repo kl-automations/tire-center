@@ -1,0 +1,66 @@
+---
+title: API Overview
+description: Base URL, authentication pattern, common error codes, and conventions.
+---
+
+## Base URL
+
+| Environment | Base URL |
+|-------------|----------|
+| Local dev | `http://localhost:8000` |
+| Dev VM (via SSH tunnel) | `http://localhost:8000` (tunnel maps to VM port 8000) |
+| Production (Cloud Run) | `https://api.your-domain.com` |
+
+## Authentication
+
+All endpoints except `/health`, `POST /api/auth/request-code`, and `POST /api/auth/verify` require a valid JWT.
+
+Include the token as a Bearer token in every request:
+
+```http
+Authorization: Bearer <token>
+```
+
+Obtain the token by completing the two-step login flow:
+1. `POST /api/auth/request-code` — validates user code, triggers OTP via SMS
+2. `POST /api/auth/verify` — verifies OTP, returns JWT
+
+The JWT has a **12-hour TTL**. When it expires the client must re-authenticate.
+
+### JWT payload
+
+```json
+{
+  "shop_id": "mechanic_user_code",
+  "erp_hash": "mechanic_user_code",
+  "exp": 1234567890
+}
+```
+
+> **Note:** `shop_id` and `erp_hash` are currently both set to the mechanic's user code as a placeholder. They will be replaced with real ERP session values once the ERP team confirms the authentication model.
+
+## Common error responses
+
+| Status | `detail` | Meaning |
+|--------|----------|---------|
+| `400` | `erp_rejected_user` | User code not recognised by the ERP |
+| `401` | `invalid_otp` | OTP mismatch |
+| `401` | `Invalid or expired token` | JWT is missing, expired, or has an invalid signature |
+| `404` | `Order not found` | Order UUID not found, or belongs to a different shop |
+| `502` | `ERP rejected diagnosis` | ERP SOAP call failed or returned an error code |
+
+All error responses follow FastAPI's default shape:
+
+```json
+{
+  "detail": "error_code_or_message"
+}
+```
+
+## Conventions
+
+- All request and response bodies are **JSON** (`Content-Type: application/json`), except `POST /api/carool/photo` which uses **multipart/form-data**.
+- UUIDs are returned as strings.
+- Timestamps are ISO-8601 strings with UTC timezone.
+- Date fields (`date_from`, `date_to`) use `YYYY-MM-DD` format.
+- The interactive API explorer is available at `/docs` (Swagger UI) when the backend is running.

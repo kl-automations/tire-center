@@ -1,0 +1,112 @@
+---
+title: New Service Order (End-to-End)
+description: Complete walkthrough of opening, diagnosing, and submitting a service order.
+---
+
+This guide walks through the full lifecycle of a service order from the mechanic's perspective.
+
+## Overview
+
+```
+Login → Dashboard → Plate lookup → Record work → (Optional: Carool photos) → Submit diagnosis → Wait for approval
+```
+
+---
+
+## Step 1 — Login
+
+The mechanic logs in using a two-step OTP flow:
+
+1. Enter user code → `POST /api/auth/request-code` → ERP sends OTP via SMS
+2. Enter OTP → `POST /api/auth/verify` → receive JWT
+
+Store the JWT in `localStorage`. All subsequent calls attach it as `Authorization: Bearer <token>`.
+
+See the [Authentication reference](/api-reference/auth) for full details.
+
+---
+
+## Step 2 — Licence plate lookup
+
+The mechanic enters the vehicle licence plate (and optional mileage).
+
+`POST /api/car` is called with:
+```json
+{
+  "license_plate": "123-456-78",
+  "mileage": 85000
+}
+```
+
+The backend:
+1. Calls ERP `GetCarData` SOAP method
+2. Inserts an `open_orders` row with `status = 'open'`
+3. Returns vehicle data + `order_id`
+
+**Store `order_id`** — it is required for diagnosis, Carool, and history calls.
+
+If the ERP does not recognise the plate, `recognized: false` is returned and the UI shows the declined-request screen.
+
+---
+
+## Step 3 — Record per-wheel work
+
+For each wheel the mechanic taps:
+- **Replacement**: select reason (wear / damage / fitment) + optional balancing, sensor, TPMS valve
+- **Repair**: select puncture, balancing, sensor, rim repair
+- **Relocation**: select target wheel position
+
+All work is held in the frontend (`sessionStorage`) until the mechanic presses Submit.
+
+---
+
+## Step 4 — Carool AI photos (optional)
+
+If the ERP returns `carool_needed: true`, the mechanic can photograph tyres for AI analysis:
+
+1. `POST /api/carool/session` — open session, receive `carool_id`
+2. For each selected wheel, capture sidewall + tread photos:
+   - `POST /api/carool/photo` (×2 per wheel)
+3. `POST /api/carool/finalize` — tell Carool analysis can begin
+
+Carool processes images asynchronously. Results arrive later via `POST /api/webhook/carool` and are stored in `open_orders.diagnosis['carool_result']`.
+
+---
+
+## Step 5 — Submit diagnosis
+
+`POST /api/diagnosis` is called with the complete work record:
+
+```json
+{
+  "order_id": "a1b2c3d4-...",
+  "mileage_update": 85200,
+  "front_alignment": true,
+  "tires": {
+    "front-left": [
+      { "action": "replacement", "reason": "wear" },
+      { "action": "balancing" }
+    ]
+  }
+}
+```
+
+The backend:
+1. Validates the order belongs to the shop
+2. Forwards to ERP `SubmitDiagnosis` SOAP method
+3. Sets `open_orders.status = 'waiting'`
+4. Returns `{ "ack": true }`
+
+---
+
+## Step 6 — Await approval
+
+The order is now in `waiting` status. The ERP notifies the backend via `POST /api/webhook/erp` when the manager decides:
+
+- `approved` — all work approved
+- `partly-approved` — some wheels approved, some declined
+- `declined` — entire order declined
+
+The backend updates `open_orders.status` and writes a Firestore signal. The mechanic's browser receives the update via `onSnapshot` without needing to refresh.
+
+See [Real-time Updates](/guides/realtime-updates) for the Firestore listener pattern.

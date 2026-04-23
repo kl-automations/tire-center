@@ -1,0 +1,61 @@
+---
+title: History Export
+description: Request a service-history report to be emailed by the ERP.
+---
+
+## POST /api/history
+
+Asks the ERP to compile a service-history report for the authenticated shop covering the specified date range and deliver it to an email address.
+
+The ERP generates and sends the report **asynchronously** — this endpoint returns only an acknowledgement. There is no webhook or polling mechanism for the delivery status.
+
+**Requires:** `Authorization: Bearer <token>`
+
+> **Current status:** The ERP `request_history_export` adapter is a **stub** that always returns `true`. It will be replaced with the real SOAP call once the ERP team confirms the method name.
+
+### Request body
+
+<ParamField body="date_from" type="string" required>
+  Start of the export date range, inclusive. ISO-8601 date string: `YYYY-MM-DD`.
+</ParamField>
+
+<ParamField body="date_to" type="string" required>
+  End of the export date range, inclusive. ISO-8601 date string: `YYYY-MM-DD`.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Email address to which the ERP should send the exported report.
+</ParamField>
+
+### Response
+
+<ResponseField name="ack" type="boolean">
+  `true` when the ERP accepted the export request.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/history \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "date_from": "2026-01-01",
+    "date_to": "2026-03-31",
+    "email": "manager@shop.co.il"
+  }'
+```
+
+```json Response
+{
+  "ack": true
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `Invalid or expired token` | Missing or invalid JWT |

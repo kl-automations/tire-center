@@ -172,6 +172,24 @@ function ConfirmationPopup({
   );
 }
 
+/**
+ * Detail screen for a single service order.
+ *
+ * Shows the full order summary: vehicle info, tyre sizes, quality tier,
+ * per-wheel work with approval status badges, front-alignment indicator,
+ * and rejection reason (if declined). Each wheel row opens a `WheelDetailPopup`
+ * with the full work breakdown.
+ *
+ * Also provides a "Confirm" action which prompts for optional mechanic notes
+ * and marks the order as acknowledged in local storage.
+ *
+ * Data source: reads from `getStoredRequests()` (sessionStorage) keyed by the
+ * `id` from the `request-detail` screen. Will be replaced with
+ * `GET /api/orders/{id}` once the frontend API client is wired.
+ *
+ * Navigation: reached from `open-requests` via `{ name: "request-detail", id }`;
+ * navigates back to `open-requests` on close or confirm.
+ */
 export function RequestDetail() {
   const { t } = useTranslation();
   const { screen, navigate } = useNavigation();

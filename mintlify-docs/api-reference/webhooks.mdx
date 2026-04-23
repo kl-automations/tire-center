@@ -1,0 +1,138 @@
+---
+title: Webhooks
+description: Inbound webhooks from ERP and Carool that update order status in real time.
+---
+
+Both webhook endpoints are called by external systems (ERP and Carool). After updating the database, each handler writes a **Firestore signal** so the mechanic's browser receives a live update via `onSnapshot`.
+
+---
+
+## POST /api/webhook/erp
+
+Called by the ERP when the garage manager approves or declines a submitted diagnosis.
+
+Updates `open_orders.status`, merges the ERP response into `diagnosis['erp_response']` JSONB,
+sets `declined_at` if the status is `"declined"`, and writes a Firestore signal.
+
+> **Security note:** `X-ERP-Hash` header verification is not yet implemented. It will be added once the ERP team confirms the authentication method (see open question Q4 in `docs/backend-plan.md`).
+
+### Request body (sent by ERP)
+
+<ParamField body="request_id" type="string" required>
+  The ERP's reference ID for the service visit. Must match `open_orders.request_id`.
+</ParamField>
+
+<ParamField body="status" type="string" required>
+  New order status. One of: `approved`, `partly-approved`, `declined`.
+</ParamField>
+
+<ParamField body="front_alignment" type="string">
+  ERP's approval decision for front alignment, if applicable. Field semantics TBD with ERP team.
+</ParamField>
+
+<ParamField body="tires" type="object">
+  Per-wheel approval decisions keyed by wheel position. Merged into `open_orders.diagnosis`. Shape TBD with ERP team.
+</ParamField>
+
+### Response
+
+<ResponseField name="ack" type="boolean">
+  `true` when the update was persisted.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```json Payload from ERP
+{
+  "request_id": "req_stub_12345678",
+  "status": "approved",
+  "tires": {
+    "front-left": { "approval": "full" },
+    "rear-right": { "approval": "puncture-only" }
+  }
+}
+```
+
+```json Response
+{
+  "ack": true
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `404` | `Order not found` | No order with the given `request_id` |
+
+---
+
+## POST /api/webhook/carool
+
+Called by Carool when AI photo analysis is complete (asynchronously after `POST /api/carool/finalize`).
+
+Merges the analysis results into `open_orders.diagnosis['carool_result']` JSONB and writes a Firestore signal.
+
+**Authentication:** `X-API-KEY` header must match the `CAROOL_API_KEY` secret.
+
+### Request body (sent by Carool)
+
+<ParamField body="externalId" type="string" required>
+  Carool's session ID. Matches `open_orders.carool_diagnosis_id`.
+</ParamField>
+
+<ParamField body="dateAnalysis" type="string">
+  ISO-8601 datetime string of when Carool completed analysis.
+</ParamField>
+
+<ParamField body="vehicle" type="object">
+  Carool's vehicle-level metadata (make, model, year, etc.).
+</ParamField>
+
+<ParamField body="prediction" type="object">
+  Tyre-condition predictions keyed by wheel position.
+</ParamField>
+
+<ParamField body="recommendations" type="array">
+  Ordered list of Carool's recommended actions per tyre.
+</ParamField>
+
+### Response
+
+<ResponseField name="ack" type="boolean">
+  `true` when the results were merged into the order.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```json Payload from Carool
+{
+  "externalId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "dateAnalysis": "2026-04-20T11:00:00Z",
+  "vehicle": { "make": "Toyota", "model": "Corolla", "year": 2021 },
+  "prediction": {
+    "FRONT_LEFT": { "condition": "worn", "tread_depth_mm": 2.1 },
+    "FRONT_RIGHT": { "condition": "ok", "tread_depth_mm": 5.8 }
+  },
+  "recommendations": [
+    { "wheel": "FRONT_LEFT", "action": "replace_immediately" }
+  ]
+}
+```
+
+```json Response
+{
+  "ack": true
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `Unauthorized` | `X-API-KEY` header missing or incorrect |
+| `404` | `Order not found` | No order matching `externalId` |

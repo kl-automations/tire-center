@@ -1,0 +1,33 @@
+---
+title: Introduction
+description: Overview of the Tire Center platform and its components.
+---
+
+# Tire Center
+
+Tire Center is a **PWA (Progressive Web App)** used by mechanics in tyre-service shops. It connects to an ERP system via SOAP and to the **Carool AI** tyre-analysis platform via REST.
+
+## What it does
+
+1. A mechanic logs in using their ERP user code and an OTP sent by SMS.
+2. They scan a vehicle licence plate to open a new service order.
+3. The ERP returns vehicle and tyre data (sizes, quality tier, wheel count).
+4. The mechanic records per-wheel work (replacement, repair, balancing, etc.) and optionally photographs tyres for Carool AI analysis.
+5. The completed diagnosis is submitted to the ERP for manager approval.
+6. The mechanic's screen updates in real time when the manager approves or declines via **Firestore onSnapshot**.
+
+## System components
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Frontend** | React 18 + Vite PWA | Mechanic-facing UI (RTL/Hebrew-first) |
+| **Backend** | FastAPI (Python) | API gateway, JWT auth, DB, ERP/Carool adapters |
+| **Database** | PostgreSQL (Cloud SQL) | `open_orders` table — persistent order state |
+| **ERP** | SOAP (zeep) | Vehicle lookup, diagnosis submission, history export |
+| **Carool AI** | REST (httpx) | AI tyre-condition analysis from photos |
+| **Firestore** | Firebase Admin SDK | Real-time status signals to the browser |
+| **Infra** | GCP VM / Cloud Run | Hosting; secrets via Secret Manager |
+
+## Who this documentation is for
+
+This site is for **backend developers** working on the FastAPI service. For frontend development notes, see the `docs/` folder in the repository.

@@ -1,0 +1,97 @@
+---
+title: Car Lookup
+description: Open a new service order by looking up a vehicle via licence plate.
+---
+
+## POST /api/car
+
+Looks up a vehicle in the ERP by licence plate (Wave 1 of the service flow).
+On success, inserts a row in `open_orders` with `status='open'` and returns
+the vehicle data together with the new `order_id`.
+
+**Requires:** `Authorization: Bearer <token>`
+
+> **Current status:** The ERP `lookup_car` adapter is a **stub** that returns hardcoded fixture data. It will be replaced with the real `GetCarData` SOAP call once the ERP team confirms the method signature.
+
+### Request body
+
+<ParamField body="license_plate" type="string" required>
+  The vehicle licence plate number. Any format accepted by the ERP (e.g. `"123-456-78"` or `"12345678"`).
+</ParamField>
+
+<ParamField body="mileage" type="integer">
+  Current odometer reading in kilometres as entered by the mechanic. Optional.
+</ParamField>
+
+### Response
+
+<ResponseField name="order_id" type="string">
+  UUID of the newly created `open_orders` row. Use this in all subsequent calls for this visit.
+</ResponseField>
+
+<ResponseField name="recognized" type="boolean">
+  `true` when the ERP found the vehicle in its records.
+</ResponseField>
+
+<ResponseField name="request_id" type="string">
+  ERP's own reference ID for this service visit. Stored in `open_orders.request_id` and required by the diagnosis endpoint.
+</ResponseField>
+
+<ResponseField name="ownership_id" type="string">
+  Fleet owner / rental company identifier (e.g. `"HERTZ"`).
+</ResponseField>
+
+<ResponseField name="tire_level" type="string">
+  Tyre quality tier: `"chinese"`, `"upgraded"`, or `"premium"`.
+</ResponseField>
+
+<ResponseField name="wheel_count" type="integer">
+  Number of road wheels: `4` (standard) or `6` (dual-rear axle).
+</ResponseField>
+
+<ResponseField name="tire_sizes" type="object">
+  Front and rear tyre size objects, each with `size` (e.g. `"205/55R16"`) and `profile` (e.g. `"91V"`).
+</ResponseField>
+
+<ResponseField name="carool_needed" type="boolean">
+  `true` when the ERP recommends Carool AI photo analysis for this vehicle.
+</ResponseField>
+
+<ResponseField name="last_mileage" type="integer | null">
+  Last recorded odometer reading on file, or `null` if no history exists.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.your-domain.com/api/car \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"license_plate": "123-456-78", "mileage": 85000}'
+```
+
+```json Response
+{
+  "order_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "recognized": true,
+  "request_id": "req_stub_12345678",
+  "ownership_id": "HERTZ",
+  "tire_level": "premium",
+  "wheel_count": 4,
+  "tire_sizes": {
+    "front": { "size": "205/55R16", "profile": "91V" },
+    "rear":  { "size": "225/45R17", "profile": "94W" }
+  },
+  "carool_needed": true,
+  "last_mileage": 82000
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `Invalid or expired token` | Missing or invalid JWT |
+| `502` | ERP error | ERP call failed (stub always succeeds) |

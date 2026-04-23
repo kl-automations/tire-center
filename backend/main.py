@@ -1,9 +1,12 @@
 """
-Tire Center — FastAPI backend
-All secrets are loaded from GCP Secret Manager via config.py at startup.
+Tire Center — FastAPI backend entry point.
 
-Start: uvicorn main:app --reload --port 8000
-Prod:  Docker → Cloud Run (Dockerfile)
+All secrets are loaded from GCP Secret Manager via config.py at import time.
+The app uses a lifespan context manager to create and tear down the asyncpg
+connection pool and Firebase Admin SDK on startup/shutdown.
+
+Local dev:  uvicorn main:app --reload --port 8000
+Production: Docker → uvicorn on $PORT (default 8080) → Cloud Run
 """
 
 import json
@@ -24,9 +27,13 @@ from routers import auth, car, carool, diagnosis, history, internal, orders, web
 
 async def _create_db_pool() -> asyncpg.Pool:
     """
-    Dev VM:    config.DB_HOST is the Postgres IP — direct TCP on port 5432.
-    Cloud Run: config.DB_HOST is the Unix socket path — asyncpg accepts it as host.
-    No code change needed when switching; only the secret value in GCP changes.
+    Create and return an asyncpg connection pool.
+
+    The connection target is determined solely by the DB_HOST secret value:
+      - Dev VM:    an IP address → asyncpg opens a direct TCP connection on port 5432.
+      - Cloud Run: a Unix socket path → asyncpg uses the Cloud SQL proxy socket.
+    No code change is needed when switching environments; only the secret
+    value in GCP Secret Manager changes.
     """
     return await asyncpg.create_pool(
         host=config.DB_HOST,
@@ -41,6 +48,14 @@ async def _create_db_pool() -> asyncpg.Pool:
 # ── Firebase init ─────────────────────────────────────────────────────────────
 
 def _init_firebase():
+    """
+    Initialise the Firebase Admin SDK if it has not already been initialised.
+
+    If FIREBASE_SERVICE_ACCOUNT is set (JSON string or file path) it is used
+    directly. Otherwise the SDK falls back to Application Default Credentials
+    (ADC), which works automatically on GCP VMs and Cloud Run without any
+    extra configuration.
+    """
     if firebase_admin._apps:
         return
     sa_json = config.FIREBASE_SERVICE_ACCOUNT
@@ -48,7 +63,7 @@ def _init_firebase():
         sa_dict = json.loads(sa_json) if sa_json.strip().startswith("{") else None
         cred = credentials.Certificate(sa_dict) if sa_dict else credentials.Certificate(sa_json)
     else:
-        # Fall back to ADC when the secret isn't configured yet
+        # Fall back to ADC when the secret is not configured (e.g. local dev without Firebase)
         cred = credentials.ApplicationDefault()
     firebase_admin.initialize_app(cred)
 
@@ -57,6 +72,19 @@ def _init_firebase():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan context manager — runs startup and shutdown logic.
+
+    Startup:
+      1. config.py has already loaded all secrets from GCP Secret Manager at
+         import time, so they are available here without an extra async call.
+      2. Creates the asyncpg connection pool and attaches it to app.state.db.
+      3. Initialises Firebase Admin SDK and attaches the Firestore client to
+         app.state.firestore.
+
+    Shutdown:
+      - Closes all connections in the asyncpg pool gracefully.
+    """
     # config.py has already loaded all secrets at import time
     app.state.db = await _create_db_pool()
 
@@ -70,7 +98,17 @@ async def lifespan(app: FastAPI):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Tire Center API", lifespan=lifespan)
+app = FastAPI(
+    title="Tire Center API",
+    description=(
+        "Backend API for the Tire Center mechanic PWA. "
+        "Handles authentication (ERP OTP flow), vehicle lookup, tyre-service diagnosis "
+        "submission, Carool AI photo analysis, and order management. "
+        "All protected endpoints require **Authorization: Bearer \\<JWT\\>**."
+    ),
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
@@ -92,6 +130,12 @@ app.include_router(webhooks.router)
 app.include_router(internal.router)
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    summary="Health check",
+    description="Returns `{\"status\": \"ok\"}`. Used by GCP load balancer health probes and CI smoke tests.",
+    tags=["meta"],
+)
 async def health():
+    """Lightweight liveness probe — no DB query, no external calls."""
     return {"status": "ok"}

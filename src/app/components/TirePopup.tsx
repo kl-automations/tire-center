@@ -3,22 +3,50 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { getRoadWheelPositions, type VehicleWheelCount } from "../vehicleWheelLayout";
 
+/**
+ * The primary action being performed on a tyre during a service visit.
+ *
+ * - `replacement` — tyre is being replaced (requires a `ReplacementReason`).
+ * - `repair`      — tyre stays on the vehicle; one or more repairs are applied.
+ * - `relocation`  — tyre is physically moved to a different wheel position.
+ */
 export type TireIssueMode = "replacement" | "repair" | "relocation";
+
+/**
+ * The reason a tyre is being replaced.
+ *
+ * - `wear`    — tyre has reached end of its service life (tread depth).
+ * - `damage`  — tyre has sustained physical damage (cut, bulge, etc.).
+ * - `fitment` — tyre is the wrong size or type for the vehicle.
+ */
 export type ReplacementReason = "wear" | "damage" | "fitment";
 
+/**
+ * All work data captured for a single wheel by the `TirePopup` form.
+ *
+ * This is the edit-time shape — the mechanic fills it in during the
+ * `AcceptedRequest` screen. On submission it is converted to `WheelWork`
+ * (in OpenRequests.tsx) which is the read/display shape.
+ * Both shapes are persisted in `open_orders.diagnosis` JSONB.
+ */
 export interface WheelData {
-  // Replacement
+  /** Reason for tyre replacement. `null` when the tyre is not being replaced. */
   replacementReason: ReplacementReason | null;
-  // Repair switches
+  /** Whether a TPMS sensor is being replaced. */
   sensor: boolean;
+  /** Whether a TPMS valve stem is being replaced. */
   tpmsValve: boolean;
+  /** Whether wheel balancing is being performed. */
   balancing: boolean;
+  /** Whether rim repair is being performed. */
   rimRepair: boolean;
-  puncture: boolean;        // disabled when replacementReason is set
-  // Relocation
+  /** Whether a puncture repair is being performed. Disabled when `replacementReason` is set. */
+  puncture: boolean;
+  /** Target wheel position when relocating a tyre. `null` if not relocating. */
   movedToWheel: string | null;
-  // Legacy fields kept for RequestDetail / HistoryDetail display
+  /** Primary action mode; drives which UI section is expanded in TirePopup. */
   mode: TireIssueMode;
+  /** Human-readable summary of the work, used in RequestDetail / history display. */
   reason: string;
 }
 
@@ -56,6 +84,27 @@ function otherWheelPositions(
   return all.filter((w) => w !== current);
 }
 
+/**
+ * Bottom-sheet popup for recording all work performed on a single wheel.
+ *
+ * Opened by tapping a wheel in `AxlesDiagram` during the `AcceptedRequest` flow.
+ * The mechanic selects the primary action (`TireIssueMode`) and fills in the
+ * relevant fields (replacement reason, repair toggles, or relocation target).
+ * A "Carool photo" button navigates to `CaroolCheck` for AI tyre analysis.
+ *
+ * On submit, calls `onSubmit(wheelPosition, WheelData)` so `AcceptedRequest`
+ * can persist the data to `sessionStorage`.
+ *
+ * @param isOpen                   - Controls popup visibility.
+ * @param onClose                  - Callback when the popup is dismissed without saving.
+ * @param wheelPosition            - The wheel being edited (e.g. `"front-left"`).
+ * @param licensePlate             - Used to compute available relocation targets.
+ * @param onSubmit                 - Called with the completed `WheelData` on save.
+ * @param onNavigateToCaroolCheck  - Called when the mechanic taps the Carool camera button.
+ * @param spareTireEnabled         - Whether the spare tyre is a valid relocation target.
+ * @param wheelCount               - Total road wheels; controls relocation target list.
+ * @param initialData              - Pre-fill form from previously saved `WheelData`.
+ */
 export function TirePopup({
   isOpen,
   onClose,

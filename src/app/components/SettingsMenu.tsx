@@ -8,6 +8,15 @@ interface SettingsMenuProps {
   onClose: () => void;
 }
 
+/**
+ * Slide-in settings overlay accessible from the Dashboard.
+ *
+ * Provides: theme toggle (light/dark), language switcher, current user code
+ * display, and logout (clears `localStorage` and navigates to `login`).
+ *
+ * @param isOpen  - Controls overlay visibility.
+ * @param onClose - Callback invoked when the overlay is dismissed.
+ */
 export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   const { t } = useTranslation();
   const { navigate } = useNavigation();

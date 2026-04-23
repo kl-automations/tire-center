@@ -1,0 +1,112 @@
+---
+title: Orders
+description: Read-only access to a shop's open service orders.
+---
+
+Both endpoints are strictly scoped to the authenticated shop — no mechanic can read another shop's orders even if they know the UUID.
+
+**Requires:** `Authorization: Bearer <token>`
+
+---
+
+## GET /api/orders
+
+Returns all non-declined orders for the authenticated shop, sorted newest first.
+
+Declined orders are excluded from this list (they are cleaned up nightly by `POST /internal/cleanup`).
+
+### Response
+
+<ResponseField name="total" type="integer">
+  Total number of orders in the response.
+</ResponseField>
+
+<ResponseField name="orders" type="array">
+  Array of order objects. Each object contains all columns from `open_orders`.
+  See the [Open Orders data model](/data-models/open-orders) for the full field list.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl https://api.your-domain.com/api/orders \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response
+{
+  "total": 2,
+  "orders": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "request_id": "req_stub_12345678",
+      "license_plate": "123-456-78",
+      "plate_type": "civilian",
+      "mileage": 85000,
+      "car_data": { "recognized": true, "wheel_count": 4 },
+      "diagnosis": null,
+      "status": "waiting",
+      "carool_diagnosis_id": null,
+      "created_at": "2026-04-20T10:30:00+00:00",
+      "updated_at": "2026-04-20T10:30:00+00:00"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+---
+
+## GET /api/orders/{order_id}
+
+Returns the full detail row for a single order.
+
+Returns `404` if the order does not exist **or** belongs to a different shop. These two cases are intentionally indistinguishable to prevent UUID enumeration.
+
+### Path parameters
+
+<ParamField path="order_id" type="string" required>
+  UUID of the order to fetch.
+</ParamField>
+
+### Response
+
+Single order object with all `open_orders` columns. See the [Open Orders data model](/data-models/open-orders).
+
+### Example
+
+<CodeGroup>
+```bash Request
+curl https://api.your-domain.com/api/orders/a1b2c3d4-e5f6-7890-abcd-ef1234567890 \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "request_id": "req_stub_12345678",
+  "license_plate": "123-456-78",
+  "plate_type": "civilian",
+  "mileage": 85000,
+  "car_data": { "recognized": true, "wheel_count": 4 },
+  "diagnosis": {
+    "front_alignment": false,
+    "tires": {
+      "front-left": [{ "action": "replacement", "reason": "wear" }]
+    }
+  },
+  "status": "approved",
+  "carool_diagnosis_id": "carool_abc123",
+  "created_at": "2026-04-20T10:30:00+00:00",
+  "updated_at": "2026-04-20T11:05:00+00:00"
+}
+```
+</CodeGroup>
+
+### Error responses
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| `401` | `Invalid or expired token` | Missing or invalid JWT |
+| `404` | `Order not found` | Order not found or belongs to a different shop |

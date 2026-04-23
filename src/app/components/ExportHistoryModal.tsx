@@ -9,6 +9,16 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
+/**
+ * Modal for requesting a service-history report by email.
+ *
+ * The mechanic selects a preset time period (1m / 3m / 6m), enters an email
+ * address, and submits. On submit, calls `POST /api/history` to ask the ERP
+ * to generate and email the report (currently mocked with a "// Mock send" stub).
+ *
+ * @param isOpen  - Controls modal visibility.
+ * @param onClose - Callback invoked when the modal is dismissed or after submit.
+ */
 export function ExportHistoryModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
