@@ -3,3 +3,5 @@ dist/
 .vite/
 guidelines/
 *.local
+.claude/
+.local/

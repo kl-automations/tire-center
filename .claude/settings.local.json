@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(pip show:*)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|js|json\\)$\")",
+      "Bash(xargs grep *)"
     ]
   }
 }

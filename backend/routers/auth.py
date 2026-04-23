@@ -22,18 +22,17 @@ ALGORITHM = "HS256"
 TOKEN_TTL_HOURS = 12
 
 
-def _make_token(user_code: str) -> str:
+def _make_token(user_code: str, otp: str) -> str:
     """
     Sign and return a 12-hour JWT for the given user code.
 
-    The shop_id and erp_hash claims are both set to user_code as a placeholder
-    until the ERP team finalises the session-hash semantics (see open question Q1
-    in backend-plan.md). Replace both values once the ERP Login response
-    includes a real shop_id and hash.
+    shop_id is set to user_code (confirmed correct mapping). erp_hash is set
+    to the OTP submitted during verification, which acts as the session hash
+    used on subsequent ERP SOAP calls.
     """
     payload = {
-        "shop_id": user_code,   # TODO: replace with ERP-returned shop_id
-        "erp_hash": user_code,  # TODO: replace with ERP-returned erp_hash
+        "shop_id": user_code,
+        "erp_hash": otp,
         "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_TTL_HOURS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
@@ -75,5 +74,5 @@ async def verify(body: VerifyOtpRequest):
     result = await erp.verify_login(body.userCode, body.otp)
     if not result["success"]:
         raise HTTPException(status_code=401, detail="invalid_otp")
-    token = _make_token(body.userCode)
+    token = _make_token(body.userCode, body.otp)
     return VerifyOtpResponse(success=True, token=token)

@@ -54,19 +54,52 @@ export function Login() {
     };
   }, [langMenuOpen]);
 
-  const handleUserCodeSubmit = (e: React.FormEvent) => {
+  const handleUserCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserCodeError(false);
-    // TODO: call POST /api/auth/request-code with { userCode }
-    setStep("code");
+    try {
+      const res = await fetch("/api/auth/request-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userCode }),
+      });
+      if (res.status === 400) {
+        setUserCodeError(true);
+        return;
+      }
+      if (!res.ok) {
+        setUserCodeError(true);
+        return;
+      }
+      setStep("code");
+    } catch {
+      setUserCodeError(true);
+    }
   };
 
-  const handleCodeSubmit = (e: React.FormEvent) => {
+  const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCodeError(false);
-    // TODO: call POST /api/auth/verify with { userCode, otp: code }, store returned token
-    localStorage.setItem("userCode", userCode);
-    navigate({ name: "dashboard" });
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userCode, otp: code }),
+      });
+      if (res.status === 401) {
+        setCodeError(true);
+        return;
+      }
+      if (!res.ok) {
+        setCodeError(true);
+        return;
+      }
+      const data: { token: string } = await res.json();
+      localStorage.setItem("token", data.token);
+      navigate({ name: "dashboard" });
+    } catch {
+      setCodeError(true);
+    }
   };
 
   const handleBackToUserCode = () => {
