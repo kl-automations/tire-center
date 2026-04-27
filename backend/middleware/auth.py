@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from config import JWT_SECRET
+from logging_utils import log, log_error
 
 _bearer = HTTPBearer()
 
@@ -41,8 +42,10 @@ def get_current_shop(
         erp_hash: str = payload.get("erp_hash")
         if not shop_id or not erp_hash:
             raise ValueError("missing claims")
+        log("AUTH", f"JWT verified shop_id={shop_id}")
         return {"shop_id": shop_id, "erp_hash": erp_hash}
-    except (JWTError, ValueError):
+    except (JWTError, ValueError) as e:
+        log_error("auth", f"JWT verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",

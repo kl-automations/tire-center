@@ -14,6 +14,7 @@ with the approval decision (approved / partly-approved / declined).
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 from models.schemas import DiagnosisRequest
 from adapters import erp
@@ -49,12 +50,18 @@ async def submit_diagnosis(
         404: Order not found or does not belong to the authenticated shop.
         502: ERP returned a failure response (ReturnCode != "1").
     """
+    log(
+        "ROUTER/diagnosis",
+        f"submit received order_id={body.order_id} shop_id={shop['shop_id']} mileage={body.mileage_update} alignment={body.front_alignment}",
+    )
     db = request.app.state.db
+    log("DB", f"SELECT open_orders for order_id={body.order_id}")
     order = await db.fetchrow(
         "SELECT request_id, carool_diagnosis_id, license_plate FROM open_orders WHERE id = $1 AND shop_id = $2",
         body.order_id, shop["shop_id"],
     )
     if not order:
+        log_error("diagnosis", f"order not found order_id={body.order_id}")
         raise HTTPException(status_code=404, detail="Order not found")
 
     erp_payload = {
@@ -69,13 +76,17 @@ async def submit_diagnosis(
         },
     }
 
+    log("ROUTER/diagnosis", f"forwarding diagnosis to ERP request_id={order['request_id']}")
     ok = await erp.submit_diagnosis(order["request_id"], erp_payload, shop["shop_id"], shop["erp_hash"])
     if not ok:
+        log_error("diagnosis", f"ERP rejected diagnosis order_id={body.order_id} request_id={order['request_id']}")
         raise HTTPException(status_code=502, detail="ERP rejected diagnosis")
 
+    log("DB", f"UPDATE open_orders SET status='waiting' for order_id={body.order_id}")
     await db.execute(
         "UPDATE open_orders SET status = 'waiting', diagnosis = $1 WHERE id = $2",
         json.dumps(erp_payload), body.order_id,
     )
+    log("ROUTER/diagnosis", f"submit success order_id={body.order_id} status=waiting")
 
     return {"ack": True}

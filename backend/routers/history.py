@@ -7,6 +7,7 @@ generates and sends the report asynchronously; there is no webhook callback.
 """
 
 from fastapi import APIRouter, Depends
+from logging_utils import log
 from middleware.auth import get_current_shop
 from models.schemas import HistoryRequest
 from adapters import erp
@@ -38,6 +39,10 @@ async def export_history(
 
     Note: request_history_export is currently a stub in adapters/erp.py.
     """
+    log(
+        "ROUTER/history",
+        f"export received shop_id={shop['shop_id']} from={body.date_from} to={body.date_to} email={body.email}",
+    )
     ok = await erp.request_history_export(
         shop_id=shop["shop_id"],
         date_from=body.date_from,
@@ -45,4 +50,5 @@ async def export_history(
         email=body.email,
         erp_hash=shop["erp_hash"],
     )
+    log("ROUTER/history", f"export ack={ok} shop_id={shop['shop_id']}")
     return {"ack": ok}

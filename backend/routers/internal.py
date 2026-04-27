@@ -11,6 +11,8 @@ TODO: add OIDC token verification middleware before deploying to production.
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request
 
+from logging_utils import log
+
 router = APIRouter(prefix="/internal", tags=["internal"])
 
 
@@ -42,13 +44,16 @@ async def cleanup_declined(request: Request):
         the incoming OIDC token issued by Cloud Scheduler against the expected
         service account (see backend-plan.md task B13).
     """
+    log("ROUTER/internal", "cleanup invoked (Cloud Scheduler)")
     cutoff = datetime.now(timezone.utc) - timedelta(days=1)
 
     db = request.app.state.db
+    log("DB", f"DELETE open_orders WHERE status='declined' AND declined_at<{cutoff.isoformat()}")
     result = await db.execute(
         "DELETE FROM open_orders WHERE status = 'declined' AND declined_at < $1",
         cutoff,
     )
     # asyncpg returns a status string like "DELETE 3"
     deleted = int(result.split()[-1]) if result else 0
+    log("ROUTER/internal", f"cleanup deleted={deleted} declined orders")
     return {"deleted": deleted}

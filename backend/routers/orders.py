@@ -9,6 +9,7 @@ until deleted.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -36,7 +37,9 @@ async def list_orders(
     columns from open_orders except declined rows, ordered by created_at DESC.
     UUIDs are coerced to strings for JSON serialisation.
     """
+    log("ROUTER/orders", f"list_orders received shop_id={shop['shop_id']}")
     db = request.app.state.db
+    log("DB", f"SELECT open_orders WHERE shop_id={shop['shop_id']} AND status!='declined'")
     rows = await db.fetch(
         """
         SELECT id, request_id, license_plate, plate_type, mileage,
@@ -51,6 +54,7 @@ async def list_orders(
     orders = [dict(r) for r in rows]
     for o in orders:
         o["id"] = str(o["id"])
+    log("ROUTER/orders", f"list_orders returning {len(orders)} orders shop_id={shop['shop_id']}")
     return {"total": len(orders), "orders": orders}
 
 
@@ -78,7 +82,9 @@ async def get_order(
     Raises:
         404: Order not found or belongs to a different shop.
     """
+    log("ROUTER/orders", f"get_order received order_id={order_id} shop_id={shop['shop_id']}")
     db = request.app.state.db
+    log("DB", f"SELECT open_orders WHERE id={order_id} AND shop_id={shop['shop_id']}")
     row = await db.fetchrow(
         """
         SELECT id, request_id, license_plate, plate_type, mileage,
@@ -90,7 +96,9 @@ async def get_order(
         order_id, shop["shop_id"],
     )
     if not row:
+        log_error("orders", f"get_order not found order_id={order_id} shop_id={shop['shop_id']}")
         raise HTTPException(status_code=404, detail="Order not found")
     result = dict(row)
     result["id"] = str(result["id"])
+    log("ROUTER/orders", f"get_order success order_id={order_id} status={result.get('status')}")
     return result

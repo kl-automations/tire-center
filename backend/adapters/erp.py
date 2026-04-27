@@ -30,6 +30,8 @@ from zeep.transports import Transport
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+from logging_utils import log, log_error
+
 # ── SOAP client constants ─────────────────────────────────────────────────────
 
 _WSDL_URL     = "https://tet.kogol.co.il:22443/csp/bil/Diagnose.Webservices.cls?WSDL"
@@ -61,9 +63,16 @@ def _get_client():
     wsdl = os.environ.get("ERP_WSDL_URL", _WSDL_URL)
     endpoint = os.environ.get("ERP_ENDPOINT_URL", _ENDPOINT_URL)
 
-    client = Client(wsdl=wsdl, transport=transport)
+    log("ADAPTER/erp", f"Building zeep SOAP client wsdl={wsdl} endpoint={endpoint} ssl_verify={ssl_verify}")
+    try:
+        client = Client(wsdl=wsdl, transport=transport)
+        service = client.create_service(_BINDING_NAME, endpoint)
+    except Exception as e:
+        log_error("ADAPTER/erp", f"Failed to build SOAP client: {e}")
+        raise
+    log("ADAPTER/erp", "SOAP client ready (cached singleton)")
     # Override the port-443 address declared in the WSDL — firewall requires 22443
-    return client.create_service(_BINDING_NAME, endpoint)
+    return service
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -86,8 +95,14 @@ async def request_otp(user_code: str) -> dict:
         }
     """
     service = _get_client()
-    response = service.IsValidUser(userCode=user_code)
+    log("ADAPTER/erp", f"SOAP IsValidUser userCode={user_code}")
+    try:
+        response = service.IsValidUser(userCode=user_code)
+    except Exception as e:
+        log_error("ADAPTER/erp", f"IsValidUser SOAP call failed for userCode={user_code}: {e}")
+        raise
     success = str(response.ReturnCode) == "1"
+    log("ADAPTER/erp", f"IsValidUser ReturnCode={response.ReturnCode} success={success}")
     test_mode = os.environ.get("ERP_TEST_MODE", "false").lower() == "true"
     return {
         "success": success,
@@ -110,9 +125,16 @@ async def verify_login(user_code: str, otp: str) -> dict:
         }
     """
     service = _get_client()
-    response = service.Login(userCode=user_code, password=otp)
+    log("ADAPTER/erp", f"SOAP Login userCode={user_code}")
+    try:
+        response = service.Login(userCode=user_code, password=otp)
+    except Exception as e:
+        log_error("ADAPTER/erp", f"Login SOAP call failed for userCode={user_code}: {e}")
+        raise
+    success = str(response.ReturnCode) == "1"
+    log("ADAPTER/erp", f"Login ReturnCode={response.ReturnCode} success={success}")
     return {
-        "success": str(response.ReturnCode) == "1",
+        "success": success,
         "message": response.ReturnMessage,
     }
 
@@ -145,13 +167,22 @@ async def lookup_car(
             carool_needed (bool), last_mileage (int|None)
     """
     service = _get_client()
-    response = service.Apply(
-        userCode=shop_id,
-        password=erp_hash,
-        CarNumber=license_plate,
-        KM=mileage if mileage else 0,
+    log(
+        "ADAPTER/erp",
+        f"SOAP Apply shop_id={shop_id} CarNumber={license_plate} KM={mileage if mileage else 0}",
     )
-    print(f"[erp.Apply] raw response: {response}")
+    try:
+        response = service.Apply(
+            userCode=shop_id,
+            password=erp_hash,
+            CarNumber=license_plate,
+            KM=mileage if mileage else 0,
+        )
+    except Exception as e:
+        log_error("ADAPTER/erp", f"Apply SOAP call failed plate={license_plate}: {e}")
+        raise
+    log("ADAPTER/erp", f"Apply ReturnCode={response.ReturnCode} ApplyId={response.ApplyId}")
+    log("ADAPTER/erp", f"Apply raw response: {response}")
     return {
         "recognized": str(response.ReturnCode) == "1",
         "request_id": response.ApplyId,
@@ -262,15 +293,25 @@ async def submit_diagnosis(
     }
 
     service = _get_client()
-    response = service.SendDiagnose(
-        userCode=shop_id,
-        password=erp_hash,
-        CarNumber=payload["license_plate"],
-        ApplyId=int(request_id),
-        Diagnosis=diagnosis_dict,
+    log(
+        "ADAPTER/erp",
+        f"SOAP SendDiagnose shop_id={shop_id} request_id={request_id} plate={payload['license_plate']} lines={len(lines)}",
     )
-    print(f"[erp.SendDiagnose] raw response: {response}")
-    return str(response.ReturnCode) == "1"
+    try:
+        response = service.SendDiagnose(
+            userCode=shop_id,
+            password=erp_hash,
+            CarNumber=payload["license_plate"],
+            ApplyId=int(request_id),
+            Diagnosis=diagnosis_dict,
+        )
+    except Exception as e:
+        log_error("ADAPTER/erp", f"SendDiagnose SOAP call failed request_id={request_id}: {e}")
+        raise
+    accepted = str(response.ReturnCode) == "1"
+    log("ADAPTER/erp", f"SendDiagnose ReturnCode={response.ReturnCode} accepted={accepted}")
+    log("ADAPTER/erp", f"SendDiagnose raw response: {response}")
+    return accepted
 
 
 # ── History export ────────────────────────────────────────────────────────────
@@ -299,5 +340,9 @@ async def request_history_export(
     Returns:
         True if the ERP accepted the export request, False otherwise.
     """
+    log(
+        "ADAPTER/erp",
+        f"request_history_export STUB shop_id={shop_id} from={date_from} to={date_to} email={email}",
+    )
     # TODO: replace stub — SOAP method TBD
     return True

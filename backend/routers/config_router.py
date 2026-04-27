@@ -14,6 +14,7 @@ authenticated endpoint instead.
 from fastapi import APIRouter
 
 import config
+from logging_utils import log
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -31,4 +32,5 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 )
 async def get_public_config():
     """Return non-secret feature flags read directly from `config`."""
+    log("ROUTER/config", f"GET /api/config -> carool_enabled={config.CAROOL_ENABLED}")
     return {"carool_enabled": config.CAROOL_ENABLED}

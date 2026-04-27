@@ -87,6 +87,10 @@ export function AcceptedRequest() {
       .then((data) => {
         if (!cancelled && data && typeof data.carool_enabled === "boolean") {
           setCaroolEnabled(data.carool_enabled);
+          console.log(
+            "[AcceptedRequest] /api/config carool_enabled =",
+            data.carool_enabled,
+          );
         }
       })
       .catch(() => {});

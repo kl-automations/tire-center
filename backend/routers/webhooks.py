@@ -15,6 +15,7 @@ import json
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
+from logging_utils import log, log_error
 from models.schemas import ErpWebhookPayload, CaroolWebhookPayload
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
@@ -51,12 +52,14 @@ def _firestore_signal(app, shop_id: str, order_id: str, status: str):
     never causes the webhook to return a non-200 to the caller.
     """
     try:
+        log("FIRESTORE", f"signal write shop_id={shop_id} order_id={order_id} status={status}")
         db = app.state.firestore
         db.collection("orders").document(shop_id) \
           .collection("updates").document(order_id) \
           .set({"status": status, "updated_at": datetime.now(timezone.utc).isoformat()})
-    except Exception:
-        pass
+        log("FIRESTORE", f"signal write success order_id={order_id}")
+    except Exception as e:
+        log_error("firestore", f"signal write failed order_id={order_id}: {e}")
 
 
 @router.post(
@@ -91,13 +94,19 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     Raises:
         404: No order with the given request_id found in the database.
     """
+    log(
+        "WEBHOOK/erp",
+        f"received request_id={payload.request_id} lines={len(payload.DiagnoseData)}",
+    )
     db = request.app.state.db
 
+    log("DB", f"SELECT open_orders WHERE request_id={payload.request_id}")
     order = await db.fetchrow(
         "SELECT id, shop_id FROM open_orders WHERE request_id = $1",
         str(payload.request_id),
     )
     if not order:
+        log_error("erp_webhook", f"order not found for request_id={payload.request_id}")
         raise HTTPException(status_code=404, detail="Order not found")
 
     items_by_location: dict[str, list] = {}
@@ -164,7 +173,12 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     }
 
     declined_at = datetime.now(timezone.utc) if status == "declined" else None
+    log(
+        "WEBHOOK/erp",
+        f"computed status={status} order_id={order['id']} wheels={wheels} alignment_confirmed={front_alignment_confirmed}",
+    )
 
+    log("DB", f"UPDATE open_orders status={status} for order_id={order['id']}")
     await db.execute(
         """
         UPDATE open_orders
@@ -183,6 +197,7 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     )
 
     _firestore_signal(request.app, order["shop_id"], str(order["id"]), status)
+    log("WEBHOOK/erp", f"ack order_id={order['id']} status={status}")
     return {"ack": True}
 
 
@@ -210,19 +225,24 @@ async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
         401: X-API-KEY header missing or does not match CAROOL_API_KEY secret.
         404: No order matching payload.externalId found in the database.
     """
+    log("WEBHOOK/carool", f"received externalId={payload.externalId}")
     api_key = request.headers.get("X-API-KEY", "")
     if api_key != os.environ.get("CAROOL_API_KEY", ""):
+        log_error("carool_webhook", f"401 Unauthorized — bad/missing X-API-KEY externalId={payload.externalId}")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     db = request.app.state.db
 
+    log("DB", f"SELECT open_orders WHERE id={payload.externalId}")
     order = await db.fetchrow(
         "SELECT id, shop_id, status FROM open_orders WHERE id = $1",
         payload.externalId,
     )
     if not order:
+        log_error("carool_webhook", f"order not found externalId={payload.externalId}")
         raise HTTPException(status_code=404, detail="Order not found")
 
+    log("DB", f"UPDATE open_orders SET diagnosis.carool_result for order_id={order['id']}")
     await db.execute(
         """
         UPDATE open_orders
@@ -238,4 +258,5 @@ async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
     )
 
     _firestore_signal(request.app, order["shop_id"], str(order["id"]), order["status"])
+    log("WEBHOOK/carool", f"ack order_id={order['id']} status={order['status']}")
     return {"ack": True}

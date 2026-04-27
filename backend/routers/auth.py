@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from jose import jwt
 from config import JWT_SECRET
+from logging_utils import log, log_error
 from models.schemas import RequestCodeRequest, RequestCodeResponse, VerifyOtpRequest, VerifyOtpResponse
 from adapters import erp
 
@@ -52,9 +53,12 @@ def _make_token(user_code: str, otp: str) -> str:
 )
 async def request_code(body: RequestCodeRequest):
     """Step 1 — validate user code and trigger OTP dispatch via ERP IsValidUser."""
+    log("ROUTER/auth", f"request-code received userCode={body.userCode}")
     result = await erp.request_otp(body.userCode)
     if not result["success"]:
+        log_error("auth", f"request-code ERP rejected userCode={body.userCode}")
         raise HTTPException(status_code=400, detail="erp_rejected_user")
+    log("ROUTER/auth", f"request-code success userCode={body.userCode}")
     return RequestCodeResponse(success=True, otp_debug=result["otp_debug"])
 
 
@@ -71,8 +75,11 @@ async def request_code(body: RequestCodeRequest):
 )
 async def verify(body: VerifyOtpRequest):
     """Step 2 — verify OTP via ERP Login; return a signed JWT on success."""
+    log("ROUTER/auth", f"verify received userCode={body.userCode}")
     result = await erp.verify_login(body.userCode, body.otp)
     if not result["success"]:
+        log_error("auth", f"verify invalid OTP userCode={body.userCode} message={result.get('message')}")
         raise HTTPException(status_code=401, detail="invalid_otp")
     token = _make_token(body.userCode, body.otp)
+    log("ROUTER/auth", f"verify success userCode={body.userCode} JWT issued (TTL={TOKEN_TTL_DAYS}d)")
     return VerifyOtpResponse(success=True, token=token)

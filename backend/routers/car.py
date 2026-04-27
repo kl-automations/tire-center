@@ -10,6 +10,7 @@ Wave 1 of the request flow:
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 from models.schemas import CarLookupRequest
 from adapters import erp
@@ -45,6 +46,10 @@ async def car_lookup(
     Raises:
         400: ERP rejected the request (e.g. mileage too low, unrecognised plate).
     """
+    log(
+        "ROUTER/car",
+        f"car_lookup received shop_id={shop['shop_id']} plate={body.license_plate} mileage={body.mileage}",
+    )
     car_data = await erp.lookup_car(
         license_plate=body.license_plate,
         mileage=body.mileage,
@@ -53,12 +58,17 @@ async def car_lookup(
     )
 
     if not car_data["recognized"]:
+        log_error(
+            "car",
+            f"ERP did not recognise plate={body.license_plate} message={car_data.get('erp_message')}",
+        )
         raise HTTPException(
             status_code=400,
             detail=car_data.get("erp_message", "erp_rejected"),
         )
 
     db = request.app.state.db
+    log("DB", f"INSERT open_orders shop_id={shop['shop_id']} plate={body.license_plate}")
     order_id = await db.fetchval(
         """
         INSERT INTO open_orders
@@ -73,6 +83,8 @@ async def car_lookup(
         str(car_data.get("request_id")),
         shop["erp_hash"],
     )
+    log("DB", f"INSERT open_orders -> order_id={order_id}")
+    log("ROUTER/car", f"car_lookup success order_id={order_id} plate={body.license_plate}")
 
     return {
         "order_id": str(order_id),

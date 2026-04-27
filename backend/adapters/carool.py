@@ -20,6 +20,8 @@ Known bug (open_session):
 import os
 import httpx
 
+from logging_utils import log, log_error
+
 BASE_URL = "https://api.ca-rool.com"  # confirm exact base URL with Carool team
 
 
@@ -59,21 +61,33 @@ async def open_session(order_id: str, license_plate: str, mileage: int | None) -
     Raises:
         httpx.HTTPStatusError: Carool returned a non-2xx response.
     """
+    url = f"{BASE_URL}/ai-diagnoses"
+    log("ADAPTER/carool", f"open_session order_id={order_id} plate={license_plate} mileage={mileage}")
+    log("ADAPTER/carool", f"POST {url}")
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}/ai-diagnoses",
-            headers=_headers(),
-            json={
-                "externalId": order_id,
-                "vehicle": {
-                    "license": license_plate,
-                    "licenseCountry": "IL",
-                    **({"mileage": mileage} if mileage else {}),
+        try:
+            resp = await client.post(
+                url,
+                headers=_headers(),
+                json={
+                    "externalId": order_id,
+                    "vehicle": {
+                        "license": license_plate,
+                        "licenseCountry": "IL",
+                        **({"mileage": mileage} if mileage else {}),
+                    },
                 },
-            },
-        )
+            )
+        except httpx.HTTPError as e:
+            log_error("ADAPTER/carool", f"open_session network error for order_id={order_id}: {e}")
+            raise
+        log("ADAPTER/carool", f"POST {url} -> {resp.status_code}")
+        if resp.status_code >= 400:
+            log_error("ADAPTER/carool", f"open_session failed: {resp.status_code} {resp.text[:200]}")
         resp.raise_for_status()
-        return str(resp.json()["id"])
+        carool_id = str(resp.json()["id"])
+        log("ADAPTER/carool", f"open_session success order_id={order_id} carool_id={carool_id}")
+        return carool_id
 
 
 async def upload_photo(
@@ -99,13 +113,26 @@ async def upload_photo(
         httpx.HTTPStatusError: Carool returned a non-2xx response.
     """
     endpoint = f"{BASE_URL}/ai-diagnoses/{carool_id}/{photo_type}-picture"
+    log(
+        "ADAPTER/carool",
+        f"upload_photo carool_id={carool_id} type={photo_type} bytes={len(image_bytes)} content_type={content_type}",
+    )
+    log("ADAPTER/carool", f"POST {endpoint}")
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            endpoint,
-            headers=_headers(),
-            files={"file": ("photo.jpg", image_bytes, content_type)},
-        )
+        try:
+            resp = await client.post(
+                endpoint,
+                headers=_headers(),
+                files={"file": ("photo.jpg", image_bytes, content_type)},
+            )
+        except httpx.HTTPError as e:
+            log_error("ADAPTER/carool", f"upload_photo network error carool_id={carool_id}: {e}")
+            raise
+        log("ADAPTER/carool", f"POST {endpoint} -> {resp.status_code}")
+        if resp.status_code >= 400:
+            log_error("ADAPTER/carool", f"upload_photo failed: {resp.status_code} {resp.text[:200]}")
         resp.raise_for_status()
+        log("ADAPTER/carool", f"upload_photo success carool_id={carool_id} type={photo_type}")
 
 
 async def finalize_session(carool_id: str) -> None:
@@ -122,9 +149,17 @@ async def finalize_session(carool_id: str) -> None:
     Raises:
         httpx.HTTPStatusError: Carool returned a non-2xx response.
     """
+    url = f"{BASE_URL}/ai-diagnoses/{carool_id}/uploaded"
+    log("ADAPTER/carool", f"finalize_session carool_id={carool_id}")
+    log("ADAPTER/carool", f"POST {url}")
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}/ai-diagnoses/{carool_id}/uploaded",
-            headers=_headers(),
-        )
+        try:
+            resp = await client.post(url, headers=_headers())
+        except httpx.HTTPError as e:
+            log_error("ADAPTER/carool", f"finalize_session network error carool_id={carool_id}: {e}")
+            raise
+        log("ADAPTER/carool", f"POST {url} -> {resp.status_code}")
+        if resp.status_code >= 400:
+            log_error("ADAPTER/carool", f"finalize_session failed: {resp.status_code} {resp.text[:200]}")
         resp.raise_for_status()
+        log("ADAPTER/carool", f"finalize_session success carool_id={carool_id}")

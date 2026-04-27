@@ -19,23 +19,35 @@ Optional secrets (CAROOL_*, FIREBASE_SERVICE_ACCOUNT):
 import os
 from google.cloud import secretmanager
 
+from logging_utils import log, log_error
+
 _project_id = os.environ["GCP_PROJECT_ID"]
+log("CONFIG", f"Initialising Secret Manager client for project={_project_id}")
 _sm = secretmanager.SecretManagerServiceClient()
 
 
 def _require(name: str) -> str:
     """Fetch a secret that must exist. Raises on failure."""
+    log("CONFIG", f"Loading required secret '{name}'")
     path = f"projects/{_project_id}/secrets/{name}/versions/latest"
-    response = _sm.access_secret_version(name=path)
+    try:
+        response = _sm.access_secret_version(name=path)
+    except Exception as e:
+        log_error("config", f"Failed to load required secret '{name}': {e}")
+        raise
+    log("CONFIG", f"Loaded required secret '{name}' (len={len(response.payload.data)})")
     return response.payload.data.decode("utf-8").strip()
 
 
 def _optional(name: str) -> str | None:
     """Fetch a secret that may not exist yet. Returns None and logs a warning."""
+    log("CONFIG", f"Loading optional secret '{name}'")
     try:
-        return _require(name)
+        value = _require(name)
+        log("CONFIG", f"Optional secret '{name}' present")
+        return value
     except Exception as e:
-        print(f"[config] WARNING: optional secret '{name}' not found — {e}")
+        log("CONFIG", f"WARNING: optional secret '{name}' not found — {e}")
         return None
 
 
@@ -59,3 +71,5 @@ FIREBASE_SERVICE_ACCOUNT = _optional("FIREBASE_SERVICE_ACCOUNT")  # JSON string
 # CAROOL_ENABLED secret to exactly "0" to disable all Carool routes and hide
 # the Carool UI in the frontend.
 CAROOL_ENABLED = _optional("CAROOL_ENABLED") != "0"
+log("CONFIG", f"CAROOL_ENABLED={CAROOL_ENABLED}")
+log("CONFIG", "All secrets loaded successfully")
