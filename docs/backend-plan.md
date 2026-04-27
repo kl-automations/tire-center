@@ -1,144 +1,52 @@
-# Backend Implementation Backlog — Tire Center
+# Backend Implementation Status — Tire Center
 
 > **Owner:** Mel (developer)
-> **Created:** 2026-04-13
-> **Context:** Full backend to be built from scratch. GCP infrastructure and secrets are already provisioned — see `MANUAL_SETUP.md`. All tasks here are code-only.
+> **Status as of:** 2026-04-26 — **all phases complete**
 > **Backend code:** `backend/`
 > **Frontend code:** `src/`
+> **Companion doc:** `docs/backend-structure.md` (architecture & API reference)
+
+> This document was originally a phased build backlog written before the ERP
+> was integrated. The architecture it described is now superseded — the live
+> backend talks to the ERP over SOAP (zeep), not a generic REST `/auth`
+> endpoint, and the auth flow is OTP-via-SMS (not email). The plan below has
+> been collapsed into a status summary of what actually shipped.
 
 ---
 
-## Phase 1 — FastAPI Skeleton
+## What was built
 
-> Unblocks everything. Test with mock ERP responses before real ERP is available.
-
-| # | Task | Details | Done when |
-|---|------|---------|-----------|
-| B1 | Scaffold FastAPI project | Create `backend/main.py`, `Dockerfile`, `requirements.txt`. Dependencies: `fastapi`, `uvicorn`, `asyncpg`, `python-jose`, `firebase-admin`, `httpx` | `docker build` succeeds. `GET /health` returns `{"status":"ok"}` |
-| B2 | Cloud SQL connection pool | Connect via `asyncpg` using `CLOUD_SQL_CONNECTION_NAME` env var. Fail fast with clear error if DB unreachable on startup | App connects on startup. Clear error if DB is down |
-| B3 | Run DB migrations | Execute schema below on startup or via migration script | `\d open_orders` shows all columns and indexes |
-| B4 | JWT middleware | `get_current_shop()` FastAPI dependency: decode JWT, extract `shop_id`. Return `401` if token missing or invalid. **Never read `shop_id` from request body** | Protected route returns `401` without token, `200` with valid token |
-
-**`open_orders` schema:**
-```sql
-CREATE TABLE open_orders (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id          text NOT NULL,
-  license_plate    text NOT NULL,
-  plate_type       text NOT NULL,
-  mileage          integer,
-  car_data         jsonb,
-  diagnosis        jsonb,
-  status           text NOT NULL DEFAULT 'waiting',
-  erp_hash         text NOT NULL,
-  declined_at      timestamptz,
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  updated_at       timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN NEW.updated_at = now(); RETURN NEW; END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER set_updated_at
-  BEFORE UPDATE ON open_orders
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE INDEX idx_open_orders_shop_id     ON open_orders (shop_id);
-CREATE INDEX idx_open_orders_status      ON open_orders (status);
-CREATE INDEX idx_open_orders_declined_at ON open_orders (declined_at) WHERE declined_at IS NOT NULL;
-```
+| Area | Status | Notes |
+|------|--------|-------|
+| Auth (OTP via `userCode`) | ✅ Live | `POST /api/auth/request-code` → ERP `IsValidUser` (sends SMS). `POST /api/auth/verify` → ERP `Login` → returns JWT `{ shop_id, erp_hash, exp }`. **No email anywhere.** |
+| Car lookup | ✅ Live | `POST /api/car` → ERP `Apply` SOAP. Inserts `open_orders` row with `status='open'` and the ERP `request_id`. |
+| Carool photo session | ✅ Live | `POST /api/carool/session` / `/photo` / `/finalize` — proxies to Carool REST. Session ID stored in `open_orders.carool_diagnosis_id`. |
+| Diagnosis submission | ✅ Live | `POST /api/diagnosis` → ERP `SendDiagnose` SOAP. Translates per-wheel actions into `DiagnosisLine` rows; sets `open_orders.status='waiting'` on success. |
+| Webhook handlers | ✅ Live | `POST /api/webhook/erp` and `POST /api/webhook/carool` update `open_orders` and (will) emit Firestore signals. |
+| Orders list & detail | ✅ Live | `GET /api/orders` and `GET /api/orders/{id}` — JWT-scoped to `shop_id`. |
+| Internal cleanup | ✅ Live | `POST /internal/cleanup` — deletes yesterday's pre-16:00 declined orders. |
 
 ---
 
-## Phase 2 — Auth Endpoint
+## What is still stubbed
 
-| # | Endpoint | Details | Done when |
-|---|----------|---------|-----------|
-| B5 | `POST /api/auth` | Forward `{username, password}` to ERP `/auth`. On approval: sign JWT with `{shop_id, erp_hash}`, return `{token, shop_id, erp_hash}`. On rejection: return `401` | Valid ERP creds → JWT returned. Invalid creds → `401` |
-
----
-
-## Phase 3 — Core API Endpoints
-
-| # | Endpoint | Details | Done when |
-|---|----------|---------|-----------|
-| B6 | `GET /api/orders` | Return `open_orders` rows for authenticated `shop_id`. Always: `WHERE shop_id = :shop_id` from JWT. Response shape: `{total, orders: [...]}` | curl with valid JWT returns only that shop's orders |
-| B7 | `GET /api/orders/{order_id}` | Return single order. Verify `shop_id` from JWT matches row — return `404` if not found or wrong shop | Returns order. Returns `404` for order belonging to a different shop |
-| B8 | `POST /api/car` | Extract `shop_id` + `erp_hash` from JWT → forward `{shop_id, license_plate, mileage}` to ERP with `erp_hash` in auth header → return ERP response as-is | Car data object returned from ERP |
-| B9 | `POST /api/diagnosis` | Validate JWT → confirm `order_id` exists AND `shop_id` matches → forward to ERP → on ERP `200`: set `status = 'waiting'` in DB → return ack | Order status updates in DB. Wrong shop `order_id` returns `404` |
-| B10 | `POST /api/history` | Extract `shop_id` + `erp_hash` from JWT → forward `{shop_id, date_from, date_to, email}` to ERP → return ack | ERP receives request |
+| Item | Reason |
+|------|--------|
+| `request_history_export` (in `adapters/erp.py`) | SOAP method name & request shape not yet provided by the ERP team. The route `POST /api/history` is wired up and returns success; the adapter is a no-op (`return True`). |
+| Firestore realtime signals | `FIREBASE_SERVICE_ACCOUNT` is not yet configured in GCP Secret Manager. The webhook handlers update the DB but skip the Firestore write. Frontend currently does not subscribe. |
 
 ---
 
-## Phase 4 — ERP Webhook + Firestore
+## New DB tables (added during ERP integration)
 
-| # | Task | Details | Done when |
-|---|------|---------|-----------|
-| B11 | `POST /api/webhook/order-status` | Validate `X-Webhook-Secret` header against `WEBHOOK_SECRET` env var — return `401` + log if mismatch. Verify `request_id` exists in DB — return `401` if not. Update: `status`, per-wheel approvals in `diagnosis` jsonb, set `declined_at` if `status = 'declined'`. Then call B12. Return `200` | Correct secret + valid order → DB updated. Wrong secret → `401` |
-| B12 | Firestore signal write | After DB update: write `orders/{shop_id}/updates/{order_id} = {status, updated_at}` using Firebase Admin SDK. Service account JSON from `FIREBASE_SERVICE_ACCOUNT` env var | Firestore document appears after webhook POST |
+Two reference tables were added to `backend/db/schema.sql` to map the
+frontend's diagnosis vocabulary onto the ERP's numeric codes. Both are seeded
+with the live ERP codes; the long-term intent is for them to be admin-managed
+(edit rows in DB → no code change required).
 
----
+- **`erp_action_codes`** — maps `(frontend_action, frontend_reason)` → `erp_code`. Seeded with codes `2` (front alignment), `3` (wear), `4` (puncture), `23` (damage), `25` (fitment).
+- **`erp_tire_locations`** — maps `wheel_position` → `erp_code`. Seeded with codes `1`–`8` covering all wheel positions plus a `no-location` entry (`6`) used for non-wheel-specific actions like front alignment.
 
-## Phase 5 — Scheduled Cleanup
-
-| # | Task | Details | Done when |
-|---|------|---------|-----------|
-| B13 | `POST /internal/cleanup` | Delete: `WHERE status = 'declined' AND declined_at::date = CURRENT_DATE - 1 AND declined_at::time < '16:00:00'`. Authenticate via OIDC token from Cloud Scheduler (verify in middleware) | Correct rows deleted. Rows declined after 16:00 survive |
-
----
-
-## Phase 6 — Frontend Integration
-
-| # | File | Replace mock with | Done when |
-|---|------|------------------|-----------|
-| F1 | `lib/api/client.ts` *(new)* | Base fetch wrapper — attach `Authorization: Bearer <jwt>` from `localStorage` on every request | All API calls go through this client |
-| F2 | `lib/firebase.ts` *(new)* | Firebase app init + Firestore client, reading from `VITE_FIREBASE_PROJECT_ID` env var | Firestore client initializes without error |
-| F3 | `lib/hooks/useOpenOrders.ts` *(new)* | `GET /api/orders` fetch + Firestore `onSnapshot` listener that calls `refetchOrder(id)` on change | Orders load on mount. UI updates when Firestore signal fires |
-| F4 | `Login.tsx` | `POST /api/auth` → store `token`, `erp_hash`, `shop_id` in `localStorage` | Login stores JWT. Invalid creds show error |
-| F5 | `OpenRequests.tsx` | Replace `MOCK_REQUESTS` with `useOpenOrders` hook | Real orders shown. Status updates without page refresh |
-| F6 | `LicensePlateLookup.tsx` | `POST /api/car` → display returned car data | Car data renders after plate lookup |
-| F7 | `DiagnosisForm.tsx` | `POST /api/diagnosis` → show success/error state | Submission updates order status in UI |
-| F8 | `HistoryExportModal.tsx` | `POST /api/history` → show "Email sent" confirmation | Modal shows ack after submit |
-
-**Firestore listener pattern (for F3):**
-```typescript
-import { collection, onSnapshot } from 'firebase/firestore'
-
-onSnapshot(
-  collection(db, 'orders', shopId, 'updates'),
-  (snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-      if (change.type === 'modified' || change.type === 'added') {
-        refetchOrder(change.doc.id)
-      }
-    })
-  }
-)
-```
-
----
-
-## Open Questions — Resolve with ERP Team Before Starting Phase 2
-
-| # | Question | Blocks |
-|---|----------|--------|
-| Q1 | ERP base URL and auth header format — does `erp_hash` go in `Authorization: Bearer <hash>` or a custom header? | B8, B9, B10 |
-| Q2 | Exact request/response payload shapes — field names, date formats, error codes | B5, B8, B9 |
-| Q3 | ERP webhook retry behavior — if our endpoint returns non-200, does ERP retry? How many times? | B11 |
-| Q4 | Does ERP login response include `shop_id`? If not, must be pre-configured | B5 |
-
----
-
-## Priority Order
-
-1. **B1–B4** — Skeleton + DB + JWT middleware
-2. **B5** — Auth endpoint (frontend becomes usable)
-3. **F1–F4** — API client + Firebase init + login wired up
-4. **B6–B7 + F3 + F5** — Orders list end-to-end with live updates
-5. **B11–B12** — Webhook + Firestore signal
-6. **B8 + F6** — Car lookup end-to-end
-7. **B9 + F7** — Diagnosis end-to-end
-8. **B13** — Cleanup endpoint
-9. **B10 + F8** — History export
+Note: the codes are currently inlined as Python dicts in `adapters/erp.py`
+(`_REASON_CODE`, `_TIRE_LOCATION_CODE`). Switching the adapter to query these
+tables is a future cleanup task.

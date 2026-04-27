@@ -1,0 +1,171 @@
+{
+  "common": {
+    "yes": "نعم",
+    "no": "لا",
+    "continue": "متابعة",
+    "lightMode": "الوضع الفاتح",
+    "darkMode": "الوضع الداكن",
+    "loading": "جارٍ التحميل...",
+    "requestNotFound": "لم يتم العثور على التقرير",
+    "newRequest": "تقرير جديد",
+    "spareTire": "عجلة الاحتياط",
+    "frontAlignment": "ضبط الزوايا الأمامية",
+    "requestNumberLine": "رقم الطلب: {{requestNumber}}",
+    "requestNumberLabel": "رقم الطلب",
+    "qualityLine": "الجودة: {{quality}}",
+    "qualityLabel": "الجودة",
+    "qualityTier": {
+      "chinese": "اقتصادي",
+      "upgraded": "محسّن",
+      "premium": "ممتاز"
+    }
+  },
+  "wheels": {
+    "frontRight": "أمامي أيمن",
+    "frontLeft": "أمامي أيسر",
+    "rearRight": "خلفي أيمن",
+    "rearLeft": "خلفي أيسر",
+    "rearRightInner": "عجلة يمين داخلية",
+    "rearLeftInner": "عجلة يسار داخلية",
+    "spareTire": "الاحتياط"
+  },
+  "services": {
+    "puncture": "ثقب",
+    "balancing": "موازنة",
+    "sensor": "حسّاس",
+    "tpmsValve": "صمام TPMS",
+    "rimRepair": "إصلاح الجنط"
+  },
+  "status": {
+    "open": "مفتوح",
+    "waiting": "بانتظار الموافقة",
+    "approved": "تمت الموافقة",
+    "partlyApproved": "موافقة جزئية — انظر التفاصيل!",
+    "declined": "مرفوض"
+  },
+  "approval": {
+    "full": "تمت الموافقة",
+    "punctureOnly": "إصلاح الثقب فقط",
+    "none": "غير موافق عليه"
+  },
+  "login": {
+    "title": "تقرير خدمة كوغل",
+    "subtitleUserCode": "أدخل رمز المستخدم الخاص بك",
+    "subtitleCode": "أدخل رمز التحقق المُرسَل إلى هاتفك",
+    "userCodeLabel": "رمز المستخدم",
+    "userCodePlaceholder": "مثال: ISRAEL ISRAELI",
+    "userCodeError": "رمز المستخدم غير معروف في النظام",
+    "codeLabel": "رمز التحقق",
+    "codePlaceholder": "أدخل الرمز",
+    "codeError": "الرمز غير صحيح، حاول مجدداً",
+    "submitUserCode": "إرسال الرمز",
+    "submitCode": "دخول",
+    "backToUserCode": "رجوع",
+    "changeLanguage": "تغيير اللغة"
+  },
+  "dashboard": {
+    "title": "تقرير خدمة كوغل",
+    "subtitle": "لوحة التحكم الرئيسية",
+    "chooseAction": "اختر إجراءً",
+    "newRequest": "تقرير جديد",
+    "newRequestDesc": "إنشاء تقرير جديد لمركبة",
+    "openRequests": "تقارير مفتوحة",
+    "openRequestsDesc": "عرض التقارير النشطة",
+    "exportHistory": "تصدير السجل"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "account": "الحساب",
+    "connectedUser": "المستخدم المتصل",
+    "displayMode": "وضع العرض",
+    "language": "اللغة",
+    "signOut": "تسجيل الخروج"
+  },
+  "openRequests": {
+    "title": "تقارير مفتوحة",
+    "empty": "لا توجد تقارير مفتوحة",
+    "searchPlaceholder": "البحث برقم اللوحة أو رقم الطلب أو سبب الرفض...",
+    "dateFrom": "من تاريخ",
+    "dateTo": "إلى تاريخ",
+    "dismissApproved": "اكتملت المعالجة. احذف التشخيص.",
+    "dismissDeclined": "تم إبلاغ العميل. احذف التشخيص."
+  },
+  "requestDetail": {
+    "title": "تفاصيل التقرير",
+    "wheelsInRequest": "العجلات في التقرير",
+    "clickWheelHint": "اضغط على عجلة مُعلَّمة لعرض التفاصيل",
+    "reason": "السبب",
+    "confirmTitle": "تأكيد الإنجاز",
+    "confirmQuestion": "هل تريد تأكيد إنهاء العمل على هذا التقرير؟",
+    "notesLabel": "ملاحظات (اختياري)",
+    "notesPlaceholder": "صِف العمل الذي تم تنفيذه...",
+    "confirmButton": "تأكيد الإنجاز"
+  },
+  "licensePlate": {
+    "line1": "إسرائيل",
+    "line2": "ISRAEL"
+  },
+  "plateType": {
+    "label": "نوع المركبة",
+    "civilian": "مدني",
+    "military": "عسكري",
+    "police": "شرطة"
+  },
+  "tirePopup": {
+    "sectionReplacement": "استبدال بسبب",
+    "sectionRepair": "إصلاح",
+    "sectionRelocation": "نقل إلى",
+    "replacementReason": {
+      "wear": "تآكل",
+      "damage": "تلف",
+      "fitment": "مقاس"
+    },
+    "continueToCheck": "المتابعة لتصوير الإطار📸"
+  },
+  "licensePlateModal": {
+    "title": "تقرير جديد",
+    "subtitle": "أدخل رقم لوحة المركبة"
+  },
+  "acceptedRequest": {
+    "title": "تقرير جديد",
+    "selectWheel": "اختر عجلة",
+    "identified": "مُعرَّف – {{customerName}}",
+    "customerLabel": "العميل",
+    "mileage": "عداد المسافات",
+    "km": "كم",
+    "mileageWarningTitle": "قراءة العداد لا تتطابق مع السجل",
+    "mileageWarningLastReported": "آخر قراءة مسجّلة في النظام: {{lastMileage}} كم",
+    "mileageWarningEditButton": "تصحيح قراءة العداد الحالية",
+    "caroolPhotosRequired": "يجب تصوير جميع الإطارات عبر Carool قبل الإرسال"
+  },
+  "declinedRequest": {
+    "title": "تقرير جديد",
+    "noApproval": "غير مصرّح بالتنفيذ",
+    "rejectionReason": "سبب الرفض:",
+    "backHome": "العودة إلى الصفحة الرئيسية"
+  },
+  "caroolCheck": {
+    "title": "تصوير العجلات",
+    "sidewall": "جانب الإطار",
+    "tread": "مداس الإطار",
+    "capture": "التقاط",
+    "done": "اكتملت الصور",
+    "capture": "التقاط",
+    "approve": "تأكيد",
+    "retake": "إعادة التصوير",
+    "cameraError": "تعذّر الوصول إلى الكاميرا",
+    "cameraErrorHint": "فعّل وصول الكاميرا من إعدادات المتصفح"
+  },
+  "exportHistory": {
+    "title": "تصدير السجل",
+    "explanation": "بعد التصدير، سيُرسل ملف يتضمّن سجل الإجراءات إلى عنوان البريد الذي أدخلته، للفترة الزمنية التي اخترتها.",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "your@email.com",
+    "periodLabel": "الفترة",
+    "period1month": "شهر",
+    "period3months": "3 أشهر",
+    "period6months": "6 أشهر",
+    "exportButton": "تصدير",
+    "sent": "تم الإرسال"
+  }
+}

@@ -174,34 +174,60 @@ class HistoryRequest(BaseModel):
 
 # ---------- Webhooks ----------
 
+class ErpDiagnoseItem(BaseModel):
+    """
+    A single per-line approval decision in the ERP webhook payload.
+
+    The ERP returns one item per (action × location) line that the mechanic
+    originally submitted, plus an additional line for front-alignment when
+    applicable (Action='2', Location='6').
+    """
+
+    Action: str = Field(
+        description=(
+            "ERP action code as a string. Known values: '3'=wear, '23'=damage, "
+            "'25'=fitment, '4'=puncture, '2'=front_alignment."
+        )
+    )
+    Location: str = Field(
+        description=(
+            "ERP tyre-location code as a string. '1'=front-left, '2'=front-right, "
+            "'3'=rear-right, '4'=rear-left, '5'=spare-tire, '6'=no-location "
+            "(front-alignment), '7'=rear-left-inner, '8'=rear-right-inner."
+        )
+    )
+    Remarks: str = Field(
+        default="",
+        description="Free-text remarks supplied by the garage manager. Optional.",
+    )
+    Confirmed: str = Field(
+        description="Approval flag as a string. '1' = approved, '0' = declined."
+    )
+
+
 class ErpWebhookPayload(BaseModel):
     """
     Inbound payload sent by the ERP when an order's approval status changes.
 
     The ERP fires this webhook after the garage manager approves or declines
-    a submitted diagnosis. The backend updates open_orders and writes a
-    Firestore signal so the browser receives a live status update.
+    a submitted diagnosis. The backend computes per-wheel approval, the
+    overall status, and front-alignment confirmation, then updates open_orders
+    and writes a Firestore signal so the browser receives a live status update.
     """
 
-    request_id: str = Field(
-        description="The ERP's own reference ID for the service visit, stored in open_orders.request_id."
-    )
-    status: str = Field(
+    request_id: int = Field(
         description=(
-            "New order status. One of: 'approved', 'partly-approved', 'declined'. "
-            "The backend maps this to the open_orders.status column."
+            "The ERP's own reference ID for the service visit. Sent as an integer "
+            "by the ERP; the backend stores open_orders.request_id as text and "
+            "looks it up via str(request_id)."
         )
     )
-    front_alignment: str | None = Field(
-        default=None,
-        description="ERP approval decision for front-alignment, if applicable. Values TBD with ERP team.",
-    )
-    tires: dict[str, Any] = Field(
-        default={},
+    DiagnoseData: list[ErpDiagnoseItem] = Field(
         description=(
-            "Per-wheel approval decisions keyed by wheel position. "
-            "Merged into open_orders.diagnosis JSONB. Shape TBD with ERP team."
-        ),
+            "Per-line approval decisions, one item per (action × location) line "
+            "the mechanic originally submitted, plus an optional front-alignment "
+            "line (Action='2', Location='6')."
+        )
     )
 
 

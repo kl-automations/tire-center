@@ -11,8 +11,8 @@ Auth flow (two-step OTP):
 
 Stub status:
   - request_otp / verify_login    → LIVE (call real ERP SOAP)
-  - lookup_car                    → STUB (returns hardcoded fixture)
-  - submit_diagnosis              → STUB (always returns True)
+  - lookup_car                    → LIVE (call real ERP SOAP)
+  - submit_diagnosis              → LIVE (call real ERP SOAP)
   - request_history_export        → STUB (always returns True)
   Replace stubs with real SOAP calls once the ERP team confirms method signatures.
 
@@ -26,6 +26,9 @@ import functools
 import requests
 from zeep import Client
 from zeep.transports import Transport
+
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── SOAP client constants ─────────────────────────────────────────────────────
 
@@ -125,16 +128,15 @@ async def lookup_car(
     """
     Look up a vehicle by licence plate and return ERP car + tyre data.
 
-    STUB — replace with a real SOAP call once the ERP team confirms the
-    method name and request/response field names (likely GetCarData).
-    The erp_hash should be sent as an authentication header per open question
-    Q1 in backend-plan.md.
+    Calls the ERP Apply SOAP method with the shop credentials (userCode /
+    password) pulled from the JWT, plus the vehicle plate (CarNumber) and
+    current mileage (KM, defaults to 0 when not provided).
 
     Args:
         license_plate: Vehicle plate string in any format accepted by the ERP.
         mileage:       Current odometer reading in km (optional).
-        shop_id:       The authenticated shop's ID from the JWT.
-        erp_hash:      The ERP session hash from the JWT (auth header for ERP calls).
+        shop_id:       The authenticated shop's ID from the JWT (sent as userCode).
+        erp_hash:      The ERP session hash from the JWT (sent as password).
 
     Returns:
         dict with at minimum:
@@ -142,47 +144,133 @@ async def lookup_car(
             tire_level (str), wheel_count (int), tire_sizes (dict),
             carool_needed (bool), last_mileage (int|None)
     """
-    # TODO: replace stub — SOAP method TBD (GetCarData?)
+    service = _get_client()
+    response = service.Apply(
+        userCode=shop_id,
+        password=erp_hash,
+        CarNumber=license_plate,
+        KM=mileage if mileage else 0,
+    )
+    print(f"[erp.Apply] raw response: {response}")
     return {
-        "recognized": True,
-        "request_id": f"req_stub_{license_plate.replace('-', '')}",
-        "ownership_id": "HERTZ",
-        "tire_level": "premium",
-        "wheel_count": 4,
+        "recognized": str(response.ReturnCode) == "1",
+        "request_id": response.ApplyId,
+        "ownership_id": response.Company,
+        "car_model": response.CarModel,
+        "last_mileage": response.LastMileage,
         "tire_sizes": {
-            "front": {"size": "205/55R16", "profile": "91V"},
-            "rear":  {"size": "225/45R17", "profile": "94W"},
+            "front": response.FrontTireSize,
+            "rear": response.RearTireSize,
         },
-        "carool_needed": True,
-        "last_mileage": (mileage - 3000) if mileage else None,
+        "erp_message": response.ReturnMessage,
+        "tire_level": None,
+        "wheel_count": None,
+        "carool_needed": None,
     }
 
 
 # ── Diagnosis ────────────────────────────────────────────────────────────────
 
+# Hardcoded until erp_action_codes / erp_tire_locations DB tables are wired in.
+# To replace: query by frontend_action+frontend_reason (or wheel_position) and return erp_code.
+_REASON_CODE: dict[str, int] = {
+    "wear":    3,
+    "damage":  23,
+    "fitment": 25,
+    "puncture": 4,
+}
+_FRONT_ALIGNMENT_CODE = 2
+
+_TIRE_LOCATION_CODE: dict[str, int] = {
+    "front-left":        1,
+    "front-right":       2,
+    "rear-right":        3,
+    "rear-left":         4,
+    "spare-tire":        5,
+    "rear-left-inner":   7,
+    "rear-right-inner":  8,
+}
+_NO_LOCATION_CODE = 6
+
+
 async def submit_diagnosis(
     request_id: str,
     payload: dict,
+    shop_id: str,
     erp_hash: str,
 ) -> bool:
     """
-    Forward a completed service diagnosis to the ERP.
+    Forward a completed service diagnosis to the ERP via SendDiagnose SOAP.
 
-    STUB — replace with a real SOAP call once the ERP team confirms the
-    method name and payload field names (likely SubmitDiagnosis).
+    Translates the frontend per-wheel action payload into the ERP's flat
+    DiagnosisLine shape: each (wheel × action) becomes a single line with
+    ActionCode + TireLocation pulled from the lookup tables. Sensor /
+    balancing / rim-repair / relocation / TPMS-valve actions have no ERP
+    code yet and are silently skipped. Front-alignment, when set, becomes
+    a final line with TireLocation = 6 (no-location).
+
     On ERP acceptance the caller sets open_orders.status = 'waiting'.
     The ERP will later fire POST /api/webhook/erp with the approval decision.
 
     Args:
         request_id: ERP's own reference ID for the service visit (from open_orders).
         payload:    Full diagnosis dict (see routers/diagnosis.py for shape).
+        shop_id:    The authenticated shop's ID from the JWT (sent as userCode).
         erp_hash:   ERP session hash used as the auth header for SOAP calls.
 
     Returns:
         True if the ERP accepted the submission, False otherwise.
     """
-    # TODO: replace stub — SOAP method TBD (SubmitDiagnosis?)
-    return True
+    carool_id = payload.get("carool_id") or ""
+    carool_status = "1" if payload.get("carool_id") else "0"
+
+    lines: list[dict] = []
+    for wheel, actions in payload["tires"].items():
+        location_code = _TIRE_LOCATION_CODE.get(wheel, _NO_LOCATION_CODE)
+        for action in actions:
+            kind = action.get("action")
+            if kind == "replacement" and action.get("reason"):
+                action_code = _REASON_CODE[action["reason"]]
+                remarks = action.get("reason") or ""
+            elif kind == "puncture":
+                action_code = _REASON_CODE["puncture"]
+                remarks = action.get("reason") or ""
+            else:
+                continue
+            lines.append({
+                "ActionCode":   action_code,
+                "TireLocation": location_code,
+                "CaRoolStatus": carool_status,
+                "CaRoolId":     carool_id,
+                "Remarks":      remarks,
+                "IsApproved":   False,
+            })
+
+    if payload.get("front_alignment"):
+        lines.append({
+            "ActionCode":   _FRONT_ALIGNMENT_CODE,
+            "TireLocation": _NO_LOCATION_CODE,
+            "CaRoolStatus": "0",
+            "CaRoolId":     "",
+            "Remarks":      "",
+            "IsApproved":   False,
+        })
+
+    diagnosis_dict = {
+        "LastMileage":     payload.get("mileage") or 0,
+        "DiagnosisLines":  {"DiagnosisLine": lines},
+    }
+
+    service = _get_client()
+    response = service.SendDiagnose(
+        userCode=shop_id,
+        password=erp_hash,
+        CarNumber=payload["license_plate"],
+        ApplyId=int(request_id),
+        Diagnosis=diagnosis_dict,
+    )
+    print(f"[erp.SendDiagnose] raw response: {response}")
+    return str(response.ReturnCode) == "1"
 
 
 # ── History export ────────────────────────────────────────────────────────────

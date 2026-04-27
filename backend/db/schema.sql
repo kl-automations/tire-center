@@ -33,3 +33,37 @@ CREATE INDEX IF NOT EXISTS idx_open_orders_shop_id     ON open_orders (shop_id);
 CREATE INDEX IF NOT EXISTS idx_open_orders_status      ON open_orders (status);
 CREATE INDEX IF NOT EXISTS idx_open_orders_request_id  ON open_orders (request_id) WHERE request_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_open_orders_declined_at ON open_orders (declined_at) WHERE declined_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS erp_action_codes (
+  id               serial  PRIMARY KEY,
+  erp_code         integer NOT NULL UNIQUE,
+  description      text    NOT NULL,
+  frontend_action  text,
+  frontend_reason  text
+);
+
+CREATE TABLE IF NOT EXISTS erp_tire_locations (
+  id               serial  PRIMARY KEY,
+  erp_code         integer NOT NULL UNIQUE,
+  description      text    NOT NULL,
+  wheel_position   text    NOT NULL
+);
+
+INSERT INTO erp_action_codes (erp_code, description, frontend_action, frontend_reason) VALUES
+  (2,  'כיוון פרונט',         'front_alignment', null),
+  (3,  'בלאי,שחיקה,יובש',    'replacement',     'wear'),
+  (4,  'נסיעה על תקר',        'puncture',        null),
+  (23, 'נזק- קרע בצמיג',      'replacement',     'damage'),
+  (25, 'מידת הצמיג שגויה',    'replacement',     'fitment')
+ON CONFLICT (erp_code) DO NOTHING;
+
+INSERT INTO erp_tire_locations (erp_code, description, wheel_position) VALUES
+  (1, 'קידמי שמאלי',          'front-left'),
+  (2, 'קידמי ימני',           'front-right'),
+  (3, 'אחורי ימני',           'rear-right'),
+  (4, 'אחורי שמאלי',          'rear-left'),
+  (5, 'ספייר',                'spare-tire'),
+  (6, 'ללא מיקום',            'no-location'),
+  (7, 'אחורי שמאלי פנימי',    'rear-left-inner'),
+  (8, 'אחורי ימני פנימי',     'rear-right-inner')
+ON CONFLICT (erp_code) DO NOTHING;

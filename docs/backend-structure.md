@@ -16,13 +16,13 @@ Browser (React)
     ▼
 FastAPI (GCP VM → Cloud Run in prod)
     ├── JWT middleware (all routes except /auth/*)
-    ├── ERP adapter (SOAP via zeep)        ← stubs until ERP team is ready
-    ├── Carool adapter (REST via httpx)    ← live now
+    ├── ERP adapter (SOAP via zeep)        ← live (history export still stubbed)
+    ├── Carool adapter (REST via httpx)    ← live
     ├── Cloud SQL / PostgreSQL (asyncpg)
     └── Firebase Admin SDK (Firestore signals)
 ```
 
-**Key principle:** The ERP adapter is one isolated file (`backend/adapters/erp.py`). When the ERP team finalises field names and method signatures, only that file changes — routes, DB logic, and JWT stay untouched.
+**Key principle:** All ERP SOAP calls are isolated in `backend/adapters/erp.py`. Routes, DB logic, and JWT handling have no knowledge of ERP field names or method signatures, so when the ERP team revises a field or ships a new method (e.g. for the still-stubbed history export) only the adapter changes.
 
 ---
 
@@ -32,16 +32,18 @@ FastAPI (GCP VM → Cloud Run in prod)
 ```
 Frontend          Backend              ERP (SOAP)
    │                  │                    │
-   ├─ POST /auth/send-code ──────────────► IsValidUser(email)
+   ├─ POST /api/auth/request-code ───────► IsValidUser(userCode)
    │                  │◄─ "send SMS" ack ──┤
    │                  │                    │
-   ├─ POST /auth/verify ────────────────► VerifyCode(email, code)
+   ├─ POST /api/auth/verify ─────────────► Login(userCode, otp)
    │                  │◄─ approved/denied ─┤
-   │◄─ { token, erp_hash, shop_id } ───────┤
+   │◄─ { token } ──────────────────────────┤
 ```
 
-JWT payload: `{ shop_id, erp_hash, exp }`
-`erp_hash` is stored by the client in `localStorage` and sent as `X-ERP-Hash` on every subsequent request.
+JWT payload: `{ shop_id, erp_hash, exp }` (signed HS256, 30-day TTL).
+The client stores only the JWT and sends it as `Authorization: Bearer <jwt>`
+on every subsequent request — `shop_id` and `erp_hash` are read from inside
+the token by the backend, never sent as a separate header.
 
 ---
 
@@ -87,13 +89,21 @@ Frontend          Backend              Carool (REST)
 ```
 Frontend          Backend              ERP (SOAP)
    │                  │                    │
-   ├─ POST /api/diagnosis ─────────────► SubmitDiagnosis(request_id, wheels, alignment, carool_id, ...)
+   ├─ POST /api/diagnosis ─────────────► SendDiagnose(ApplyId, CarNumber, Diagnosis{LastMileage, DiagnosisLines[]})
    │                  │◄─ ack ────────────┤
    │                  ├─ UPDATE open_orders SET status='waiting'
    │◄─ { ack: true }
 ```
 
 After this, the order sits in `waiting` until the ERP fires its webhook.
+
+**ERP action codes are reasons, not action types.** The ERP only accepts a
+single numeric `ActionCode` per `DiagnosisLine`, and that code represents
+*why* the tyre needs work — `wear` (3), `damage` (23), `fitment` (25),
+`puncture` (4), or `front_alignment` (2). Frontend actions like `sensor`,
+`balancing`, `rim_repair`, `relocation`, and `tpms-valve` have **no ERP
+equivalent**: they are persisted in `open_orders.diagnosis` (JSONB) and
+silently skipped when building the `DiagnosisLines` payload.
 
 ---
 
@@ -102,8 +112,7 @@ After this, the order sits in `waiting` until the ERP fires its webhook.
 ERP               Backend              Firestore
    │                  │                    │
    ├─ POST /api/webhook/erp ─────────────┤
-   │    X-ERP-Hash: <hash>               │
-   │                  ├─ Validate hash    │
+   │                  ├─ Validate auth (mechanism TBD with ERP team)
    │                  ├─ UPDATE open_orders (status, per-wheel approvals, declined_at)
    │                  └─ Write orders/{shop_id}/updates/{order_id} ──────────────► triggers onSnapshot in browser
 ```
@@ -116,32 +125,34 @@ ERP               Backend              Firestore
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| POST | `/api/auth/send-code` | None | Send email to ERP → ERP sends SMS to mechanic |
-| POST | `/api/auth/verify` | None | Verify SMS code with ERP → return signed JWT |
+| POST | `/api/auth/request-code` | None | Forward `userCode` to ERP `IsValidUser` → ERP sends OTP via SMS |
+| POST | `/api/auth/verify` | None | Verify `userCode` + `otp` via ERP `Login` → return signed JWT |
 
-**`POST /api/auth/send-code`**
+**`POST /api/auth/request-code`**
 ```json
 // Request
-{ "email": "mechanic@hertz-tlv.co.il" }
+{ "userCode": "12345" }
 
 // Response 200
-{ "sent": true }
+{ "success": true, "otp_debug": null }
 
-// Response 401
-{ "sent": false }
+// Response 400
+{ "detail": "erp_rejected_user" }
 ```
+> `otp_debug` is only populated when `ERP_TEST_MODE=true` so automated tests can run without a real phone.
 
 **`POST /api/auth/verify`**
 ```json
 // Request
-{ "email": "mechanic@hertz-tlv.co.il", "code": "482910" }
+{ "userCode": "12345", "otp": "482910" }
 
 // Response 200
-{ "token": "<jwt>", "erp_hash": "a3f9c2...", "shop_id": "hertz-tlv-01" }
+{ "success": true, "token": "<jwt>" }
 
 // Response 401
-{ "error": "invalid_code" }
+{ "detail": "invalid_otp" }
 ```
+> The JWT carries `{ shop_id, erp_hash, exp }`. Clients send it as `Authorization: Bearer <jwt>` on every protected route.
 
 ---
 
@@ -180,7 +191,7 @@ ERP               Backend              Firestore
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| POST | `/api/car` | JWT + X-ERP-Hash | Lookup plate in ERP, open order in DB |
+| POST | `/api/car` | JWT | Lookup plate in ERP, open order in DB |
 
 **Request:**
 ```json
@@ -192,24 +203,24 @@ ERP               Backend              Firestore
 {
   "recognized": true,
   "order_id": "uuid",
-  "request_id": "req_a1b2c3d4",
+  "request_id": "12345",
   "ownership_id": "HERTZ",
-  "tire_level": "premium",
-  "wheel_count": 4,
+  "car_model": "TOYOTA COROLLA 2020",
+  "last_mileage": 84200,
   "tire_sizes": {
-    "front": { "size": "205/55R16", "profile": "summer" },
-    "rear":  { "size": "205/55R16", "profile": "summer" }
+    "front": "205/55R16",
+    "rear":  "205/55R16"
   },
-  "carool_needed": true,
-  "last_mileage": 84200
+  "erp_message": "OK",
+  "tire_level": null,
+  "wheel_count": null,
+  "carool_needed": null
 }
 ```
+> `tire_sizes.front` and `.rear` are flat strings exactly as the ERP returns them. `tire_level`, `wheel_count`, and `carool_needed` are reserved fields that the current ERP `Apply` response does not populate — they are returned as `null` until the ERP exposes them.
 
-**Response — not recognized:**
-```json
-{ "recognized": false, "order_id": "uuid" }
-```
-> Even when not recognized, an order is created in the DB so the mechanic can still submit a manual diagnosis.
+**Response — not recognized (ERP `ReturnCode != "1"`):**
+The route returns HTTP `400` with `{ "detail": <ERP ReturnMessage> }`. No order is created in this case.
 
 ---
 
@@ -247,7 +258,7 @@ Backend forwards to `POST /ai-diagnoses/{carool_id}/sidewall-picture` or `.../tr
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| POST | `/api/diagnosis` | JWT + X-ERP-Hash | Submit full diagnosis to ERP, set order status to waiting |
+| POST | `/api/diagnosis` | JWT | Submit full diagnosis to ERP, set order status to waiting |
 
 **Request:**
 ```json
@@ -273,7 +284,7 @@ Backend forwards to `POST /ai-diagnoses/{carool_id}/sidewall-picture` or `.../tr
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| POST | `/api/history` | JWT + X-ERP-Hash | Ask ERP to email a history report |
+| POST | `/api/history` | JWT | Ask ERP to email a history report |
 
 ```json
 // Request
@@ -289,7 +300,7 @@ Backend forwards to `POST /ai-diagnoses/{carool_id}/sidewall-picture` or `.../tr
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| POST | `/api/webhook/erp` | X-ERP-Hash | ERP fires order approval / rejection |
+| POST | `/api/webhook/erp` | TBD | ERP fires order approval / rejection (auth mechanism still pending) |
 | POST | `/api/webhook/carool` | X-API-KEY | Carool fires AI analysis results |
 
 **ERP webhook payload:**
@@ -384,6 +395,39 @@ CREATE INDEX idx_open_orders_shop_id     ON open_orders (shop_id);
 CREATE INDEX idx_open_orders_status      ON open_orders (status);
 CREATE INDEX idx_open_orders_request_id  ON open_orders (request_id) WHERE request_id IS NOT NULL;
 CREATE INDEX idx_open_orders_declined_at ON open_orders (declined_at) WHERE declined_at IS NOT NULL;
+
+-- ── ERP reference tables (admin-managed) ────────────────────────────────────
+-- Map the frontend's diagnosis vocabulary onto the ERP's numeric codes.
+-- Both tables are seeded with the live ERP codes; rows are intended to be
+-- editable by an admin (no code change required to extend the mapping).
+
+CREATE TABLE erp_action_codes (
+  id               serial  PRIMARY KEY,
+  erp_code         integer NOT NULL UNIQUE,
+  description      text    NOT NULL,        -- Hebrew label as used in the ERP UI
+  frontend_action  text,                    -- e.g. 'replacement', 'puncture', 'front_alignment'
+  frontend_reason  text                     -- e.g. 'wear', 'damage', 'fitment' (null when not applicable)
+);
+
+-- Seed:
+--   2  = front_alignment            (no reason)
+--   3  = replacement / wear
+--   4  = puncture                   (no reason)
+--   23 = replacement / damage
+--   25 = replacement / fitment
+
+CREATE TABLE erp_tire_locations (
+  id               serial  PRIMARY KEY,
+  erp_code         integer NOT NULL UNIQUE,
+  description      text    NOT NULL,        -- Hebrew label as used in the ERP UI
+  wheel_position   text    NOT NULL         -- 'front-left' | 'front-right' | 'rear-left' | 'rear-right' | 'spare-tire' | 'no-location' | 'rear-left-inner' | 'rear-right-inner'
+);
+
+-- Seed:
+--   1 = front-left          5 = spare-tire
+--   2 = front-right         6 = no-location          (used for front_alignment)
+--   3 = rear-right          7 = rear-left-inner
+--   4 = rear-left           8 = rear-right-inner
 ```
 
 ### `diagnosis` JSONB structure (per order, after all data collected)
@@ -456,48 +500,22 @@ backend/
 
 ---
 
-## ERP Adapter — Stub Contract
+## ERP Adapter — Status
 
-Until the ERP team delivers their endpoints, `adapters/erp.py` returns hardcoded stubs that match the expected response shapes. Every function has a `# TODO: replace stub` comment with the known SOAP method name (or `# SOAP method TBD` where unknown).
+All ERP SOAP calls live in `adapters/erp.py` (single point of change for ERP
+integration). Status of each adapter function:
 
-```python
-# adapters/erp.py
+| Function | Status | SOAP method |
+|----------|--------|-------------|
+| `request_otp(user_code)` | LIVE | `IsValidUser` |
+| `verify_login(user_code, otp)` | LIVE | `Login` |
+| `lookup_car(license_plate, mileage, shop_id, erp_hash)` | LIVE | `Apply` |
+| `submit_diagnosis(request_id, payload, shop_id, erp_hash)` | LIVE | `SendDiagnose` |
+| `request_history_export(shop_id, date_from, date_to, email, erp_hash)` | **STUB** | TBD — adapter currently returns `True` without calling the ERP |
 
-async def send_auth_code(email: str) -> bool:
-    # TODO: replace stub — SOAP method TBD (IsValidUser variant?)
-    return True
-
-async def verify_auth_code(email: str, code: str) -> dict | None:
-    # TODO: replace stub — SOAP method TBD
-    # Returns { shop_id, erp_hash } on success, None on failure
-    if code == "000000":
-        return None
-    return { "shop_id": "hertz-tlv-01", "erp_hash": "stub-hash-abc123" }
-
-async def lookup_car(license_plate: str, mileage: int, shop_id: str, erp_hash: str) -> dict:
-    # TODO: replace stub — SOAP method TBD
-    return {
-        "recognized": True,
-        "request_id": f"req_stub_{license_plate}",
-        "ownership_id": "HERTZ",
-        "tire_level": "premium",
-        "wheel_count": 4,
-        "tire_sizes": {
-            "front": { "size": "205/55R16", "profile": "summer" },
-            "rear":  { "size": "205/55R16", "profile": "summer" }
-        },
-        "carool_needed": True,
-        "last_mileage": mileage - 3000
-    }
-
-async def submit_diagnosis(request_id: str, payload: dict, erp_hash: str) -> bool:
-    # TODO: replace stub — SOAP method TBD
-    return True
-
-async def request_history_export(shop_id: str, date_from: str, date_to: str, email: str, erp_hash: str) -> bool:
-    # TODO: replace stub — SOAP method TBD
-    return True
-```
+The auth flow uses the mechanic's `userCode` (not email) and an OTP delivered
+via SMS. `shop_id` in the JWT is set to the `userCode`; `erp_hash` is the OTP
+value, reused as the SOAP `password` argument on subsequent calls.
 
 ---
 
@@ -515,31 +533,14 @@ The frontend's `onSnapshot` listener on `orders/{shop_id}/updates` triggers a re
 
 ## Build Order
 
-| # | What | Unblocks |
-|---|------|---------|
-| 1 | Scaffold `main.py`, `Dockerfile`, `requirements.txt` | Everything |
-| 2 | DB schema (`schema.sql`) + Cloud SQL connection pool | All DB reads/writes |
-| 3 | JWT middleware (`middleware/auth.py`) | All protected routes |
-| 4 | ERP adapter stubs (`adapters/erp.py`) | Auth + Wave 1 + Wave 2 routes |
-| 5 | Auth routes (`routers/auth.py`) | Frontend login |
-| 6 | Car lookup route (`routers/car.py`) | Frontend Wave 1 |
-| 7 | Carool adapter + routes (`adapters/carool.py`, `routers/carool.py`) | Camera UI |
-| 8 | Diagnosis route (`routers/diagnosis.py`) | Frontend Wave 2 |
-| 9 | Webhook handlers (`routers/webhooks.py`) + Firestore signals | Live order updates |
-| 10 | Orders list/detail routes (`routers/orders.py`) | Open requests page |
-| 11 | History + cleanup routes | History export, nightly cleanup |
+All build-order steps are complete as of 2026-04-26. See `docs/backend-plan.md`
+for the per-area status summary (what's live vs. still stubbed).
 
 ---
 
-## Open Questions for ERP Team
+## Open Questions
 
 | # | Question | Blocks |
 |---|----------|--------|
-| Q1 | SOAP method names for auth (send code + verify code) | Step 4–5 above |
-| Q2 | SOAP method name + exact field names for car lookup | Step 6 |
-| Q3 | SOAP method name + exact field names for diagnosis submission | Step 8 |
-| Q4 | Webhook auth mechanism — does ERP send `X-ERP-Hash`? A shared secret? Both? | Step 9 |
-| Q5 | Does car lookup response include `carool_needed` field? | Carool session trigger logic |
-| Q6 | Does car lookup response include `shop_id` or is it always read from JWT? | Step 6 |
-| Q7 | ERP base URL for production vs dev | All ERP adapter calls |
-| Q8 | Does ERP retry webhook calls on non-200? How many times, what backoff? | Step 9 reliability |
+| Q1 | ERP webhook auth mechanism — shared secret header? mTLS? IP allowlist? | `POST /api/webhook/erp` is wired up but currently has no auth check. |
+| Q2 | Firebase / Firestore integration — `FIREBASE_SERVICE_ACCOUNT` is not yet configured in GCP Secret Manager, so realtime signal writes are skipped after webhook DB updates. | Live frontend updates without page refresh. |

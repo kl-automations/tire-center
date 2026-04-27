@@ -53,3 +53,9 @@ DB_PASSWORD = _require("DB_PASSWORD")
 CAROOL_API_KEY      = _optional("CAROOL_API_KEY")
 CAROOL_PAGE_ORIGIN  = _optional("CAROOL_PAGE_ORIGIN")
 FIREBASE_SERVICE_ACCOUNT = _optional("FIREBASE_SERVICE_ACCOUNT")  # JSON string
+
+# Master kill-switch for the Carool integration. Default is ON: any value other
+# than "0" (including a missing secret) leaves Carool enabled. Set the
+# CAROOL_ENABLED secret to exactly "0" to disable all Carool routes and hide
+# the Carool UI in the frontend.
+CAROOL_ENABLED = _optional("CAROOL_ENABLED") != "0"

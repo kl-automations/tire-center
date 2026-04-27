@@ -11,12 +11,32 @@ Security:
 - Carool webhook: X-API-KEY header is validated against the CAROOL_API_KEY secret.
 """
 
+import json
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from models.schemas import ErpWebhookPayload, CaroolWebhookPayload
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
+
+
+# Inverse of the lookup tables in adapters/erp.py — maps ERP codes back to
+# the wheel-position / action-name strings used internally and by the frontend.
+_LOCATION_TO_POSITION = {
+    "1": "front-left", "2": "front-right", "3": "rear-right",
+    "4": "rear-left",  "5": "spare-tire",  "7": "rear-left-inner",
+    "8": "rear-right-inner",
+}
+_ACTION_TO_NAME = {
+    "3": "wear", "23": "damage", "25": "fitment",
+    "4": "puncture", "2": "front_alignment",
+}
+_FRONT_ALIGNMENT_LOCATION = "6"
+_FRONT_ALIGNMENT_ACTION = "2"
+
+# Replacement-action codes (any approved replacement → wheel marked "full")
+_REPLACEMENT_ACTIONS = {"3", "23", "25"}
+_PUNCTURE_ACTION = "4"
 
 
 def _firestore_signal(app, shop_id: str, order_id: str, status: str):
@@ -53,27 +73,97 @@ def _firestore_signal(app, shop_id: str, order_id: str, status: str):
 )
 async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     """
-    Process an ERP order-status update and propagate it to Firestore.
+    Process an ERP per-line approval payload, derive per-wheel + overall status,
+    and propagate the result to Firestore.
 
-    Looks up the order by ERP request_id (not UUID). Stores the full payload
-    under open_orders.diagnosis['erp_response'] for auditability.
+    Steps:
+      1. Look up the order by str(payload.request_id) — DB stores request_id as text.
+      2. Group DiagnoseData by Location.
+      3. For each non-front-alignment location, compute "full" / "puncture-only" / "none".
+      4. For the front-alignment line (Location='6', Action='2'), record its Confirmed flag.
+      5. Compute overall status from all non-alignment items:
+            all '1' → 'approved', all '0' → 'declined', mix → 'partly-approved'.
+      6. Persist under open_orders.diagnosis['erp_response'], update status / declined_at,
+         and signal Firestore.
 
     TODO: verify X-ERP-Hash header once auth method confirmed with ERP team (open Q4).
 
     Raises:
         404: No order with the given request_id found in the database.
     """
-    # TODO: verify X-ERP-Hash header once auth method confirmed with ERP team (Q4)
     db = request.app.state.db
 
     order = await db.fetchrow(
         "SELECT id, shop_id FROM open_orders WHERE request_id = $1",
-        payload.request_id,
+        str(payload.request_id),
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    declined_at = datetime.now(timezone.utc) if payload.status == "declined" else None
+    items_by_location: dict[str, list] = {}
+    for item in payload.DiagnoseData:
+        items_by_location.setdefault(item.Location, []).append(item)
+
+    wheels: dict[str, str] = {}
+    front_alignment_confirmed = False
+    non_alignment_items = []
+
+    for location, items in items_by_location.items():
+        if location == _FRONT_ALIGNMENT_LOCATION:
+            for item in items:
+                if item.Action == _FRONT_ALIGNMENT_ACTION:
+                    front_alignment_confirmed = item.Confirmed == "1"
+            continue
+
+        position = _LOCATION_TO_POSITION.get(location)
+        if not position:
+            # Unknown location code — skip but keep auditing via raw payload below.
+            continue
+
+        non_alignment_items.extend(items)
+
+        replacement_present = any(
+            item.Action in _REPLACEMENT_ACTIONS for item in items
+        )
+        replacement_approved = any(
+            item.Action in _REPLACEMENT_ACTIONS and item.Confirmed == "1"
+            for item in items
+        )
+        puncture_approved = any(
+            item.Action == _PUNCTURE_ACTION and item.Confirmed == "1"
+            for item in items
+        )
+
+        if replacement_approved:
+            wheels[position] = "full"
+        elif puncture_approved:
+            # "puncture-only" specifically means the mechanic asked for a
+            # replacement and the ERP downgraded it to a puncture repair.
+            # If puncture was the only submitted action, an approval is "full".
+            wheels[position] = "puncture-only" if replacement_present else "full"
+        else:
+            wheels[position] = "none"
+
+    if non_alignment_items:
+        confirmed_flags = {item.Confirmed for item in non_alignment_items}
+        if confirmed_flags == {"1"}:
+            status = "approved"
+        elif confirmed_flags == {"0"}:
+            status = "declined"
+        else:
+            status = "partly-approved"
+    else:
+        # Edge case: payload contains only the front-alignment line (no per-wheel
+        # items), e.g. when alignment was the sole submitted action. Derive the
+        # overall status from the alignment flag — wheels{} will be empty.
+        status = "approved" if front_alignment_confirmed else "declined"
+
+    erp_response = {
+        "wheels": wheels,
+        "front_alignment_confirmed": front_alignment_confirmed,
+    }
+
+    declined_at = datetime.now(timezone.utc) if status == "declined" else None
 
     await db.execute(
         """
@@ -86,13 +176,13 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
             )
         WHERE id = $4
         """,
-        payload.status,
+        status,
         declined_at,
-        payload.model_dump_json(),
+        json.dumps(erp_response),
         order["id"],
     )
 
-    _firestore_signal(request.app, order["shop_id"], str(order["id"]), payload.status)
+    _firestore_signal(request.app, order["shop_id"], str(order["id"]), status)
     return {"ack": True}
 
 

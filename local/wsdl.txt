@@ -1,0 +1,278 @@
+memla@tire-center-dev-vm:~/carbonyl-browser/carbonyl-0.0.3$ curl -s https://tet.kogol.co.il:22443/csp/bil/Diagnose.Webservices.cls?wsdl
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:s0="http://tempuri.org" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://tempuri.org">
+    <types>
+        <s:schema elementFormDefault="qualified" targetNamespace="http://tempuri.org">
+            <s:element name="Apply">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element minOccurs="0" name="userCode" type="s:string"/>
+                        <s:element minOccurs="0" name="password" type="s:string"/>
+                        <s:element minOccurs="0" name="CarNumber" type="s:string"/>
+                        <s:element minOccurs="0" name="KM" type="s:long"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:element name="ApplyResponse">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element name="ApplyResult" type="s0:ApplyResult"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:complexType name="ApplyResult">
+                <s:sequence>
+                    <s:element minOccurs="0" name="ReturnCode" type="s:string"/>
+                    <s:element minOccurs="0" name="ReturnMessage" type="s:string"/>
+                    <s:element minOccurs="0" name="CarModel" type="s:string"/>
+                    <s:element minOccurs="0" name="Company" type="s:string"/>
+                    <s:element minOccurs="0" name="LastMileage" type="s:long"/>
+                    <s:element minOccurs="0" name="FrontTireSize" type="s:string"/>
+                    <s:element minOccurs="0" name="RearTireSize" type="s:string"/>
+                    <s:element minOccurs="0" name="ApplyId" type="s:long"/>
+                </s:sequence>
+            </s:complexType>
+            <s:element name="GetActionTable">
+                <s:complexType>
+                    <s:sequence/>
+                </s:complexType>
+            </s:element>
+            <s:element name="GetActionTableResponse">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element name="GetActionTableResult" type="s0:TableCodes"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:complexType name="TableCodes">
+                <s:sequence>
+                    <s:element minOccurs="0" name="TableID" type="s:string"/>
+                    <s:element minOccurs="0" name="TableCodes" type="s0:ArrayOfTableCode"/>
+                </s:sequence>
+            </s:complexType>
+            <s:complexType name="ArrayOfTableCode">
+                <s:sequence>
+                    <s:element maxOccurs="unbounded" minOccurs="0" name="TableCode" nillable="true" type="s0:TableCode"/>
+                </s:sequence>
+            </s:complexType>
+            <s:complexType name="TableCode">
+                <s:sequence>
+                    <s:element minOccurs="0" name="Code" type="s:string"/>
+                    <s:element minOccurs="0" name="Description" type="s:string"/>
+                    <s:element minOccurs="0" name="AdditionalData" type="s:string"/>
+                </s:sequence>
+            </s:complexType>
+            <s:element name="GetTireLocationTable">
+                <s:complexType>
+                    <s:sequence/>
+                </s:complexType>
+            </s:element>
+            <s:element name="GetTireLocationTableResponse">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element name="GetTireLocationTableResult" type="s0:TableCodes"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:element name="IsValidUser">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element minOccurs="0" name="userCode" type="s:string"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:element name="IsValidUserResponse">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element name="IsValidUserResult" type="s0:Result"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:complexType name="Result">
+                <s:sequence>
+                    <s:element minOccurs="0" name="ReturnCode" type="s:string"/>
+                    <s:element minOccurs="0" name="ReturnMessage" type="s:string"/>
+                </s:sequence>
+            </s:complexType>
+            <s:element name="Login">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element minOccurs="0" name="userCode" type="s:string"/>
+                        <s:element minOccurs="0" name="password" type="s:string"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:element name="LoginResponse">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element name="LoginResult" type="s0:Result"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:element name="SendDiagnose">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element minOccurs="0" name="userCode" type="s:string"/>
+                        <s:element minOccurs="0" name="password" type="s:string"/>
+                        <s:element minOccurs="0" name="CarNumber" type="s:string"/>
+                        <s:element minOccurs="0" name="ApplyId" type="s:long"/>
+                        <s:element minOccurs="0" name="Diagnosis" type="s0:Diagnosis"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+            <s:complexType name="Diagnosis">
+                <s:sequence>
+                    <s:element minOccurs="0" name="ReturnCode" type="s:string"/>
+                    <s:element minOccurs="0" name="ReturnMessage" type="s:string"/>
+                    <s:element minOccurs="0" name="LastMileage" type="s:long"/>
+                    <s:element minOccurs="0" name="DiagnosisLines" type="s0:ArrayOfDiagnosisLine"/>
+                </s:sequence>
+            </s:complexType>
+            <s:complexType name="ArrayOfDiagnosisLine">
+                <s:sequence>
+                    <s:element maxOccurs="unbounded" minOccurs="0" name="DiagnosisLine" nillable="true" type="s0:DiagnosisLine"/>
+                </s:sequence>
+            </s:complexType>
+            <s:complexType name="DiagnosisLine">
+                <s:sequence>
+                    <s:element minOccurs="0" name="ActionCode" type="s:long"/>
+                    <s:element minOccurs="0" name="TireLocation" type="s:long"/>
+                    <s:element minOccurs="0" name="CaRoolStatus" type="s:string"/>
+                    <s:element minOccurs="0" name="CaRoolId" type="s:string"/>
+                    <s:element minOccurs="0" name="Remarks" type="s:string"/>
+                    <s:element minOccurs="0" name="IsApproved" type="s:boolean"/>
+                </s:sequence>
+            </s:complexType>
+            <s:element name="SendDiagnoseResponse">
+                <s:complexType>
+                    <s:sequence>
+                        <s:element name="SendDiagnoseResult" type="s0:Result"/>
+                    </s:sequence>
+                </s:complexType>
+            </s:element>
+        </s:schema>
+    </types>
+    <message name="ApplySoapIn">
+        <part name="parameters" element="s0:Apply"/>
+    </message>
+    <message name="ApplySoapOut">
+        <part name="parameters" element="s0:ApplyResponse"/>
+    </message>
+    <message name="GetActionTableSoapIn">
+        <part name="parameters" element="s0:GetActionTable"/>
+    </message>
+    <message name="GetActionTableSoapOut">
+        <part name="parameters" element="s0:GetActionTableResponse"/>
+    </message>
+    <message name="GetTireLocationTableSoapIn">
+        <part name="parameters" element="s0:GetTireLocationTable"/>
+    </message>
+    <message name="GetTireLocationTableSoapOut">
+        <part name="parameters" element="s0:GetTireLocationTableResponse"/>
+    </message>
+    <message name="IsValidUserSoapIn">
+        <part name="parameters" element="s0:IsValidUser"/>
+    </message>
+    <message name="IsValidUserSoapOut">
+        <part name="parameters" element="s0:IsValidUserResponse"/>
+    </message>
+    <message name="LoginSoapIn">
+        <part name="parameters" element="s0:Login"/>
+    </message>
+    <message name="LoginSoapOut">
+        <part name="parameters" element="s0:LoginResponse"/>
+    </message>
+    <message name="SendDiagnoseSoapIn">
+        <part name="parameters" element="s0:SendDiagnose"/>
+    </message>
+    <message name="SendDiagnoseSoapOut">
+        <part name="parameters" element="s0:SendDiagnoseResponse"/>
+    </message>
+    <portType name="DiagnoseWebservicesSoap">
+        <operation name="Apply">
+            <input message="s0:ApplySoapIn"/>
+            <output message="s0:ApplySoapOut"/>
+        </operation>
+        <operation name="GetActionTable">
+            <input message="s0:GetActionTableSoapIn"/>
+            <output message="s0:GetActionTableSoapOut"/>
+        </operation>
+        <operation name="GetTireLocationTable">
+            <input message="s0:GetTireLocationTableSoapIn"/>
+            <output message="s0:GetTireLocationTableSoapOut"/>
+        </operation>
+        <operation name="IsValidUser">
+            <input message="s0:IsValidUserSoapIn"/>
+            <output message="s0:IsValidUserSoapOut"/>
+        </operation>
+        <operation name="Login">
+            <input message="s0:LoginSoapIn"/>
+            <output message="s0:LoginSoapOut"/>
+        </operation>
+        <operation name="SendDiagnose">
+            <input message="s0:SendDiagnoseSoapIn"/>
+            <output message="s0:SendDiagnoseSoapOut"/>
+        </operation>
+    </portType>
+    <binding name="DiagnoseWebservicesSoap" type="s0:DiagnoseWebservicesSoap">
+        <soap:binding transport="http://schemas.xmlsoap.org/soap/http" style="document"/>
+        <operation name="Apply">
+            <soap:operation soapAction="http://tempuri.org/Diagnose.Webservices.Apply" style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+        <operation name="GetActionTable">
+            <soap:operation soapAction="http://tempuri.org/Diagnose.Webservices.GetActionTable" style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+        <operation name="GetTireLocationTable">
+            <soap:operation soapAction="http://tempuri.org/Diagnose.Webservices.GetTireLocationTable" style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+        <operation name="IsValidUser">
+            <soap:operation soapAction="http://tempuri.org/Diagnose.Webservices.IsValidUser" style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+        <operation name="Login">
+            <soap:operation soapAction="http://tempuri.org/Diagnose.Webservices.Login" style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+        <operation name="SendDiagnose">
+            <soap:operation soapAction="http://tempuri.org/Diagnose.Webservices.SendDiagnose" style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+        </operation>
+    </binding>
+    <service name="DiagnoseWebservices">
+        <port name="DiagnoseWebservicesSoap" binding="s0:DiagnoseWebservicesSoap">
+            <soap:address location="https://tet.kogol.co.il:443/csp/bil/Diagnose.Webservices.cls"/>
+        </port>
+    </service>

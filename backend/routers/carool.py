@@ -11,10 +11,11 @@ The mechanic taps the camera icon for up to 4 wheels (2 photos each):
 All three endpoints require a valid JWT (Authorization: Bearer <token>).
 """
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile, HTTPException
 from middleware.auth import get_current_shop
 from models.schemas import CaroolSessionRequest, CaroolSessionResponse, CaroolFinalizeRequest
 from adapters import carool
+from config import CAROOL_ENABLED
 
 router = APIRouter(prefix="/api/carool", tags=["carool"])
 
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/api/carool", tags=["carool"])
         "The ID is also stored in `open_orders.carool_diagnosis_id`."
     ),
     response_description="The Carool session ID to use in photo upload and finalize calls.",
+    responses={204: {"description": "Carool integration is disabled (CAROOL_ENABLED=0); no-op."}},
 )
 async def open_session(
     body: CaroolSessionRequest,
@@ -40,11 +42,17 @@ async def open_session(
     Open a Carool session and persist the session ID against the order.
 
     Verifies the order belongs to the authenticated shop before creating
-    the session. On success, updates open_orders.carool_diagnosis_id.
+    the session. The order ID is forwarded to Carool as `externalId` so the
+    webhook callback can be matched back to the originating order. On success,
+    updates open_orders.carool_diagnosis_id.
 
     Raises:
         404: Order not found or does not belong to the authenticated shop.
     """
+    if not CAROOL_ENABLED:
+        # Returning a `Response` object bypasses `response_model` validation —
+        # a dict body would fail to serialize as `CaroolSessionResponse`.
+        return Response(status_code=204)
     db = request.app.state.db
     order = await db.fetchrow(
         "SELECT license_plate, mileage FROM open_orders WHERE id = $1 AND shop_id = $2",
@@ -53,7 +61,7 @@ async def open_session(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    carool_id = await carool.open_session(order["license_plate"], order["mileage"])
+    carool_id = await carool.open_session(body.order_id, order["license_plate"], order["mileage"])
 
     await db.execute(
         "UPDATE open_orders SET carool_diagnosis_id = $1 WHERE id = $2",
@@ -74,6 +82,7 @@ async def open_session(
         "Requires an active Carool session opened via `/api/carool/session`."
     ),
     response_description="Confirmation that the photo was forwarded to Carool.",
+    responses={204: {"description": "Carool integration is disabled (CAROOL_ENABLED=0); no-op."}},
 )
 async def upload_photo(
     request: Request,
@@ -92,6 +101,8 @@ async def upload_photo(
     Raises:
         404: Order not found, does not belong to the shop, or has no active Carool session.
     """
+    if not CAROOL_ENABLED:
+        return Response(status_code=204)
     db = request.app.state.db
     carool_id = await db.fetchval(
         "SELECT carool_diagnosis_id FROM open_orders WHERE id = $1 AND shop_id = $2",
@@ -115,6 +126,7 @@ async def upload_photo(
         "`POST /api/webhook/carool` when results are ready."
     ),
     response_description="Confirmation that Carool was notified to start analysis.",
+    responses={204: {"description": "Carool integration is disabled (CAROOL_ENABLED=0); no-op."}},
 )
 async def finalize(
     body: CaroolFinalizeRequest,
@@ -131,6 +143,8 @@ async def finalize(
     Raises:
         404: Order not found, does not belong to the shop, or has no active Carool session.
     """
+    if not CAROOL_ENABLED:
+        return Response(status_code=204)
     db = request.app.state.db
     carool_id = await db.fetchval(
         "SELECT carool_diagnosis_id FROM open_orders WHERE id = $1 AND shop_id = $2",

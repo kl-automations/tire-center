@@ -19,12 +19,12 @@ from adapters import erp
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 ALGORITHM = "HS256"
-TOKEN_TTL_HOURS = 12
+TOKEN_TTL_DAYS = 180
 
 
 def _make_token(user_code: str, otp: str) -> str:
     """
-    Sign and return a 12-hour JWT for the given user code.
+    Sign and return a 30-day JWT for the given user code.
 
     shop_id is set to user_code (confirmed correct mapping). erp_hash is set
     to the OTP submitted during verification, which acts as the session hash
@@ -33,7 +33,7 @@ def _make_token(user_code: str, otp: str) -> str:
     payload = {
         "shop_id": user_code,
         "erp_hash": otp,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_TTL_HOURS),
+        "exp": datetime.now(timezone.utc) + timedelta(days=TOKEN_TTL_DAYS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
 
@@ -64,7 +64,7 @@ async def request_code(body: RequestCodeRequest):
     summary="Verify OTP and receive JWT (step 2 of login)",
     description=(
         "Submits the mechanic's user code and OTP to the ERP **Login** SOAP method. "
-        "On success a signed JWT (HS256, 12-hour TTL) is returned. "
+        "On success a signed JWT (HS256, 30-day TTL) is returned. "
         "Include it as **Authorization: Bearer \\<token\\>** on every subsequent request."
     ),
     response_description="Signed JWT to use as Bearer token on all protected endpoints.",

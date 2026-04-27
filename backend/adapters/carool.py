@@ -37,7 +37,7 @@ def _headers() -> dict:
     }
 
 
-async def open_session(license_plate: str, mileage: int | None) -> str:
+async def open_session(order_id: str, license_plate: str, mileage: int | None) -> str:
     """
     Open a new Carool AI diagnosis session for a vehicle.
 
@@ -46,6 +46,9 @@ async def open_session(license_plate: str, mileage: int | None) -> str:
     subsequent upload_photo and finalize_session calls.
 
     Args:
+        order_id:      Our internal order ID, sent as `externalId`. Carool
+                       echoes this value back in the webhook payload so we can
+                       match the async analysis result to the originating order.
         license_plate: Vehicle plate in any format; licenseCountry is hardcoded
                        to "IL" (Israel) for this deployment.
         mileage:       Current odometer reading in km, if available.
@@ -61,11 +64,12 @@ async def open_session(license_plate: str, mileage: int | None) -> str:
             f"{BASE_URL}/ai-diagnoses",
             headers=_headers(),
             json={
+                "externalId": order_id,
                 "vehicle": {
                     "license": license_plate,
                     "licenseCountry": "IL",
                     **({"mileage": mileage} if mileage else {}),
-                }
+                },
             },
         )
         resp.raise_for_status()

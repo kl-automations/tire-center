@@ -16,11 +16,11 @@ from contextlib import asynccontextmanager
 import asyncpg
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
-from routers import auth, car, carool, diagnosis, history, internal, orders, webhooks
+from routers import auth, car, carool, config_router, diagnosis, history, internal, orders, webhooks
 
 
 # ── DB connection ─────────────────────────────────────────────────────────────
@@ -120,9 +120,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
 app.include_router(auth.router)
 app.include_router(car.router)
 app.include_router(carool.router)
+app.include_router(config_router.router)
 app.include_router(diagnosis.router)
 app.include_router(history.router)
 app.include_router(orders.router)

@@ -2,12 +2,14 @@
 Car-lookup router — opens a new service order for a given licence plate.
 
 Wave 1 of the request flow:
-  Frontend  →  POST /api/car  →  ERP GetCarData (SOAP)
+  Frontend  →  POST /api/car  →  ERP Apply (SOAP)
             →  INSERT open_orders (status='open')
             →  return vehicle + order data to frontend
 """
 
-from fastapi import APIRouter, Depends, Request
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from middleware.auth import get_current_shop
 from models.schemas import CarLookupRequest
 from adapters import erp
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/api", tags=["car"])
     "/car",
     summary="Look up vehicle and open a service order",
     description=(
-        "Calls the ERP **GetCarData** SOAP method to fetch vehicle details "
+        "Calls the ERP **Apply** SOAP method to fetch vehicle details "
         "(tyre sizes, quality tier, wheel count, etc.) for the given licence plate. "
         "On success, inserts a row in **open_orders** with `status='open'` and "
         "returns the vehicle data together with the new `order_id`."
@@ -41,7 +43,7 @@ async def car_lookup(
     screen immediately without an extra GET /api/orders/{id} round-trip.
 
     Raises:
-        502: ERP lookup_car stub not yet implemented / ERP call failed.
+        400: ERP rejected the request (e.g. mileage too low, unrecognised plate).
     """
     car_data = await erp.lookup_car(
         license_plate=body.license_plate,
@@ -49,6 +51,12 @@ async def car_lookup(
         shop_id=shop["shop_id"],
         erp_hash=shop["erp_hash"],
     )
+
+    if not car_data["recognized"]:
+        raise HTTPException(
+            status_code=400,
+            detail=car_data.get("erp_message", "erp_rejected"),
+        )
 
     db = request.app.state.db
     order_id = await db.fetchval(
@@ -61,8 +69,8 @@ async def car_lookup(
         shop["shop_id"],
         body.license_plate,
         body.mileage,
-        car_data,
-        car_data.get("request_id"),
+        json.dumps(car_data),
+        str(car_data.get("request_id")),
         shop["erp_hash"],
     )
 
