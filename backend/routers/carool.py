@@ -127,7 +127,13 @@ async def upload_photo(
 
     image_bytes = await file.read()
     log("ROUTER/carool", f"upload_photo file read bytes={len(image_bytes)} carool_id={carool_id}")
-    await carool.upload_photo(carool_id, photo_type, image_bytes, file.content_type or "image/jpeg")
+    await carool.upload_photo(
+        carool_id,
+        photo_type,
+        image_bytes,
+        file.content_type or "image/jpeg",
+        wheel_position=wheel,
+    )
 
     log("ROUTER/carool", f"upload_photo success order_id={order_id} wheel={wheel} type={photo_type}")
     return {"uploaded": True}

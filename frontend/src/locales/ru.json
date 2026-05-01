@@ -15,7 +15,7 @@
     "qualityLine": "Качество: {{quality}}",
     "qualityLabel": "Качество",
     "qualityTier": {
-      "chinese": "Китайский",
+      "chinese": "Базовый",
       "upgraded": "Улучшенный",
       "premium": "Премиум"
     }

@@ -60,6 +60,8 @@ DB_NAME     = _require("DB_NAME")
 DB_USER     = _require("DB_USER")
 DB_PASSWORD = _require("DB_PASSWORD")
 
+CAROOL_BASE_URL = _require("CAROOL_BASE_URL")
+
 # ── Optional secrets — missing values disable the relevant integration ─────────
 
 CAROOL_API_KEY      = _optional("CAROOL_API_KEY")

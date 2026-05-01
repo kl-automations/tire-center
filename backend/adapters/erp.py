@@ -58,7 +58,7 @@ def _get_client():
     ssl_verify = os.environ.get("ERP_SSL_VERIFY", "false").lower() == "true"
     session = requests.Session()
     session.verify = ssl_verify
-    transport = Transport(session=session)
+    transport = Transport(session=session, timeout=15, operation_timeout=15)
 
     wsdl = os.environ.get("ERP_WSDL_URL", _WSDL_URL)
     endpoint = os.environ.get("ERP_ENDPOINT_URL", _ENDPOINT_URL)
@@ -204,13 +204,21 @@ async def lookup_car(
 
 # Hardcoded until erp_action_codes / erp_tire_locations DB tables are wired in.
 # To replace: query by frontend_action+frontend_reason (or wheel_position) and return erp_code.
-_REASON_CODE: dict[str, int] = {
+# ActionCode: what operation is being done
+_ACTION_CODE = {
+    "replacement": 2,  # החלפת צמיג
+    "puncture":    1,  # תיקון תקר
+}
+
+# ReasonCode: why
+_REASON_CODE = {
     "wear":    3,
     "damage":  23,
     "fitment": 25,
     "puncture": 4,
 }
-_FRONT_ALIGNMENT_CODE = 2
+
+_FRONT_ALIGNMENT_REASON_CODE = 2
 
 _TIRE_LOCATION_CODE: dict[str, int] = {
     "front-left":        1,
@@ -261,15 +269,18 @@ async def submit_diagnosis(
         for action in actions:
             kind = action.get("action")
             if kind == "replacement" and action.get("reason"):
-                action_code = _REASON_CODE[action["reason"]]
+                action_code = _ACTION_CODE["replacement"]
+                reason_code = _REASON_CODE[action["reason"]]
                 remarks = action.get("reason") or ""
             elif kind == "puncture":
-                action_code = _REASON_CODE["puncture"]
+                action_code = _ACTION_CODE["puncture"]
+                reason_code = _REASON_CODE["puncture"]
                 remarks = action.get("reason") or ""
             else:
                 continue
             lines.append({
                 "ActionCode":   action_code,
+                "ReasonCode":   reason_code,
                 "TireLocation": location_code,
                 "CaRoolStatus": carool_status,
                 "CaRoolId":     carool_id,
@@ -279,7 +290,8 @@ async def submit_diagnosis(
 
     if payload.get("front_alignment"):
         lines.append({
-            "ActionCode":   _FRONT_ALIGNMENT_CODE,
+            "ActionCode":   0,
+            "ReasonCode":   _FRONT_ALIGNMENT_REASON_CODE,
             "TireLocation": _NO_LOCATION_CODE,
             "CaRoolStatus": "0",
             "CaRoolId":     "",

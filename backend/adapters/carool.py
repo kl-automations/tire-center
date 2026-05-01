@@ -17,12 +17,11 @@ Known bug (open_session):
     now use `await client.post(...)`.
 """
 
-import os
+import json
 import httpx
 
+from config import CAROOL_API_KEY, CAROOL_BASE_URL, CAROOL_PAGE_ORIGIN
 from logging_utils import log, log_error
-
-BASE_URL = "https://api.ca-rool.com"  # confirm exact base URL with Carool team
 
 
 def _headers() -> dict:
@@ -34,8 +33,8 @@ def _headers() -> dict:
     misconfiguration immediately visible rather than producing silent 401s.
     """
     return {
-        "X-API-KEY": os.environ["CAROOL_API_KEY"],
-        "X-Page-origin": os.environ["CAROOL_PAGE_ORIGIN"],
+        "X-API-KEY": CAROOL_API_KEY,
+        "X-Page-origin": CAROOL_PAGE_ORIGIN,
     }
 
 
@@ -61,7 +60,7 @@ async def open_session(order_id: str, license_plate: str, mileage: int | None) -
     Raises:
         httpx.HTTPStatusError: Carool returned a non-2xx response.
     """
-    url = f"{BASE_URL}/ai-diagnoses"
+    url = f"{CAROOL_BASE_URL}/ai-diagnoses"
     log("ADAPTER/carool", f"open_session order_id={order_id} plate={license_plate} mileage={mileage}")
     log("ADAPTER/carool", f"POST {url}")
     async with httpx.AsyncClient() as client:
@@ -71,11 +70,9 @@ async def open_session(order_id: str, license_plate: str, mileage: int | None) -
                 headers=_headers(),
                 json={
                     "externalId": order_id,
-                    "vehicle": {
-                        "license": license_plate,
-                        "licenseCountry": "IL",
-                        **({"mileage": mileage} if mileage else {}),
-                    },
+                    "license": license_plate,
+                    "licenseCountry": "IL",
+                    "vehicleMileage": mileage or 0,
                 },
             )
         except httpx.HTTPError as e:
@@ -95,6 +92,7 @@ async def upload_photo(
     photo_type: str,   # "sidewall" | "tread"
     image_bytes: bytes,
     content_type: str = "image/jpeg",
+    wheel_position: str = "FRONT_LEFT",
 ) -> None:
     """
     Upload a single tyre photo to an existing Carool session.
@@ -112,18 +110,23 @@ async def upload_photo(
     Raises:
         httpx.HTTPStatusError: Carool returned a non-2xx response.
     """
-    endpoint = f"{BASE_URL}/ai-diagnoses/{carool_id}/{photo_type}-picture"
+    endpoint = f"{CAROOL_BASE_URL}/ai-diagnoses/{carool_id}/{photo_type}-picture"
     log(
         "ADAPTER/carool",
         f"upload_photo carool_id={carool_id} type={photo_type} bytes={len(image_bytes)} content_type={content_type}",
     )
     log("ADAPTER/carool", f"POST {endpoint}")
+    picture_field = "sidewallPicture" if photo_type == "sidewall" else "treadPicture"
+    body_json = json.dumps({"position": wheel_position}).encode("utf-8")
     async with httpx.AsyncClient(timeout=30) as client:
         try:
             resp = await client.post(
                 endpoint,
                 headers=_headers(),
-                files={"file": ("photo.jpg", image_bytes, content_type)},
+                files={
+                    picture_field: ("photo.jpg", image_bytes, content_type),
+                    "body": ("body.json", body_json, "application/json"),
+                },
             )
         except httpx.HTTPError as e:
             log_error("ADAPTER/carool", f"upload_photo network error carool_id={carool_id}: {e}")
@@ -149,7 +152,7 @@ async def finalize_session(carool_id: str) -> None:
     Raises:
         httpx.HTTPStatusError: Carool returned a non-2xx response.
     """
-    url = f"{BASE_URL}/ai-diagnoses/{carool_id}/uploaded"
+    url = f"{CAROOL_BASE_URL}/ai-diagnoses/{carool_id}/uploaded"
     log("ADAPTER/carool", f"finalize_session carool_id={carool_id}")
     log("ADAPTER/carool", f"POST {url}")
     async with httpx.AsyncClient() as client:

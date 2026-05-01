@@ -15,7 +15,7 @@
     "qualityLine": "الجودة: {{quality}}",
     "qualityLabel": "الجودة",
     "qualityTier": {
-      "chinese": "اقتصادي",
+      "chinese": "أساسي",
       "upgraded": "محسّن",
       "premium": "ممتاز"
     }

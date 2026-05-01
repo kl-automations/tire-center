@@ -27,50 +27,66 @@ function getToken(): Record<string, string> {
 }
 
 /**
- * Crop a captured frame to a square matching the on-screen mask overlay.
+ * A square crop window expressed in source-video pixel coordinates.
+ * Computed once at capture time so the actual crop in `cropDataUrl` does not
+ * depend on any DOM state being valid later (orientation changes, viewport
+ * resizes, the camera stream being stopped, etc.).
+ */
+type CropRect = { cx: number; cy: number; size: number };
+
+/**
+ * Compute the largest centred square inside the mask overlay's projection
+ * onto the source video frame.
  *
  * The `<video>` element uses `object-cover`, so the video pixels are scaled
  * (uniform `scale`) and centred inside the element with extra pixels clipped
  * on the longer axis. We reverse that mapping to translate the mask's screen
- * rectangle back into source video coordinates, then take the largest centred
- * square that fits inside the mask projection and draw it to a square canvas.
+ * rectangle back into source video coordinates.
  *
- * @param dataUrl Raw JPEG data URL of the full-frame capture.
- * @param maskEl  The DOM node positioned over the live camera view that
- *                visually frames where the tyre should appear.
- * @param video   The source `<video>` element (must already have non-zero
- *                `videoWidth`/`videoHeight`).
- * @returns A JPEG data URL of the cropped square at quality 0.9.
+ * Returns `null` if the video metadata is not yet available, in which case
+ * the caller should fall back to uploading the uncropped frame.
  */
-function cropToSquare(
-  dataUrl: string,
+function computeCropRect(
   maskEl: HTMLElement,
   video: HTMLVideoElement,
-): Promise<string> {
+): CropRect | null {
+  if (!video.videoWidth || !video.videoHeight) return null;
+  const maskRect = maskEl.getBoundingClientRect();
+  const scale = Math.max(
+    video.clientWidth / video.videoWidth,
+    video.clientHeight / video.videoHeight,
+  );
+  const offsetX = (video.clientWidth - video.videoWidth * scale) / 2;
+  const offsetY = (video.clientHeight - video.videoHeight * scale) / 2;
+  const vx = (maskRect.left - offsetX) / scale;
+  const vy = (maskRect.top - offsetY) / scale;
+  const vw = maskRect.width / scale;
+  const vh = maskRect.height / scale;
+  const size = Math.min(vw, vh);
+  const cx = vx + (vw - size) / 2;
+  const cy = vy + (vh - size) / 2;
+  return { cx, cy, size };
+}
+
+/**
+ * Apply a previously computed `CropRect` to a JPEG data URL and return the
+ * cropped square as a new JPEG data URL at quality 0.9. Pure with respect to
+ * the live DOM — only depends on its arguments.
+ */
+function cropDataUrl(dataUrl: string, rect: CropRect): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const maskRect = maskEl.getBoundingClientRect();
-      const scale = Math.max(
-        video.clientWidth / video.videoWidth,
-        video.clientHeight / video.videoHeight,
-      );
-      const offsetX = (video.clientWidth - video.videoWidth * scale) / 2;
-      const offsetY = (video.clientHeight - video.videoHeight * scale) / 2;
-      const vx = (maskRect.left - offsetX) / scale;
-      const vy = (maskRect.top - offsetY) / scale;
-      const vw = maskRect.width / scale;
-      const vh = maskRect.height / scale;
-      const size = Math.min(vw, vh);
-      const cx = vx + (vw - size) / 2;
-      const cy = vy + (vh - size) / 2;
-
       const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
+      canvas.width = rect.size;
+      canvas.height = rect.size;
       const ctx = canvas.getContext("2d");
       if (!ctx) return reject(new Error("2d context unavailable"));
-      ctx.drawImage(img, cx, cy, size, size, 0, 0, size, size);
+      ctx.drawImage(
+        img,
+        rect.cx, rect.cy, rect.size, rect.size,
+        0, 0, rect.size, rect.size,
+      );
       resolve(canvas.toDataURL("image/jpeg", 0.9));
     };
     img.onerror = () => reject(new Error("image load failed"));
@@ -123,6 +139,11 @@ export function CaroolCheck() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const maskContainerRef = useRef<HTMLDivElement>(null);
+  // Crop geometry snapshotted at capture time. Decouples the crop step in
+  // `handleApprove` from any live DOM state (video dimensions, mask layout,
+  // viewport size, stream liveness), so layout changes between capture and
+  // approve cannot silently produce a wrong or fallback crop.
+  const cropRectRef = useRef<CropRect | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const [wheelIndex, setWheelIndex] = useState(0);
@@ -172,7 +193,10 @@ export function CaroolCheck() {
 
   const handleBack = () => {
     // In preview: back = retake. In live: no escape back to AcceptedRequest — photos are required.
-    if (preview) setPreview(null);
+    if (preview) {
+      setPreview(null);
+      cropRectRef.current = null;
+    }
   };
 
   const handleCapture = async () => {
@@ -183,26 +207,33 @@ export function CaroolCheck() {
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 720;
     canvas.getContext("2d")!.drawImage(video, 0, 0);
-    const fullDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    if (!mask) {
-      setPreview(fullDataUrl);
-      return;
-    }
-    try {
-      const cropped = await cropToSquare(fullDataUrl, mask, video);
-      setPreview(cropped);
-    } catch {
-      setPreview(fullDataUrl);
-    }
+    // Snapshot the crop geometry now, while the video and mask are both live
+    // and laid out. `handleApprove` will use this rect instead of re-reading
+    // the DOM. If it's null (no metadata yet) the approve step uploads the
+    // uncropped frame as a safe fallback.
+    cropRectRef.current = mask ? computeCropRect(mask, video) : null;
+    setPreview(canvas.toDataURL("image/jpeg", 0.9));
   };
 
-  const handleRetake = () => setPreview(null);
+  const handleRetake = () => {
+    setPreview(null);
+    cropRectRef.current = null;
+  };
 
   const handleApprove = async () => {
     if (!preview || isUploading) return;
     setIsUploading(true);
     try {
-      const blob = dataUrlToBlob(preview);
+      const rect = cropRectRef.current;
+      let cropped = preview;
+      if (rect) {
+        try {
+          cropped = await cropDataUrl(preview, rect);
+        } catch {
+          cropped = preview;
+        }
+      }
+      const blob = dataUrlToBlob(cropped);
 
       let sessionId = caroolId;
       if (!sessionId) {
@@ -230,6 +261,7 @@ export function CaroolCheck() {
       if (!uploadRes.ok) throw new Error("upload failed");
 
       setPreview(null);
+      cropRectRef.current = null;
 
       if (isLastWheel && photoStep === "tread") {
         await fetch("/api/carool/finalize", {
@@ -273,7 +305,9 @@ export function CaroolCheck() {
         <img src={preview} alt="" className="absolute inset-0 w-full h-full object-cover" />
       )}
 
-      {/* Mask overlay — only while live, fills space between header and shutter */}
+      {/* Mask overlay — only while live. The crop geometry is snapshotted
+          into `cropRectRef` at capture time, so the mask DOM is no longer
+          needed once the preview is showing. */}
       {!preview && (
         <div
           ref={maskContainerRef}

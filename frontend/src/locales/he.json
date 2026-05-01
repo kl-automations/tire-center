@@ -15,7 +15,7 @@
     "qualityLine": "איכות: {{quality}}",
     "qualityLabel": "איכות",
     "qualityTier": {
-      "chinese": "סיני",
+      "chinese": "בסיסי",
       "upgraded": "משודרג",
       "premium": "פרימיום"
     }
