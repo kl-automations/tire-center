@@ -32,9 +32,17 @@ export function Login() {
   const [userCodeError, setUserCodeError] = useState(false);
   const [codeError, setCodeError] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [cooldownUntil, setCooldownUntil] = useState<number>(0);
+  const [now, setNow] = useState<number>(Date.now());
   const langMenuRef = useRef<HTMLDivElement>(null);
   const { navigate } = useNavigation();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [cooldownUntil]);
 
   useEffect(() => {
     if (!langMenuOpen) return;
@@ -56,6 +64,7 @@ export function Login() {
 
   const handleUserCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (Date.now() < cooldownUntil) return;
     setUserCodeError(false);
     try {
       const res = await fetch("/api/auth/request-code", {
@@ -65,15 +74,19 @@ export function Login() {
       });
       if (res.status === 400) {
         setUserCodeError(true);
+        setCooldownUntil(Date.now() + 15000);
         return;
       }
       if (!res.ok) {
         setUserCodeError(true);
+        setCooldownUntil(Date.now() + 15000);
         return;
       }
       setStep("code");
+      setCooldownUntil(Date.now() + 15000);
     } catch {
       setUserCodeError(true);
+      setCooldownUntil(Date.now() + 15000);
     }
   };
 
@@ -107,6 +120,9 @@ export function Login() {
     setCode("");
     setCodeError(false);
   };
+
+  const cooldownActive = Date.now() < cooldownUntil;
+  const cooldownSeconds = Math.ceil((cooldownUntil - now) / 1000);
 
   return (
     <div className="min-h-screen flex items-center justify-center relative">
@@ -205,6 +221,7 @@ export function Login() {
                   onChange={(e) => {
                     setUserCode(e.target.value);
                     setUserCodeError(false);
+                    setCooldownUntil(0);
                   }}
                   className={`w-full px-4 py-3 bg-input-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
                     userCodeError ? "border-red-500" : "border-border"
@@ -220,9 +237,10 @@ export function Login() {
               </div>
               <button
                 type="submit"
+                disabled={cooldownActive}
                 className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
               >
-                {t("login.submitUserCode")}
+                {cooldownActive ? `${cooldownSeconds}s` : t("login.submitUserCode")}
               </button>
             </form>
           ) : (
