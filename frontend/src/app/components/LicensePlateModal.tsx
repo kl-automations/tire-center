@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { TriangleAlert, X } from "lucide-react";
 import type { PlateType } from "./LicensePlate";
 import { LICENSE_PLATE_FRAME_CLASS, LicensePlateBlueStrip } from "./LicensePlate";
 
@@ -67,13 +67,90 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const [plateType, setPlateType] = useState<PlateType>("civilian");
   const [mileage, setMileage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Last mileage on file from the ERP, fetched in the background on LP-blur.
+  // `null` covers all "skip validation" cases: no history (ERP ReturnCode='1'),
+  // network/ERP error, response not yet returned, or no LP-blur fired yet.
+  const [lastMileage, setLastMileage] = useState<number | null>(null);
+  const [showMileagePopup, setShowMileagePopup] = useState(false);
+  // Track the in-flight request (plate it was issued for + its AbortController)
+  // so a stale response from a previous LP doesn't overwrite a fresh one, and
+  // so changing the LP cancels the obsolete request before kicking a new one.
+  const lastMileageRequestRef = useRef<{ plate: string; controller: AbortController } | null>(null);
 
-  const handleContinue = async () => {
+  // Clean up any in-flight request if the modal is unmounted mid-fetch.
+  useEffect(() => {
+    return () => {
+      if (lastMileageRequestRef.current) {
+        lastMileageRequestRef.current.controller.abort();
+        lastMileageRequestRef.current = null;
+      }
+    };
+  }, []);
+
+  const fetchLastMileage = (plate: string) => {
+    if (!plate) return;
+
+    if (lastMileageRequestRef.current) {
+      lastMileageRequestRef.current.controller.abort();
+    }
+
+    // Reset to the "pending / unknown" state for the duration of the fetch.
+    // Without this, a re-blur on the same LP would keep the previous response
+    // visible to the validator until the new one lands — which is wrong if
+    // the underlying value has been invalidated for any reason. Pending is
+    // treated as skip-validation, matching the spec.
+    setLastMileage(null);
+
+    const controller = new AbortController();
+    lastMileageRequestRef.current = { plate, controller };
+
+    const token = localStorage.getItem("token");
+    fetch("/api/car/last-mileage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ license_plate: plate }),
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { last_mileage?: number | null } | null) => {
+        // Stale-response guard: another blur (or LP edit) has happened since
+        // we issued this request, so its result is no longer relevant.
+        if (lastMileageRequestRef.current?.plate !== plate) return;
+        const value =
+          data && typeof data.last_mileage === "number" ? data.last_mileage : null;
+        setLastMileage(value);
+      })
+      .catch(() => {
+        // Spec: any failure (timeout, ERP error) silently skips validation.
+        // No state change needed — `lastMileage` stays null and the submit
+        // path treats null as "no history, allow submission".
+      });
+  };
+
+  const handleLicensePlateBlur = () => {
     const plate = licensePlate.trim();
-    if (!plate || isSubmitting) return;
+    if (!plate) return;
+    fetchLastMileage(plate);
+  };
 
-    const trimmedMileage = mileage.trim();
-    const parsedMileage = trimmedMileage ? parseInt(trimmedMileage, 10) : null;
+  // Mobile fallback: tapping straight from the LP input into the mileage
+  // input doesn't reliably fire LP-blur before mileage receives focus, so
+  // we re-trigger the fetch here. The ref guard skips the call when LP-blur
+  // has already kicked off (or completed) a request for the same plate.
+  const handleMileageFocus = () => {
+    const plate = licensePlate.trim();
+    if (!plate || lastMileageRequestRef.current?.plate === plate) return;
+    fetchLastMileage(plate);
+  };
+
+  const submitToCar = async (
+    plate: string,
+    parsedMileage: number | null,
+    trimmedMileage: string,
+  ) => {
     const genericFallback = "שגיאה בבדיקת הרכב. נסו שוב.";
 
     setIsSubmitting(true);
@@ -144,9 +221,56 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     }
   };
 
+  const handleContinue = async () => {
+    const plate = licensePlate.trim();
+    if (!plate || isSubmitting) return;
+
+    const trimmedMileage = mileage.trim();
+    const parsedMileage = trimmedMileage ? parseInt(trimmedMileage, 10) : null;
+
+    // Last-mileage check (spec): warn — but don't block — when the entered
+    // mileage is below the last value on file. The mechanic can correct it
+    // or proceed anyway via the popup. Number.isFinite guards against
+    // parseInt returning NaN, which would otherwise sneak past the
+    // `!== null` check and silently skip the warning (NaN < anything is
+    // always false).
+    if (
+      lastMileage !== null &&
+      parsedMileage !== null &&
+      Number.isFinite(parsedMileage) &&
+      parsedMileage < lastMileage
+    ) {
+      setShowMileagePopup(true);
+      return;
+    }
+
+    await submitToCar(plate, parsedMileage, trimmedMileage);
+  };
+
+  const handleProceedAnyway = async () => {
+    const plate = licensePlate.trim();
+    if (!plate || isSubmitting) return;
+    const trimmedMileage = mileage.trim();
+    const parsedMileage = trimmedMileage ? parseInt(trimmedMileage, 10) : null;
+    setShowMileagePopup(false);
+    await submitToCar(plate, parsedMileage, trimmedMileage);
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase().slice(0, 8);
     setLicensePlate(value);
+    // Editing the LP invalidates any previously fetched value — cancel the
+    // in-flight request and drop the cached result so it doesn't linger
+    // across vehicles.
+    if (lastMileageRequestRef.current) {
+      lastMileageRequestRef.current.controller.abort();
+      lastMileageRequestRef.current = null;
+    }
+    setLastMileage(null);
+  };
+
+  const handleMileageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMileage(e.target.value);
   };
 
   if (!isOpen) return null;
@@ -155,6 +279,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const text = PLATE_TEXT[plateType];
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
@@ -205,6 +330,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                         type="text"
                         value={licensePlate}
                         onChange={handleInputChange}
+                        onBlur={handleLicensePlateBlur}
                         placeholder="12-345-67"
                         className={`w-full min-w-0 bg-transparent text-center text-2xl sm:text-4xl font-black outline-none ${text.main} ${text.placeholder} tracking-widest tabular-nums [text-shadow:0_2px_0_rgba(0,0,0,0.12),0_1px_0_rgba(255,255,255,0.08)]`}
                         style={mono}
@@ -223,6 +349,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                         type="text"
                         value={licensePlate}
                         onChange={handleInputChange}
+                        onBlur={handleLicensePlateBlur}
                         placeholder="123456"
                         className={`min-w-0 flex-1 bg-transparent text-end text-2xl sm:text-4xl font-black outline-none ${text.main} ${text.placeholder} tracking-widest tabular-nums`}
                         style={mono}
@@ -250,6 +377,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                           type="text"
                           value={licensePlate}
                           onChange={handleInputChange}
+                          onBlur={handleLicensePlateBlur}
                           placeholder="12-345"
                           className={`min-w-0 flex-1 bg-transparent text-end text-2xl sm:text-4xl font-black outline-none ${text.main} ${text.placeholder} tracking-widest tabular-nums`}
                           style={mono}
@@ -271,7 +399,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           </div>
 
           {/* Mileage input */}
-          <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-muted/50">
             <label className="text-sm font-medium text-foreground shrink-0">
               {t("acceptedRequest.mileage")}
             </label>
@@ -279,7 +407,8 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
               type="number"
               inputMode="numeric"
               value={mileage}
-              onChange={(e) => setMileage(e.target.value)}
+              onFocus={handleMileageFocus}
+              onChange={handleMileageChange}
               placeholder="0"
               className="flex-1 min-w-0 text-center rounded-lg border border-border bg-input-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
@@ -304,5 +433,57 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         </div>
       </div>
     </div>
+
+    {showMileagePopup && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        <div
+          className="absolute inset-0 bg-black/60"
+          onClick={() => setShowMileagePopup(false)}
+        />
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          className="relative bg-card rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 border border-border text-center"
+        >
+          <div className="flex justify-center mb-4">
+            <TriangleAlert className="w-16 h-16 text-amber-500" strokeWidth={2} />
+          </div>
+          <h3 className="text-2xl font-bold text-foreground mb-3">שים לב!</h3>
+          <div className="space-y-1 mb-6">
+            <p className="text-foreground">
+              {"הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!"}
+            </p>
+            <p className="text-foreground">
+              {"אנא וודא שהוזן קילומטרז' תקין"}
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={() => setShowMileagePopup(false)}
+              className="flex-1 bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+            >
+              {"עדכן קילומטרז'"}
+            </button>
+            <button
+              type="button"
+              onClick={handleProceedAnyway}
+              disabled={isSubmitting}
+              className="flex-1 border border-border bg-card hover:bg-muted text-foreground py-3 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-foreground/40 border-t-foreground rounded-full animate-spin" />
+                  {t("common.loading")}
+                </span>
+              ) : (
+                "המשך בכל זאת"
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

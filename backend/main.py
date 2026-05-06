@@ -21,6 +21,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
+from adapters.erp import close_http_client
 from logging_utils import log, log_error
 from routers import auth, car, carool, config_router, diagnosis, history, internal, orders, webhooks
 
@@ -101,6 +102,8 @@ async def lifespan(app: FastAPI):
 
     Shutdown:
       - Closes all connections in the asyncpg pool gracefully.
+      - Closes the shared httpx.AsyncClient used by the ERP adapter so its
+        TCP connections drain cleanly instead of being torn down by the GC.
     """
     log("STARTUP", "Lifespan startup begin")
     app.state.db = await _create_db_pool()
@@ -115,6 +118,8 @@ async def lifespan(app: FastAPI):
     log("SHUTDOWN", "Lifespan shutdown begin — closing asyncpg pool")
     await app.state.db.close()
     log("SHUTDOWN", "asyncpg pool closed")
+    log("SHUTDOWN", "Closing ERP httpx client")
+    await close_http_client()
 
 
 # ── App ───────────────────────────────────────────────────────────────────────

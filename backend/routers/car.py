@@ -19,7 +19,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from logging_utils import log, log_error
 from middleware.auth import get_current_shop
-from models.schemas import CarLookupRequest
+from models.schemas import CarLookupRequest, LastMileageRequest, LastMileageResponse
 from adapters import erp
 
 router = APIRouter(prefix="/api", tags=["car"])
@@ -171,3 +171,61 @@ async def car_lookup(
         "order_id": str(order_id),
         **car_data,
     }
+
+
+@router.post(
+    "/car/last-mileage",
+    summary="Fetch the last recorded mileage for a vehicle (LP-blur pre-check)",
+    description=(
+        "Lightweight pre-check called by the frontend on licence-plate input "
+        "blur, before the mechanic finishes entering the current mileage. "
+        "Calls the ERP **GetLastMileage** SOAP method and returns the value "
+        "so the UI can warn the mechanic if the mileage they enter is below "
+        "the last value on file.\n\n"
+        "**Response semantics**: `last_mileage` is `null` when the ERP has "
+        "no history for this vehicle (ReturnCode='1'), otherwise the int "
+        "mileage. The frontend treats `null` as 'skip validation'.\n\n"
+        "**Failure handling**: any ERP / network failure is swallowed and "
+        "returned as `{ \"last_mileage\": null }` so a transient ERP outage "
+        "never hard-blocks the mechanic on the LP screen — the comparison is "
+        "purely advisory."
+    ),
+    response_model=LastMileageResponse,
+    response_description="Last recorded mileage on file, or null when no history exists.",
+)
+async def car_last_mileage(
+    body: LastMileageRequest,
+    shop: dict = Depends(get_current_shop),
+):
+    """
+    Return the ERP's last recorded mileage for a vehicle, or null on no history / error.
+
+    The endpoint is intentionally fail-soft: any exception from the SOAP
+    call is logged and the response is reduced to `{ "last_mileage": null }`,
+    matching the no-history case so the frontend has a single contract.
+    """
+    log(
+        "ROUTER/car",
+        f"last_mileage received shop_id={shop['shop_id']} plate={body.license_plate}",
+    )
+    try:
+        last_mileage = await erp.get_last_mileage(
+            license_plate=body.license_plate,
+            shop_id=shop["shop_id"],
+            erp_hash=shop["erp_hash"],
+        )
+    except Exception as e:
+        # Spec: never hard-block on a failed check. Collapse any ERP/network
+        # failure into the no-history shape so the frontend treats it as
+        # "skip validation" rather than surfacing an alert.
+        log_error(
+            "car",
+            f"GetLastMileage failed plate={body.license_plate}: {e}; returning last_mileage=null",
+        )
+        return LastMileageResponse(last_mileage=None)
+
+    log(
+        "ROUTER/car",
+        f"last_mileage success plate={body.license_plate} value={last_mileage}",
+    )
+    return LastMileageResponse(last_mileage=last_mileage)

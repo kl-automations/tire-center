@@ -73,6 +73,30 @@ class CarLookupRequest(BaseModel):
     )
 
 
+class LastMileageRequest(BaseModel):
+    """Request body for the LP-blur pre-check that fetches a vehicle's last recorded mileage."""
+
+    license_plate: str = Field(
+        description=(
+            "The vehicle licence plate number to look up in the ERP's mileage "
+            "history. Any format accepted by the ERP."
+        )
+    )
+
+
+class LastMileageResponse(BaseModel):
+    """Response returned by the last-mileage pre-check endpoint."""
+
+    last_mileage: int | None = Field(
+        default=None,
+        description=(
+            "Last odometer reading on file in km, or null when the ERP has no "
+            "history for this vehicle (ReturnCode='1'). The frontend skips "
+            "validation entirely when this is null."
+        ),
+    )
+
+
 # ---------- Carool ----------
 
 class CaroolSessionRequest(BaseModel):

@@ -124,7 +124,8 @@
   },
   "licensePlateModal": {
     "title": "דיווח חדש",
-    "subtitle": "הזן מספר רישוי של הרכב"
+    "subtitle": "הזן מספר רישוי של הרכב",
+    "mileageBelowLastWarning": "הקילומטרז' האחרון במערכת גבוה יותר — אנא ודא את הקילומטרז'."
   },
   "acceptedRequest": {
     "title": "דיווח חדש",

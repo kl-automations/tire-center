@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigation } from "../NavigationContext";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
@@ -6,6 +6,13 @@ import { AxlesDiagram } from "./AxlesDiagram";
 import { LicensePlate } from "./LicensePlate";
 import { TirePopup, type WheelData } from "./TirePopup";
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
+
+/** Wire-shape of one entry in `DiagnosisRequest.tires[wheel]`. */
+type DiagnosisTireAction = {
+  action: "replacement" | "puncture" | "sensor" | "tpms_valve" | "balancing" | "rim_repair" | "relocation";
+  reason?: string;
+  transfer_target?: string;
+};
 
 function getStoredAffectedWheels(plate: string): Record<string, WheelData> {
   try {
@@ -20,6 +27,65 @@ function storeAffectedWheel(plate: string, wheel: string, data: WheelData) {
   const current = getStoredAffectedWheels(plate);
   current[wheel] = data;
   sessionStorage.setItem(`affected-wheels-${plate}`, JSON.stringify(current));
+}
+
+/**
+ * Best-effort inverse of the action-builder loop in `handleSubmitDiagnosis`.
+ *
+ * Used only by the Carool waiting-overlay timeout to repopulate
+ * `affected-wheels-{plate}` so the mechanic can retry without losing their
+ * wheel selections. `mode` is reconstructed conservatively (replacement /
+ * relocation / repair) and `reason` defaults to the replacement reason or
+ * an empty string — the source-of-truth payload (`DiagnosisRequest.tires`)
+ * doesn't carry the human-readable summary the popup builds.
+ */
+function affectedWheelsFromDiagnosisTires(
+  tires: Record<string, DiagnosisTireAction[]>,
+): Record<string, WheelData> {
+  const result: Record<string, WheelData> = {};
+  for (const [wheel, actions] of Object.entries(tires)) {
+    const data: WheelData = {
+      replacementReason: null,
+      sensor: false,
+      tpmsValve: false,
+      balancing: false,
+      rimRepair: false,
+      puncture: false,
+      movedToWheel: null,
+      mode: "repair",
+      reason: "",
+    };
+    for (const a of actions) {
+      switch (a.action) {
+        case "replacement":
+          data.replacementReason = (a.reason as WheelData["replacementReason"]) ?? null;
+          data.mode = "replacement";
+          if (a.reason) data.reason = a.reason;
+          break;
+        case "puncture":
+          data.puncture = true;
+          break;
+        case "sensor":
+          data.sensor = true;
+          break;
+        case "tpms_valve":
+          data.tpmsValve = true;
+          break;
+        case "balancing":
+          data.balancing = true;
+          break;
+        case "rim_repair":
+          data.rimRepair = true;
+          break;
+        case "relocation":
+          data.movedToWheel = a.transfer_target ?? null;
+          data.mode = "relocation";
+          break;
+      }
+    }
+    result[wheel] = data;
+  }
+  return result;
 }
 
 /**
@@ -67,7 +133,17 @@ export function AcceptedRequest() {
     () => getStoredAffectedWheels(licensePlate)
   );
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showCaroolWaiting, setShowCaroolWaiting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Watchdog around the Carool waiting overlay: if Firestore doesn't navigate
+  // us off this screen within ~2 minutes we assume the analysis silently
+  // failed, drop the spinner, surface an alert, and put the mechanic's wheel
+  // selections back so they can retry.
+  const caroolWaitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSubmittedDiagnosisRef = useRef<{
+    tires: Record<string, DiagnosisTireAction[]>;
+    front_alignment: boolean;
+  } | null>(null);
   // Default to `true` so the Carool entry points don't flash off and back on
   // before the runtime-config response arrives. The backend gate is the source
   // of truth — the worst case from this default is a single failed request
@@ -99,15 +175,41 @@ export function AcceptedRequest() {
     };
   }, []);
 
-  const reportedMileageNum = mileage ? Number(mileage) : null;
-  const mileageDiff =
-    typeof lastMileage === "number" && reportedMileageNum !== null
-      ? lastMileage - reportedMileageNum
-      : null;
-  const showMileageWarning = mileageDiff !== null && mileageDiff > 0;
+  // Carool waiting-overlay watchdog. The cleanup runs in two scenarios:
+  //   1. Firestore listener navigates us off the screen → AcceptedRequest
+  //      unmounts → cleanup clears the timeout so it can't fire late on
+  //      the dashboard.
+  //   2. The timeout itself flips showCaroolWaiting back to false → this
+  //      effect re-runs; the previous cleanup clears the (now-fired)
+  //      handle and we exit early because !showCaroolWaiting.
+  useEffect(() => {
+    if (!showCaroolWaiting) return;
 
-  const [editingMileage, setEditingMileage] = useState(false);
-  const [mileageInput, setMileageInput] = useState(mileage ?? "");
+    caroolWaitingTimeoutRef.current = setTimeout(() => {
+      caroolWaitingTimeoutRef.current = null;
+      setShowCaroolWaiting(false);
+
+      const submitted = lastSubmittedDiagnosisRef.current;
+      if (submitted) {
+        const restored = affectedWheelsFromDiagnosisTires(submitted.tires);
+        sessionStorage.setItem(
+          `affected-wheels-${licensePlate}`,
+          JSON.stringify(restored),
+        );
+        setAffectedWheels(restored);
+        setFrontAlignment(submitted.front_alignment);
+      }
+
+      alert("הניתוח נכשל. בדוק את החיבור ונסה שוב.");
+    }, 120_000);
+
+    return () => {
+      if (caroolWaitingTimeoutRef.current) {
+        clearTimeout(caroolWaitingTimeoutRef.current);
+        caroolWaitingTimeoutRef.current = null;
+      }
+    };
+  }, [showCaroolWaiting, licensePlate]);
 
   const handleWheelClick = (wheelPosition: string) => {
     setSelectedWheel(wheelPosition);
@@ -147,15 +249,9 @@ export function AcceptedRequest() {
       }
     }
 
-    type TireAction = {
-      action: "replacement" | "puncture" | "sensor" | "tpms_valve" | "balancing" | "rim_repair" | "relocation";
-      reason?: string;
-      transfer_target?: string;
-    };
-
-    const tires: Record<string, TireAction[]> = {};
+    const tires: Record<string, DiagnosisTireAction[]> = {};
     for (const [wheel, data] of Object.entries(affectedWheels)) {
-      const actions: TireAction[] = [];
+      const actions: DiagnosisTireAction[] = [];
       if (data.replacementReason) actions.push({ action: "replacement", reason: data.replacementReason });
       if (data.puncture) actions.push({ action: "puncture" });
       if (data.sensor) actions.push({ action: "sensor" });
@@ -166,26 +262,72 @@ export function AcceptedRequest() {
       if (actions.length > 0) tires[wheel] = actions;
     }
 
-    const trimmedMileage = mileageInput.trim();
-    const sourceMileage = trimmedMileage || (mileage ?? "");
+    const sourceMileage = mileage ?? "";
     const parsed = sourceMileage ? parseInt(sourceMileage, 10) : NaN;
     const parsedMileage = Number.isFinite(parsed) ? parsed : null;
 
+    const diagnosisPayload = {
+      order_id,
+      mileage_update: parsedMileage,
+      front_alignment: frontAlignment,
+      tires,
+    };
+    const token = localStorage.getItem("token");
+    const jsonHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
+      // Carool-active path: stage the mechanic's inputs, kick off Carool's
+      // async analysis, and wait. The Carool webhook merges the AI results
+      // into the order and submits to the ERP server-side; the order's
+      // Firestore listener fires when status flips to 'waiting' and the
+      // dashboard view picks it up from there.
+      if (caroolEnabled && caroolNeeded === 1) {
+        const draftRes = await fetch("/api/diagnosis/draft", {
+          method: "POST",
+          headers: jsonHeaders,
+          body: JSON.stringify(diagnosisPayload),
+        });
+        if (!draftRes.ok) {
+          alert("שגיאה בשליחת האבחון. נסו שוב.");
+          return;
+        }
+
+        const finalizeRes = await fetch("/api/carool/finalize", {
+          method: "POST",
+          headers: jsonHeaders,
+          body: JSON.stringify({ order_id }),
+        });
+        if (!finalizeRes.ok) {
+          // Leave sessionStorage intact so the mechanic can retry without
+          // having to re-enter every wheel selection.
+          alert("שגיאה בשליחת האבחון. נסו שוב.");
+          return;
+        }
+
+        // Both backend hops accepted the work — safe to drop the local
+        // scratchpads now. The watchdog timeout below restores them from
+        // `lastSubmittedDiagnosisRef` if Carool never calls back.
+        sessionStorage.removeItem(`carool-photos-done-${licensePlate}`);
+        sessionStorage.removeItem(`affected-wheels-${licensePlate}`);
+
+        lastSubmittedDiagnosisRef.current = {
+          tires: diagnosisPayload.tires,
+          front_alignment: diagnosisPayload.front_alignment,
+        };
+        setShowCaroolWaiting(true);
+        return;
+      }
+
+      // Fallback: Carool disabled or not needed for this order — submit to
+      // the ERP directly, exactly as before.
       const res = await fetch("/api/diagnosis", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          order_id,
-          mileage_update: parsedMileage,
-          front_alignment: frontAlignment,
-          tires,
-        }),
+        headers: jsonHeaders,
+        body: JSON.stringify(diagnosisPayload),
       });
 
       if (!res.ok) {
@@ -243,70 +385,6 @@ export function AcceptedRequest() {
 
           {/* License Plate */}
           <LicensePlate plateNumber={licensePlate} plateType={plateType} className="max-w-[260px] mx-auto" />
-
-          {/* Mileage mismatch warning */}
-          {showMileageWarning && (
-            <div className="bg-red-50 dark:bg-red-950/40 border border-red-500 rounded-lg px-3 py-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-red-600 dark:text-red-400 leading-tight">
-                    ⚠️ {t("acceptedRequest.mileageWarningTitle")}
-                  </p>
-                  <p className="text-xs text-red-500 dark:text-red-400 leading-tight mt-1">
-                    {t("acceptedRequest.mileageWarningLastReported", { lastMileage: lastMileage!.toLocaleString() })}
-                  </p>
-                </div>
-                {editingMileage ? (
-                  <div className="flex gap-1.5 shrink-0">
-                    <input
-                      type="number"
-                      value={mileageInput}
-                      onChange={(e) => setMileageInput(e.target.value)}
-                      className="w-24 text-xs rounded border border-red-400 bg-white dark:bg-red-950/60 text-foreground px-2 py-1.5 focus:outline-none"
-                      dir="ltr"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate({
-                          name: "accepted-request",
-                          plate: licensePlate,
-                          plateType,
-                          mileage: mileageInput,
-                          order_id,
-                          request_id,
-                          tireSizes,
-                          ownershipId,
-                          lastMileage,
-                          tireLevel,
-                          wheelCount: wheelCountHint,
-                          caroolNeeded,
-                        })
-                      }
-                      className="px-2.5 py-1.5 rounded bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
-                    >
-                      עדכן
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingMileage(false)}
-                      className="px-2.5 py-1.5 rounded border border-red-400 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                    >
-                      ביטול
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditingMileage(true)}
-                    className="shrink-0 px-3 py-1.5 rounded border border-red-500 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                  >
-                    {t("acceptedRequest.mileageWarningEditButton")}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Info chips — 2x2 grid */}
           <div className="grid grid-cols-2 gap-1.5">
@@ -418,6 +496,20 @@ export function AcceptedRequest() {
               </svg>
             </div>
             <span className="text-lg font-bold text-foreground">נשלח בהצלחה</span>
+          </div>
+        </div>
+      )}
+
+      {/* Carool analysis waiting overlay — Firestore listener handles the
+          transition once the backend has merged the AI results and submitted
+          to the ERP (status flips to 'waiting'). */}
+      {showCaroolWaiting && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 bg-card border border-border rounded-2xl px-10 py-8 shadow-xl">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="w-9 h-9 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+            <span className="text-lg font-bold text-foreground">מנתח צמיגים...</span>
           </div>
         </div>
       )}

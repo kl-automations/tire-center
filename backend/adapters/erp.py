@@ -12,67 +12,161 @@ Auth flow (two-step OTP):
 Stub status:
   - request_otp / verify_login    → LIVE (call real ERP SOAP)
   - lookup_car                    → LIVE (call real ERP SOAP)
+  - get_last_mileage              → LIVE (call real ERP SOAP)
   - submit_diagnosis              → LIVE (call real ERP SOAP)
   - request_history_export        → STUB (always returns True)
   Replace stubs with real SOAP calls once the ERP team confirms method signatures.
 
-CRITICAL port note:
-  The WSDL advertises port 443, but the firewall only allows port 22443.
-  _get_client() loads the WSDL then overrides the binding address to use 22443.
+Implementation note:
+  This module talks to the ERP using raw SOAP 1.1 envelopes posted via
+  httpx.AsyncClient — no SOAP library, no WSDL fetch. A blocking SOAP
+  client would stall the FastAPI event loop under concurrency, so we
+  build envelopes by hand and parse responses with xml.etree. The
+  endpoint URL is hit directly so the WSDL's port-443 binding (firewall
+  only allows 22443) is never consulted.
 """
 
 import os
-import functools
-import requests
-from zeep import Client
-from zeep.transports import Transport
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import httpx
 
 from logging_utils import log, log_error
 
-# ── SOAP client constants ─────────────────────────────────────────────────────
+# ── SOAP constants ────────────────────────────────────────────────────────────
 
-_WSDL_URL     = "https://tet.kogol.co.il:22443/csp/bil/Diagnose.Webservices.cls?WSDL"
 _ENDPOINT_URL = "https://tet.kogol.co.il:22443/csp/bil/Diagnose.Webservices.cls"
-_BINDING_NAME = "{http://tempuri.org}DiagnoseWebservicesSoap"
+_NAMESPACE    = "http://tempuri.org"
+_SOAP_ENV_NS  = "http://schemas.xmlsoap.org/soap/envelope/"
+_TIMEOUT_S    = 15.0
 
 
-# ── SOAP client (lazy singleton) ─────────────────────────────────────────────
+# ── httpx client (lazy singleton) ─────────────────────────────────────────────
 
-@functools.lru_cache(maxsize=1)
-def _get_client():
+_client: httpx.AsyncClient | None = None
+
+
+async def _get_http_client() -> httpx.AsyncClient:
     """
-    Build and cache the zeep SOAP service (singleton via lru_cache).
+    Return a process-wide httpx.AsyncClient, creating it on first use.
 
-    SSL verification is disabled for the test environment (self-signed cert on
-    the ERP server). Set ERP_SSL_VERIFY=true once a valid certificate is in place.
+    SSL verification is off by default for the test environment (self-signed
+    cert on the ERP server). Set ERP_SSL_VERIFY=true once a valid certificate
+    is in place. The endpoint URL can be overridden via ERP_ENDPOINT_URL for
+    staging / production targets.
 
-    The WSDL endpoint URLs can be overridden via environment variables
-    ERP_WSDL_URL and ERP_ENDPOINT_URL for staging / production targets.
+    The client is shared across all calls so connections are pooled and TLS
+    handshakes are reused — much faster than spinning up a fresh client per
+    call. No lock is needed: FastAPI runs on a single-threaded event loop,
+    so the ``if _client is None`` check and the assignment below run
+    atomically with respect to other coroutines (no await between them).
+    """
+    global _client
+    if _client is None:
+        ssl_verify = os.environ.get("ERP_SSL_VERIFY", "false").lower() == "true"
+        _client = httpx.AsyncClient(verify=ssl_verify, timeout=_TIMEOUT_S)
+        log("ADAPTER/erp", f"httpx.AsyncClient ready ssl_verify={ssl_verify}")
+    return _client
+
+
+async def close_http_client() -> None:
+    """Close the shared httpx client. Call from FastAPI's lifespan shutdown."""
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None
+        log("ADAPTER/erp", "httpx.AsyncClient closed")
+
+
+# ── SOAP envelope builder + response wrapper ─────────────────────────────────
+
+_ENVELOPE_TEMPLATE = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<soap:Envelope xmlns:soap="{soap_ns}" xmlns:tem="{tem_ns}">'
+    '<soap:Body>{body}</soap:Body>'
+    '</soap:Envelope>'
+)
+
+
+def _x(value) -> str:
+    """XML-escape a value, treating None as empty string."""
+    return escape(str(value)) if value is not None else ""
+
+
+class _SoapResponse:
+    """
+    Attribute-access wrapper over a parsed SOAP response element.
+
+    Exposes ``response.ReturnCode`` style attribute access on top of a
+    parsed SOAP body element by walking the response subtree and returning
+    the text of the first descendant whose local tag matches the requested
+    attribute name. Returns None when no matching element is found.
+    """
+
+    def __init__(self, element: ET.Element) -> None:
+        self._element = element
+
+    def __getattr__(self, name: str):
+        for child in self._element.iter():
+            local = child.tag.rsplit("}", 1)[-1]
+            if local == name:
+                return child.text
+        return None
+
+    def __repr__(self) -> str:
+        return ET.tostring(self._element, encoding="unicode")
+
+
+async def _call_soap(method: str, body_inner: str) -> _SoapResponse:
+    """
+    Send a SOAP 1.1 request to the ERP endpoint and return the parsed result.
+
+    Args:
+        method:     SOAP method name (e.g. "IsValidUser"). Used to wrap the
+                    body and to build the SOAPAction header.
+        body_inner: XML fragment placed inside ``<tem:{method}>...</tem:{method}>``.
+                    Caller is responsible for escaping any user-supplied text.
 
     Returns:
-        A zeep service proxy bound to the ERP SOAP endpoint.
+        A _SoapResponse around the inner ``*Response`` element. Field text is
+        accessible via attribute access (``result.ReturnCode``).
     """
-    ssl_verify = os.environ.get("ERP_SSL_VERIFY", "false").lower() == "true"
-    session = requests.Session()
-    session.verify = ssl_verify
-    transport = Transport(session=session, timeout=15, operation_timeout=15)
-
-    wsdl = os.environ.get("ERP_WSDL_URL", _WSDL_URL)
     endpoint = os.environ.get("ERP_ENDPOINT_URL", _ENDPOINT_URL)
+    envelope = _ENVELOPE_TEMPLATE.format(
+        soap_ns=_SOAP_ENV_NS,
+        tem_ns=_NAMESPACE,
+        body=f'<tem:{method}>{body_inner}</tem:{method}>',
+    )
+    headers = {
+        "Content-Type": "text/xml; charset=utf-8",
+        "SOAPAction": f'"{_NAMESPACE}/{method}"',
+    }
 
-    log("ADAPTER/erp", f"Building zeep SOAP client wsdl={wsdl} endpoint={endpoint} ssl_verify={ssl_verify}")
-    try:
-        client = Client(wsdl=wsdl, transport=transport)
-        service = client.create_service(_BINDING_NAME, endpoint)
-    except Exception as e:
-        log_error("ADAPTER/erp", f"Failed to build SOAP client: {e}")
-        raise
-    log("ADAPTER/erp", "SOAP client ready (cached singleton)")
-    # Override the port-443 address declared in the WSDL — firewall requires 22443
-    return service
+    client = await _get_http_client()
+    response = await client.post(
+        endpoint,
+        content=envelope.encode("utf-8"),
+        headers=headers,
+    )
+    response.raise_for_status()
+
+    root = ET.fromstring(response.text)
+    body = root.find(f"{{{_SOAP_ENV_NS}}}Body")
+    if body is None or len(body) == 0:
+        raise RuntimeError(f"SOAP {method}: malformed response, missing Body")
+
+    fault = body.find(f"{{{_SOAP_ENV_NS}}}Fault")
+    if fault is not None:
+        # SOAP 1.1 Fault: <faultcode>, <faultstring>
+        fault_str = ""
+        for child in fault.iter():
+            if child.tag.rsplit("}", 1)[-1] == "faultstring" and child.text:
+                fault_str = child.text
+                break
+        raise RuntimeError(f"SOAP {method} fault: {fault_str or 'unknown fault'}")
+
+    return _SoapResponse(body[0])
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -94,10 +188,10 @@ async def request_otp(user_code: str) -> dict:
             "otp_debug": str|None  # OTP value, only set when ERP_TEST_MODE=true
         }
     """
-    service = _get_client()
+    body = f"<tem:userCode>{_x(user_code)}</tem:userCode>"
     log("ADAPTER/erp", f"SOAP IsValidUser userCode={user_code}")
     try:
-        response = service.IsValidUser(userCode=user_code)
+        response = await _call_soap("IsValidUser", body)
     except Exception as e:
         log_error("ADAPTER/erp", f"IsValidUser SOAP call failed for userCode={user_code}: {e}")
         raise
@@ -124,10 +218,13 @@ async def verify_login(user_code: str, otp: str) -> dict:
             "message": str    # ERP ReturnMessage (error text on failure)
         }
     """
-    service = _get_client()
+    body = (
+        f"<tem:userCode>{_x(user_code)}</tem:userCode>"
+        f"<tem:password>{_x(otp)}</tem:password>"
+    )
     log("ADAPTER/erp", f"SOAP Login userCode={user_code}")
     try:
-        response = service.Login(userCode=user_code, password=otp)
+        response = await _call_soap("Login", body)
     except Exception as e:
         log_error("ADAPTER/erp", f"Login SOAP call failed for userCode={user_code}: {e}")
         raise
@@ -166,18 +263,19 @@ async def lookup_car(
             tire_level (str), wheel_count (int), tire_sizes (dict),
             carool_needed (bool), last_mileage (int|None)
     """
-    service = _get_client()
+    km = mileage if mileage else 0
+    body = (
+        f"<tem:userCode>{_x(shop_id)}</tem:userCode>"
+        f"<tem:password>{_x(erp_hash)}</tem:password>"
+        f"<tem:CarNumber>{_x(license_plate)}</tem:CarNumber>"
+        f"<tem:KM>{int(km)}</tem:KM>"
+    )
     log(
         "ADAPTER/erp",
-        f"SOAP Apply shop_id={shop_id} CarNumber={license_plate} KM={mileage if mileage else 0}",
+        f"SOAP Apply shop_id={shop_id} CarNumber={license_plate} KM={km}",
     )
     try:
-        response = service.Apply(
-            userCode=shop_id,
-            password=erp_hash,
-            CarNumber=license_plate,
-            KM=mileage if mileage else 0,
-        )
+        response = await _call_soap("Apply", body)
     except Exception as e:
         log_error("ADAPTER/erp", f"Apply SOAP call failed plate={license_plate}: {e}")
         raise
@@ -188,7 +286,7 @@ async def lookup_car(
         "request_id": response.ApplyId,
         "ownership_id": response.Company,
         "car_model": response.CarModel,
-        "last_mileage": response.LastMileage,
+        "last_mileage": int(response.LastMileage) if response.LastMileage else None,
         "tire_sizes": {
             "front": response.FrontTireSize,
             "rear": response.RearTireSize,
@@ -200,25 +298,85 @@ async def lookup_car(
     }
 
 
+async def get_last_mileage(
+    license_plate: str,
+    shop_id: str,
+    erp_hash: str,
+) -> int | None:
+    """
+    Fetch the last recorded odometer reading for a vehicle from the ERP.
+
+    Calls the ERP GetLastMileage SOAP method using the same auth pattern as
+    every other ERP call in this adapter: shop credentials (userCode /
+    password) pulled from the JWT, plus the vehicle plate (CarNumber).
+
+    Used by the LP-blur pre-check so the frontend can warn the mechanic
+    when the value they're about to enter is below the last value the ERP
+    has on file. Distinct from the LastMileage value returned by Apply,
+    which is only available after a full vehicle lookup has completed.
+
+    The ERP packs the mileage value into ReturnMessage (not a dedicated
+    LastMileage element) and uses ReturnCode="1" for success — same
+    convention as Apply / IsValidUser / Login. Any other ReturnCode is
+    treated as "no history on record" and the frontend skips the
+    comparison entirely.
+
+    Args:
+        license_plate: Vehicle plate string (CarNumber).
+        shop_id:       The authenticated shop's ID from the JWT (userCode).
+        erp_hash:      The ERP session hash from the JWT (password).
+
+    Returns:
+        The last recorded mileage as int when ReturnCode == "1", otherwise
+        None (no history on record or any error response).
+    """
+    body = (
+        f"<tem:userCode>{_x(shop_id)}</tem:userCode>"
+        f"<tem:password>{_x(erp_hash)}</tem:password>"
+        f"<tem:CarNumber>{_x(license_plate)}</tem:CarNumber>"
+    )
+    log(
+        "ADAPTER/erp",
+        f"SOAP GetLastMileage shop_id={shop_id} CarNumber={license_plate}",
+    )
+    try:
+        response = await _call_soap("GetLastMileage", body)
+    except Exception as e:
+        log_error(
+            "ADAPTER/erp",
+            f"GetLastMileage SOAP call failed plate={license_plate}: {e}",
+        )
+        raise
+    log(
+        "ADAPTER/erp",
+        f"GetLastMileage ReturnCode={response.ReturnCode} ReturnMessage={response.ReturnMessage}",
+    )
+    if str(response.ReturnCode) == "1":
+        return int(response.ReturnMessage) if response.ReturnMessage else None
+    return None
+
+
 # ── Diagnosis ────────────────────────────────────────────────────────────────
 
-# Hardcoded until erp_action_codes / erp_tire_locations DB tables are wired in.
-# To replace: query by frontend_action+frontend_reason (or wheel_position) and return erp_code.
+# Confirmed against ERP GetActionTable / GetReasonTable responses 2026-05-04.
 # ActionCode: what operation is being done
 _ACTION_CODE = {
-    "replacement": 2,  # החלפת צמיג
-    "puncture":    1,  # תיקון תקר
+    "replacement":  3,  # החלפת צמיג
+    "puncture":     1,  # תיקון תקר
+    "relocation":   2,  # העברה
+    "rim_repair":   5,  # יישור ג'אנט
+    "front_alignment": 6,  # כיוון פרונט
+    "balancing":    7,  # איזון גלגלים
+    "tpms_valve":   8,  # שסתום
+    "sensor":       9,  # חיישן
 }
 
-# ReasonCode: why
+# ReasonCode: why (linked_action_code=3 for all — replacement only)
 _REASON_CODE = {
-    "wear":    3,
-    "damage":  23,
-    "fitment": 25,
-    "puncture": 4,
+    "wear":    30,  # בלאי
+    "damage":  40,  # נזק
+    "fitment": 50,  # התאמה
 }
-
-_FRONT_ALIGNMENT_REASON_CODE = 2
 
 _TIRE_LOCATION_CODE: dict[str, int] = {
     "front-left":        1,
@@ -230,6 +388,21 @@ _TIRE_LOCATION_CODE: dict[str, int] = {
     "rear-right-inner":  8,
 }
 _NO_LOCATION_CODE = 6
+
+
+def _diagnosis_line_xml(line: dict) -> str:
+    """Serialise one DiagnosisLine dict into its <tem:DiagnosisLine> XML fragment."""
+    return (
+        "<tem:DiagnosisLine>"
+        f"<tem:ActionCode>{int(line['ActionCode'])}</tem:ActionCode>"
+        f"<tem:ReasonCode>{int(line['ReasonCode'])}</tem:ReasonCode>"
+        f"<tem:TireLocation>{int(line['TireLocation'])}</tem:TireLocation>"
+        f"<tem:CaRoolStatus>{_x(line['CaRoolStatus'])}</tem:CaRoolStatus>"
+        f"<tem:CaRoolId>{_x(line['CaRoolId'])}</tem:CaRoolId>"
+        f"<tem:Remarks>{_x(line['Remarks'])}</tem:Remarks>"
+        f"<tem:IsApproved>{'true' if line['IsApproved'] else 'false'}</tem:IsApproved>"
+        "</tem:DiagnosisLine>"
+    )
 
 
 async def submit_diagnosis(
@@ -274,8 +447,12 @@ async def submit_diagnosis(
                 remarks = action.get("reason") or ""
             elif kind == "puncture":
                 action_code = _ACTION_CODE["puncture"]
-                reason_code = _REASON_CODE["puncture"]
-                remarks = action.get("reason") or ""
+                reason_code = 0
+                remarks = ""
+            elif kind in ("relocation", "rim_repair", "balancing", "tpms_valve", "sensor"):
+                action_code = _ACTION_CODE[kind]
+                reason_code = 0
+                remarks = ""
             else:
                 continue
             lines.append({
@@ -290,8 +467,8 @@ async def submit_diagnosis(
 
     if payload.get("front_alignment"):
         lines.append({
-            "ActionCode":   0,
-            "ReasonCode":   _FRONT_ALIGNMENT_REASON_CODE,
+            "ActionCode":   _ACTION_CODE["front_alignment"],
+            "ReasonCode":   0,
             "TireLocation": _NO_LOCATION_CODE,
             "CaRoolStatus": "0",
             "CaRoolId":     "",
@@ -299,24 +476,29 @@ async def submit_diagnosis(
             "IsApproved":   False,
         })
 
-    diagnosis_dict = {
-        "LastMileage":     payload.get("mileage") or 0,
-        "DiagnosisLines":  {"DiagnosisLine": lines},
-    }
+    last_mileage = int(payload.get("mileage") or 0)
+    diagnosis_xml = (
+        "<tem:Diagnosis>"
+        f"<tem:LastMileage>{last_mileage}</tem:LastMileage>"
+        "<tem:DiagnosisLines>"
+        + "".join(_diagnosis_line_xml(line) for line in lines)
+        + "</tem:DiagnosisLines>"
+        "</tem:Diagnosis>"
+    )
+    body = (
+        f"<tem:userCode>{_x(shop_id)}</tem:userCode>"
+        f"<tem:password>{_x(erp_hash)}</tem:password>"
+        f"<tem:CarNumber>{_x(payload['license_plate'])}</tem:CarNumber>"
+        f"<tem:ApplyId>{int(request_id)}</tem:ApplyId>"
+        + diagnosis_xml
+    )
 
-    service = _get_client()
     log(
         "ADAPTER/erp",
         f"SOAP SendDiagnose shop_id={shop_id} request_id={request_id} plate={payload['license_plate']} lines={len(lines)}",
     )
     try:
-        response = service.SendDiagnose(
-            userCode=shop_id,
-            password=erp_hash,
-            CarNumber=payload["license_plate"],
-            ApplyId=int(request_id),
-            Diagnosis=diagnosis_dict,
-        )
+        response = await _call_soap("SendDiagnose", body)
     except Exception as e:
         log_error("ADAPTER/erp", f"SendDiagnose SOAP call failed request_id={request_id}: {e}")
         raise

@@ -124,7 +124,8 @@
   },
   "licensePlateModal": {
     "title": "تقرير جديد",
-    "subtitle": "أدخل رقم لوحة المركبة"
+    "subtitle": "أدخل رقم لوحة المركبة",
+    "mileageBelowLastWarning": "آخر قراءة مسجّلة للعداد كانت أعلى — يُرجى التحقق من قراءة العداد."
   },
   "acceptedRequest": {
     "title": "تقرير جديد",

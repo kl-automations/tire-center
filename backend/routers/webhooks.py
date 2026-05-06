@@ -12,11 +12,12 @@ Security:
 """
 
 import json
-import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from logging_utils import log, log_error
 from models.schemas import ErpWebhookPayload, CaroolWebhookPayload
+from config import CAROOL_API_KEY
+from routers.diagnosis import _submit_to_erp
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 
@@ -207,27 +208,43 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     description=(
         "Called asynchronously by Carool after a photo-analysis session is complete "
         "(triggered by POST /api/carool/finalize). "
-        "Merges the AI results into `open_orders.diagnosis['carool_result']` and "
-        "writes a Firestore signal. "
+        "Merges the AI results into `open_orders.diagnosis['carool_result']`, then "
+        "auto-submits the combined diagnosis to the ERP (the order is expected to "
+        "be sitting at `status='pending_carool'` from a prior `/api/diagnosis/draft` "
+        "call). On a successful ERP ack the order moves to `status='waiting'` and a "
+        "Firestore signal is written; on ERP rejection the failure is logged and the "
+        "order stays in `pending_carool` so it can be re-submitted manually. "
+        "Always returns 200 — Carool retries indefinitely on any non-2xx response. "
         "Authenticated via **X-API-KEY** header (must match the `CAROOL_API_KEY` secret)."
     ),
     response_description="Acknowledgement that the Carool results were persisted.",
 )
 async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
     """
-    Merge Carool AI analysis results into the order and signal the frontend.
+    Merge Carool AI analysis results into the order and forward to the ERP.
 
     Authenticates via X-API-KEY header. Uses payload.externalId to locate the
     order (this field is set by the backend when calling Carool open_session).
-    Stores the full payload under open_orders.diagnosis['carool_result'].
+    Stores the full payload under open_orders.diagnosis['carool_result'], then
+    re-fetches the row (including erp_hash) and calls _submit_to_erp, which
+    builds the merged ERP payload, sends SendDiagnose, and on success flips
+    status to 'waiting'. ERP failures are logged but never surfaced to Carool
+    — Carool would retry indefinitely on any non-2xx response.
 
     Raises:
-        401: X-API-KEY header missing or does not match CAROOL_API_KEY secret.
+        401: Either the CAROOL_API_KEY secret is not configured on this instance
+             (logged as a "500 Misconfigured" ops issue), or the incoming
+             X-API-KEY header is missing / does not match the secret
+             (logged as "401 Unauthorized"). Both return 401 to the caller to
+             avoid leaking internal config state.
         404: No order matching payload.externalId found in the database.
     """
     log("WEBHOOK/carool", f"received externalId={payload.externalId}")
     api_key = request.headers.get("X-API-KEY", "")
-    if api_key != os.environ.get("CAROOL_API_KEY", ""):
+    if not CAROOL_API_KEY:
+        log_error("carool_webhook", f"500 Misconfigured — CAROOL_API_KEY secret is not set; rejecting all Carool callbacks externalId={payload.externalId}")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if api_key != CAROOL_API_KEY:
         log_error("carool_webhook", f"401 Unauthorized — bad/missing X-API-KEY externalId={payload.externalId}")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -257,6 +274,52 @@ async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
         order["id"],
     )
 
-    _firestore_signal(request.app, order["shop_id"], str(order["id"]), order["status"])
-    log("WEBHOOK/carool", f"ack order_id={order['id']} status={order['status']}")
+    # Re-fetch the freshly merged row so _submit_to_erp can read both
+    # mechanic_inputs (saved earlier by /api/diagnosis/draft) and the
+    # carool_result we just persisted. erp_hash is read from open_orders
+    # because the webhook has no JWT to fall back on.
+    #
+    # NOTE: backend-plan.md and the original change spec describe a separate
+    # `shops` table holding shop credentials and suggest a JOIN here. That
+    # table does not exist in the current schema (see backend/db/schema.sql);
+    # erp_hash is currently a column on open_orders. Switch this query to
+    # `JOIN shops s ON s.id = o.shop_id` once that migration lands.
+    log("DB", f"SELECT order full row for ERP submit order_id={order['id']}")
+    full_order = await db.fetchrow(
+        """
+        SELECT id, shop_id, request_id, carool_diagnosis_id,
+               license_plate, diagnosis, erp_hash
+        FROM open_orders
+        WHERE id = $1
+        """,
+        order["id"],
+    )
+    if not full_order:
+        # Should be impossible — we just updated the same row above.
+        log_error(
+            "carool_webhook",
+            f"order vanished between carool_result update and ERP re-fetch order_id={order['id']}",
+        )
+        return {"ack": True}
+
+    try:
+        await _submit_to_erp(
+            full_order,
+            full_order["shop_id"],
+            full_order["erp_hash"],
+            db,
+        )
+    except Exception as e:
+        # Carool retries on any non-2xx response, which we never want — the
+        # mechanic's order is now stuck in 'pending_carool' and a human needs
+        # to retry the ERP submission manually. Surface it loudly in logs.
+        log_error(
+            "carool_webhook",
+            f"ERP submit failed after carool merge order_id={order['id']}: {e}; "
+            f"acking carool to prevent retries — manual ERP re-submit required",
+        )
+        return {"ack": True}
+
+    _firestore_signal(request.app, full_order["shop_id"], str(full_order["id"]), "waiting")
+    log("WEBHOOK/carool", f"ack order_id={order['id']} status=waiting (ERP submitted)")
     return {"ack": True}
