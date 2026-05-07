@@ -45,6 +45,7 @@ export type Screen =
       wheelCount?: number | null;
       /** ERP flag indicating whether the Carool photo flow is required (1 = required). */
       caroolNeeded?: number | null;
+      existingLines?: Array<{ wheel: string; action: number; reason: number }>;
     }
   | {
       name: "declined-request";

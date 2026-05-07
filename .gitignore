@@ -6,3 +6,5 @@ guidelines/
 .claude/
 .local/
 quick-tools.md
+.env
+backend/.env

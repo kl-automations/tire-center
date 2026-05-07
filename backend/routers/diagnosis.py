@@ -43,6 +43,23 @@ _ERP_WHEEL_TO_CAROOL: dict[str, str] = {
     "rear-right":  "REAR_RIGHT",
 }
 
+_LEGACY_ACTION_TO_CODE_KEY: dict[str, str] = {
+    "replacement": "replacement",
+    "puncture": "puncture",
+    "repair": "puncture",
+    "relocation": "relocation",
+    "rim_repair": "rim_repair",
+    "balancing": "balancing",
+    "tpms_valve": "tpms_valve",
+    "sensor": "sensor",
+}
+
+_LEGACY_REASON_TO_CODE_KEY: dict[str, str] = {
+    "wear": "wear",
+    "damage": "damage",
+    "fitment": "fitment",
+}
+
 
 def _coerce_jsonb(value) -> dict:
     """
@@ -82,8 +99,105 @@ def _build_mechanic_inputs(body: DiagnosisRequest) -> dict:
         },
     }
 
+async def _load_code_maps(db) -> tuple[dict[int, int], dict[str, int], dict[int, tuple[int, int]], dict[str, tuple[int, int]]]:
+    action_rows = await db.fetch("SELECT code, label_he FROM erp_action_codes")
+    reason_rows = await db.fetch("SELECT code, linked_action_code, label_he FROM erp_reason_codes")
+    valid_action_codes = {int(row["code"]): int(row["code"]) for row in action_rows}
+    action_by_label = {str(row["label_he"]).strip(): int(row["code"]) for row in action_rows if row["label_he"]}
+    valid_reason_codes = {
+        int(row["code"]): (int(row["code"]), int(row["linked_action_code"]))
+        for row in reason_rows
+    }
+    reason_by_label = {
+        str(row["label_he"]).strip(): (int(row["code"]), int(row["linked_action_code"]))
+        for row in reason_rows
+        if row["label_he"]
+    }
+    return valid_action_codes, action_by_label, valid_reason_codes, reason_by_label
 
-async def _submit_to_erp(order, shop_id: str, erp_hash: str, db) -> None:
+
+def _resolve_action_code(
+    raw_action: int | str,
+    valid_action_codes: dict[int, int],
+    action_by_label: dict[str, int],
+) -> int | None:
+    if isinstance(raw_action, int):
+        return raw_action if raw_action in valid_action_codes else None
+    if isinstance(raw_action, str):
+        stripped = raw_action.strip()
+        if stripped.isdigit():
+            as_int = int(stripped)
+            return as_int if as_int in valid_action_codes else None
+        return action_by_label.get(stripped)
+    return None
+
+
+def _resolve_reason_code(
+    raw_reason: int | str | None,
+    action_code: int,
+    valid_reason_codes: dict[int, tuple[int, int]],
+    reason_by_label: dict[str, tuple[int, int]],
+) -> int:
+    if raw_reason is None:
+        return 0
+    if isinstance(raw_reason, int):
+        resolved = valid_reason_codes.get(raw_reason)
+        if resolved and resolved[1] == action_code:
+            return resolved[0]
+        return 0
+    if isinstance(raw_reason, str):
+        stripped = raw_reason.strip()
+        if stripped.isdigit():
+            as_int = int(stripped)
+            resolved = valid_reason_codes.get(as_int)
+            if resolved and resolved[1] == action_code:
+                return resolved[0]
+            return 0
+        resolved = reason_by_label.get(stripped)
+        if resolved and resolved[1] == action_code:
+            return resolved[0]
+    return 0
+
+
+def _normalize_tires_actions(
+    tires: dict[str, list[dict]],
+    valid_action_codes: dict[int, int],
+    action_by_label: dict[str, int],
+    valid_reason_codes: dict[int, tuple[int, int]],
+    reason_by_label: dict[str, tuple[int, int]],
+) -> dict[str, list[dict]]:
+    normalized: dict[str, list[dict]] = {}
+    for wheel, actions in (tires or {}).items():
+        out: list[dict] = []
+        for action in actions or []:
+            raw_action = action.get("action")
+            action_code = _resolve_action_code(raw_action, valid_action_codes, action_by_label)
+            if action_code is None and isinstance(raw_action, str):
+                legacy_label = _LEGACY_ACTION_TO_CODE_KEY.get(raw_action)
+                if legacy_label:
+                    action_code = action_by_label.get(legacy_label)
+            if action_code is None:
+                continue
+            raw_reason = action.get("reason")
+            reason_code = _resolve_reason_code(raw_reason, action_code, valid_reason_codes, reason_by_label)
+            if reason_code == 0 and isinstance(raw_reason, str):
+                legacy_reason = _LEGACY_REASON_TO_CODE_KEY.get(raw_reason)
+                if legacy_reason:
+                    resolved = reason_by_label.get(legacy_reason)
+                    if resolved and resolved[1] == action_code:
+                        reason_code = resolved[0]
+            out.append({
+                "action": action_code,
+                "reason": reason_code,
+                "transfer_target": action.get("transfer_target"),
+                "remarks": action.get("remarks"),
+            })
+        if out:
+            normalized[wheel] = out
+    return normalized
+
+
+async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db) -> None:
     """
     Forward a stored diagnosis to the ERP and persist the result.
 
@@ -106,21 +220,40 @@ async def _submit_to_erp(order, shop_id: str, erp_hash: str, db) -> None:
     """
     diagnosis = _coerce_jsonb(order["diagnosis"])
     mechanic_inputs = diagnosis.get("mechanic_inputs") or {}
+    (
+        valid_action_codes,
+        action_by_label,
+        valid_reason_codes,
+        reason_by_label,
+    ) = await _load_code_maps(db)
 
     erp_payload = {
         "request_id": order["request_id"],
         "mileage": mechanic_inputs.get("mileage_update"),
         "front_alignment": bool(mechanic_inputs.get("front_alignment", False)),
+        "front_alignment_code": 6 if mechanic_inputs.get("front_alignment") else None,
         "carool_id": order["carool_diagnosis_id"],
         "license_plate": order["license_plate"],
         # Defensive copy — we mutate the per-wheel action lists below to
         # append Carool predictions, and we don't want to scribble on the
         # caller's dict if they happen to be reusing it.
-        "tires": {
-            wheel: list(actions or [])
-            for wheel, actions in (mechanic_inputs.get("tires") or {}).items()
-        },
+        "tires": _normalize_tires_actions(
+            mechanic_inputs.get("tires") or {},
+            valid_action_codes,
+            action_by_label,
+            valid_reason_codes,
+            reason_by_label,
+        ),
     }
+    remarks = None
+    if car_data.get("mileage_overridden"):
+        actual = car_data.get("actual_mileage")
+        last = car_data.get("last_mileage")
+        remarks = f"KM entered: {actual} | Last KM on file: {last}"
+    if remarks:
+        for actions in erp_payload["tires"].values():
+            for action in actions:
+                action["remarks"] = remarks
 
     carool_result = diagnosis.get("carool_result")
     if isinstance(carool_result, dict):
@@ -203,7 +336,7 @@ async def submit_diagnosis(
     db = request.app.state.db
     log("DB", f"SELECT open_orders for order_id={body.order_id}")
     order_row = await db.fetchrow(
-        "SELECT id, request_id, carool_diagnosis_id, license_plate FROM open_orders WHERE id = $1 AND shop_id = $2",
+        "SELECT id, request_id, carool_diagnosis_id, license_plate, car_data FROM open_orders WHERE id = $1 AND shop_id = $2",
         body.order_id, shop["shop_id"],
     )
     if not order_row:
@@ -222,7 +355,13 @@ async def submit_diagnosis(
         "diagnosis": {"mechanic_inputs": _build_mechanic_inputs(body)},
     }
 
-    await _submit_to_erp(order_for_submit, shop["shop_id"], shop["erp_hash"], db)
+    await _submit_to_erp(
+        order_for_submit,
+        _coerce_jsonb(order_row["car_data"]),
+        shop["shop_id"],
+        shop["erp_hash"],
+        db,
+    )
 
     return {"ack": True}
 

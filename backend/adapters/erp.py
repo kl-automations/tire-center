@@ -41,6 +41,16 @@ _NAMESPACE    = "http://tempuri.org"
 _SOAP_ENV_NS  = "http://schemas.xmlsoap.org/soap/envelope/"
 _TIMEOUT_S    = 15.0
 
+_LOCATION_TO_WHEEL = {
+    "1": "front-left",
+    "2": "front-right",
+    "3": "rear-right",
+    "4": "rear-left",
+    "5": "spare-tire",
+    "7": "rear-left-inner",
+    "8": "rear-right-inner",
+}
+
 
 # ── httpx client (lazy singleton) ─────────────────────────────────────────────
 
@@ -243,6 +253,7 @@ async def lookup_car(
     mileage: int | None,
     shop_id: str,
     erp_hash: str,
+    override_km: int | None = None,
 ) -> dict:
     """
     Look up a vehicle by licence plate and return ERP car + tyre data.
@@ -260,10 +271,10 @@ async def lookup_car(
     Returns:
         dict with at minimum:
             recognized (bool), request_id (str), ownership_id (str),
-            tire_level (str), wheel_count (int), tire_sizes (dict),
-            carool_needed (bool), last_mileage (int|None)
+            tire_level (int|None), wheel_count (int|None), tire_sizes (dict),
+            carool_needed (int, 0 or 1), last_mileage (int|None)
     """
-    km = mileage if mileage else 0
+    km = override_km if override_km is not None else (mileage if mileage else 0)
     body = (
         f"<tem:userCode>{_x(shop_id)}</tem:userCode>"
         f"<tem:password>{_x(erp_hash)}</tem:password>"
@@ -281,8 +292,26 @@ async def lookup_car(
         raise
     log("ADAPTER/erp", f"Apply ReturnCode={response.ReturnCode} ApplyId={response.ApplyId}")
     log("ADAPTER/erp", f"Apply raw response: {response}")
+    existing_lines: list[dict] = []
+    for line in response._element.iter():
+        tag = line.tag.rsplit("}", 1)[-1]
+        if tag == "DiagnosisLine":
+            action = None
+            reason = 0
+            location = None
+            for child in line:
+                child_tag = child.tag.rsplit("}", 1)[-1]
+                if child_tag == "ActionCode" and child.text:
+                    action = int(child.text)
+                elif child_tag == "ReasonCode" and child.text:
+                    reason = int(child.text)
+                elif child_tag == "TireLocation" and child.text:
+                    location = child.text.strip()
+            wheel = _LOCATION_TO_WHEEL.get(location)
+            if action and wheel:
+                existing_lines.append({"wheel": wheel, "action": action, "reason": reason})
     return {
-        "recognized": str(response.ReturnCode) == "1",
+        "recognized": str(response.ReturnCode) in ("1", "2"),
         "request_id": response.ApplyId,
         "ownership_id": response.Company,
         "car_model": response.CarModel,
@@ -292,9 +321,10 @@ async def lookup_car(
             "rear": response.RearTireSize,
         },
         "erp_message": response.ReturnMessage,
-        "tire_level": None,
-        "wheel_count": None,
-        "carool_needed": None,
+        "tire_level": int(response.TireLevel) if response.TireLevel else None,
+        "wheel_count": int(response.WheelCount) if response.WheelCount else None,
+        "carool_needed": 1 if str(response.CaroolNeeded).lower() == "true" else 0,
+        "existing_lines": existing_lines,
     }
 
 
@@ -302,7 +332,7 @@ async def get_last_mileage(
     license_plate: str,
     shop_id: str,
     erp_hash: str,
-) -> int | None:
+) -> dict:
     """
     Fetch the last recorded odometer reading for a vehicle from the ERP.
 
@@ -327,8 +357,11 @@ async def get_last_mileage(
         erp_hash:      The ERP session hash from the JWT (password).
 
     Returns:
-        The last recorded mileage as int when ReturnCode == "1", otherwise
-        None (no history on record or any error response).
+        {
+            "last_mileage": int | None,
+            "max_mileage": int | None,
+        }
+        The ERP-returned mileage values when ReturnCode == "1", otherwise nulls.
     """
     body = (
         f"<tem:userCode>{_x(shop_id)}</tem:userCode>"
@@ -352,31 +385,23 @@ async def get_last_mileage(
         f"GetLastMileage ReturnCode={response.ReturnCode} ReturnMessage={response.ReturnMessage}",
     )
     if str(response.ReturnCode) == "1":
-        return int(response.ReturnMessage) if response.ReturnMessage else None
-    return None
+        max_mileage_raw = response.AdditionalData
+        max_mileage = (
+            int(max_mileage_raw)
+            if max_mileage_raw and max_mileage_raw.strip().isdigit()
+            else None
+        )
+        return {
+            "last_mileage": int(response.ReturnMessage) if response.ReturnMessage else None,
+            "max_mileage": max_mileage,
+        }
+    return {
+        "last_mileage": None,
+        "max_mileage": None,
+    }
 
 
 # ── Diagnosis ────────────────────────────────────────────────────────────────
-
-# Confirmed against ERP GetActionTable / GetReasonTable responses 2026-05-04.
-# ActionCode: what operation is being done
-_ACTION_CODE = {
-    "replacement":  3,  # החלפת צמיג
-    "puncture":     1,  # תיקון תקר
-    "relocation":   2,  # העברה
-    "rim_repair":   5,  # יישור ג'אנט
-    "front_alignment": 6,  # כיוון פרונט
-    "balancing":    7,  # איזון גלגלים
-    "tpms_valve":   8,  # שסתום
-    "sensor":       9,  # חיישן
-}
-
-# ReasonCode: why (linked_action_code=3 for all — replacement only)
-_REASON_CODE = {
-    "wear":    30,  # בלאי
-    "damage":  40,  # נזק
-    "fitment": 50,  # התאמה
-}
 
 _TIRE_LOCATION_CODE: dict[str, int] = {
     "front-left":        1,
@@ -414,12 +439,9 @@ async def submit_diagnosis(
     """
     Forward a completed service diagnosis to the ERP via SendDiagnose SOAP.
 
-    Translates the frontend per-wheel action payload into the ERP's flat
-    DiagnosisLine shape: each (wheel × action) becomes a single line with
-    ActionCode + TireLocation pulled from the lookup tables. Sensor /
-    balancing / rim-repair / relocation / TPMS-valve actions have no ERP
-    code yet and are silently skipped. Front-alignment, when set, becomes
-    a final line with TireLocation = 6 (no-location).
+    Translates the per-wheel action payload into the ERP's flat DiagnosisLine
+    shape. Each (wheel × action) becomes a line; ActionCode / ReasonCode are
+    expected to already be resolved by the router.
 
     On ERP acceptance the caller sets open_orders.status = 'waiting'.
     The ERP will later fire POST /api/webhook/erp with the approval decision.
@@ -440,24 +462,14 @@ async def submit_diagnosis(
     for wheel, actions in payload["tires"].items():
         location_code = _TIRE_LOCATION_CODE.get(wheel, _NO_LOCATION_CODE)
         for action in actions:
-            kind = action.get("action")
-            if kind == "replacement" and action.get("reason"):
-                action_code = _ACTION_CODE["replacement"]
-                reason_code = _REASON_CODE[action["reason"]]
-                remarks = action.get("reason") or ""
-            elif kind == "puncture":
-                action_code = _ACTION_CODE["puncture"]
-                reason_code = 0
-                remarks = ""
-            elif kind in ("relocation", "rim_repair", "balancing", "tpms_valve", "sensor"):
-                action_code = _ACTION_CODE[kind]
-                reason_code = 0
-                remarks = ""
-            else:
+            action_code = action.get("action")
+            if action_code is None:
                 continue
+            reason_code = action.get("reason") or 0
+            remarks = action.get("remarks") or ""
             lines.append({
-                "ActionCode":   action_code,
-                "ReasonCode":   reason_code,
+                "ActionCode":   int(action_code),
+                "ReasonCode":   int(reason_code),
                 "TireLocation": location_code,
                 "CaRoolStatus": carool_status,
                 "CaRoolId":     carool_id,
@@ -465,9 +477,9 @@ async def submit_diagnosis(
                 "IsApproved":   False,
             })
 
-    if payload.get("front_alignment"):
+    if payload.get("front_alignment_code"):
         lines.append({
-            "ActionCode":   _ACTION_CODE["front_alignment"],
+            "ActionCode":   int(payload["front_alignment_code"]),
             "ReasonCode":   0,
             "TireLocation": _NO_LOCATION_CODE,
             "CaRoolStatus": "0",
@@ -479,7 +491,7 @@ async def submit_diagnosis(
     last_mileage = int(payload.get("mileage") or 0)
     diagnosis_xml = (
         "<tem:Diagnosis>"
-        f"<tem:LastMileage>{last_mileage}</tem:LastMileage>"
+        f"<tem:UserMileage>{last_mileage}</tem:UserMileage>"
         "<tem:DiagnosisLines>"
         + "".join(_diagnosis_line_xml(line) for line in lines)
         + "</tem:DiagnosisLines>"

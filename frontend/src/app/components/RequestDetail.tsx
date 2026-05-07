@@ -8,10 +8,21 @@ import {
   STATUS_STYLES,
   addDismissedOrderId,
   mapOrdersResponse,
+  useCodes,
   type OpenRequest,
   type WheelWork,
 } from "./OpenRequests";
+import type { ActionCodeItem, ReasonCodeItem } from "./TirePopup";
 import { translateQualityTier } from "../qualityTier";
+
+type LabeledRow = { label_he?: string | null; label_ar?: string | null; label_ru?: string | null };
+function labelFor(item: LabeledRow | undefined, language: string): string {
+  if (!item) return "";
+  const lang = language?.split("-")[0] ?? "he";
+  if (lang === "ar" && item.label_ar && item.label_ar.trim().length > 0) return item.label_ar;
+  if (lang === "ru" && item.label_ru && item.label_ru.trim().length > 0) return item.label_ru;
+  return item.label_he || "";
+}
 
 const WHEEL_POS_KEYS: Record<string, string> = {
   "front-right": "wheels.frontRight",
@@ -28,20 +39,23 @@ function WheelDetailPopup({
   onClose,
   wheelPosition,
   work,
+  actions,
+  reasons,
+  language,
 }: {
   isOpen: boolean;
   onClose: () => void;
   wheelPosition: string;
   work: WheelWork;
+  actions: ActionCodeItem[];
+  reasons: ReasonCodeItem[];
+  language: string;
 }) {
   const { t } = useTranslation();
   if (!isOpen) return null;
 
-  const services = [
-    { labelKey: "services.puncture" as const, active: work.puncture },
-    { labelKey: "services.balancing" as const, active: work.balancing },
-    { labelKey: "services.sensor" as const, active: work.sensor },
-  ];
+  const actionByCode = new Map<number, ActionCodeItem>(actions.map((a) => [a.code, a]));
+  const reasonByCode = new Map<number, ReasonCodeItem>(reasons.map((r) => [r.code, r]));
 
   const approvalLabel =
     work.approval === "full"
@@ -81,31 +95,49 @@ function WheelDetailPopup({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground">{t("requestDetail.reason")}</label>
-            <div className="w-full px-4 py-3 bg-muted border border-border rounded-lg text-foreground">
-              {work.reason}
+          {work.replacementReason && (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">{t("requestDetail.reason")}</label>
+              <div className="w-full px-4 py-3 bg-muted border border-border rounded-lg text-foreground">
+                {work.replacementReason}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="space-y-3">
-            {services.map((s) => (
-              <div
-                key={s.labelKey}
-                className="flex items-center justify-between bg-background rounded-xl px-4 py-3 border border-border"
-              >
-                <span className="font-semibold text-foreground">{t(s.labelKey)}</span>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                    s.active
-                      ? "bg-primary/10 dark:bg-blue-400/15 text-primary dark:text-blue-400"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {s.active ? t("common.yes") : t("common.no")}
-                </span>
-              </div>
-            ))}
+            {work.actions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center">—</p>
+            ) : (
+              work.actions.map((action, i) => {
+                const actionLabel = labelFor(actionByCode.get(action.code), language);
+                const reasonLabel =
+                  typeof action.reason === "number"
+                    ? labelFor(reasonByCode.get(action.reason), language)
+                    : "";
+                const targetLabel = action.transferTarget
+                  ? WHEEL_POS_KEYS[action.transferTarget]
+                    ? t(WHEEL_POS_KEYS[action.transferTarget])
+                    : action.transferTarget
+                  : "";
+                const text = action.transferTarget
+                  ? `${actionLabel || t("tirePopup.sectionRelocation")} → ${targetLabel}`
+                  : reasonLabel
+                    ? `${actionLabel} | ${reasonLabel}`
+                    : actionLabel;
+                if (!text) return null;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between bg-background rounded-xl px-4 py-3 border border-border"
+                  >
+                    <span className="font-semibold text-foreground">{text}</span>
+                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-primary/10 dark:bg-blue-400/15 text-primary dark:text-blue-400">
+                      {t("common.yes")}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -191,7 +223,8 @@ function ConfirmationPopup({
  * navigates back to `open-requests` on close or confirm.
  */
 export function RequestDetail() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const codes = useCodes();
   const { screen, navigate } = useNavigation();
   const [detailWheel, setDetailWheel] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -226,7 +259,7 @@ export function RequestDetail() {
           return;
         }
         const data = await res.json();
-        const [mapped] = mapOrdersResponse([data]);
+        const [mapped] = mapOrdersResponse([data], codes.actions, codes.reasons, i18n.language);
         setRequest(mapped ?? null);
       } catch {
         if (!cancelled) setRequest(null);
@@ -238,7 +271,7 @@ export function RequestDetail() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, codes, i18n.language]);
 
   if (screen.name !== "request-detail") return null;
 
@@ -358,6 +391,9 @@ export function RequestDetail() {
           onClose={() => setDetailWheel(null)}
           wheelPosition={detailWheel!}
           work={currentWheelWork}
+          actions={codes.actions}
+          reasons={codes.reasons}
+          language={i18n.language}
         />
       )}
 

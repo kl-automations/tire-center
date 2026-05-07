@@ -41,6 +41,10 @@ const SUFFIX: Record<Exclude<PlateType, "civilian">, string> = {
 
 const mono = { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" as const };
 
+type SubmitToCarOptions = {
+  lastMileageHint?: number | null;
+};
+
 interface LicensePlateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -71,7 +75,11 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   // `null` covers all "skip validation" cases: no history (ERP ReturnCode='1'),
   // network/ERP error, response not yet returned, or no LP-blur fired yet.
   const [lastMileage, setLastMileage] = useState<number | null>(null);
+  const [maxMileage, setMaxMileage] = useState<number | null>(null);
   const [showMileagePopup, setShowMileagePopup] = useState(false);
+  const [mileageWarningMessage, setMileageWarningMessage] = useState<string>(
+    "הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!",
+  );
   // Track the in-flight request (plate it was issued for + its AbortController)
   // so a stale response from a previous LP doesn't overwrite a fresh one, and
   // so changing the LP cancels the obsolete request before kicking a new one.
@@ -100,6 +108,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     // the underlying value has been invalidated for any reason. Pending is
     // treated as skip-validation, matching the spec.
     setLastMileage(null);
+    setMaxMileage(null);
 
     const controller = new AbortController();
     lastMileageRequestRef.current = { plate, controller };
@@ -115,13 +124,16 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { last_mileage?: number | null } | null) => {
+      .then((data: { last_mileage?: number | null; max_mileage?: number | null } | null) => {
         // Stale-response guard: another blur (or LP edit) has happened since
         // we issued this request, so its result is no longer relevant.
         if (lastMileageRequestRef.current?.plate !== plate) return;
-        const value =
+        const lastMileageValue =
           data && typeof data.last_mileage === "number" ? data.last_mileage : null;
-        setLastMileage(value);
+        const maxMileageValue =
+          data && typeof data.max_mileage === "number" ? data.max_mileage : null;
+        setLastMileage(lastMileageValue);
+        setMaxMileage(maxMileageValue);
       })
       .catch(() => {
         // Spec: any failure (timeout, ERP error) silently skips validation.
@@ -150,7 +162,9 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     plate: string,
     parsedMileage: number | null,
     trimmedMileage: string,
+    options: SubmitToCarOptions = {},
   ) => {
+    const { lastMileageHint = null } = options;
     const genericFallback = "שגיאה בבדיקת הרכב. נסו שוב.";
 
     setIsSubmitting(true);
@@ -165,6 +179,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         body: JSON.stringify({
           license_plate: plate,
           mileage: parsedMileage,
+          last_mileage_hint: lastMileageHint,
         }),
       });
 
@@ -180,6 +195,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         tire_level?: string | null;
         wheel_count?: number | null;
         carool_needed?: number | null;
+        existing_lines?: Array<{ wheel: string; action: number; reason: number }>;
       };
       let data: CarLookupResponse | null = null;
       try {
@@ -206,6 +222,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           tireLevel: data.tire_level ?? null,
           wheelCount: typeof data.wheel_count === "number" ? data.wheel_count : null,
           caroolNeeded: typeof data.carool_needed === "number" ? data.carool_needed : null,
+          existingLines: Array.isArray(data.existing_lines) ? data.existing_lines : [],
         });
       } else {
         const reason =
@@ -240,11 +257,23 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       Number.isFinite(parsedMileage) &&
       parsedMileage < lastMileage
     ) {
+      setMileageWarningMessage("הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!");
       setShowMileagePopup(true);
       return;
     }
 
-    await submitToCar(plate, parsedMileage, trimmedMileage);
+    if (
+      maxMileage !== null &&
+      parsedMileage !== null &&
+      Number.isFinite(parsedMileage) &&
+      parsedMileage > maxMileage
+    ) {
+      setMileageWarningMessage("הקילומטרז' שהוזן גבוה מהמקסימום המותר לרכב זה");
+      setShowMileagePopup(true);
+      return;
+    }
+
+    await submitToCar(plate, parsedMileage, trimmedMileage, { lastMileageHint: null });
   };
 
   const handleProceedAnyway = async () => {
@@ -253,7 +282,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     const trimmedMileage = mileage.trim();
     const parsedMileage = trimmedMileage ? parseInt(trimmedMileage, 10) : null;
     setShowMileagePopup(false);
-    await submitToCar(plate, parsedMileage, trimmedMileage);
+    await submitToCar(plate, parsedMileage, trimmedMileage, { lastMileageHint: lastMileage });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,6 +296,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       lastMileageRequestRef.current = null;
     }
     setLastMileage(null);
+    setMaxMileage(null);
   };
 
   const handleMileageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -274,6 +304,14 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   };
 
   if (!isOpen) return null;
+
+  const trimmedEnteredMileage = mileage.trim();
+  const parsedEnteredMileage = trimmedEnteredMileage ? parseInt(trimmedEnteredMileage, 10) : null;
+  const isMileageAboveMax =
+    maxMileage !== null &&
+    parsedEnteredMileage !== null &&
+    Number.isFinite(parsedEnteredMileage) &&
+    parsedEnteredMileage > maxMileage;
 
   const bgMain = PLATE_BG_MAIN[plateType];
   const text = PLATE_TEXT[plateType];
@@ -414,11 +452,16 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
             />
             <span className="text-sm text-muted-foreground shrink-0">{t("acceptedRequest.km")}</span>
           </div>
+          {isMileageAboveMax && (
+            <p className="text-sm text-red-500">
+              {"קילומטרז' גבוה מהמקסימום המותר לרכב זה"}
+            </p>
+          )}
 
           <button
             type="button"
             onClick={handleContinue}
-            disabled={!licensePlate.trim() || !mileage.trim() || isSubmitting}
+            disabled={!licensePlate.trim() || !mileage.trim() || isSubmitting || isMileageAboveMax}
             className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
           >
             {isSubmitting ? (
@@ -451,7 +494,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           <h3 className="text-2xl font-bold text-foreground mb-3">שים לב!</h3>
           <div className="space-y-1 mb-6">
             <p className="text-foreground">
-              {"הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!"}
+              {mileageWarningMessage}
             </p>
             <p className="text-foreground">
               {"אנא וודא שהוזן קילומטרז' תקין"}

@@ -30,24 +30,27 @@ export type ReplacementReason = "wear" | "damage" | "fitment";
  * Both shapes are persisted in `open_orders.diagnosis` JSONB.
  */
 export interface WheelData {
-  /** Reason for tyre replacement. `null` when the tyre is not being replaced. */
-  replacementReason: ReplacementReason | null;
-  /** Whether a TPMS sensor is being replaced. */
-  sensor: boolean;
-  /** Whether a TPMS valve stem is being replaced. */
-  tpmsValve: boolean;
-  /** Whether wheel balancing is being performed. */
-  balancing: boolean;
-  /** Whether rim repair is being performed. */
-  rimRepair: boolean;
-  /** Whether a puncture repair is being performed. Disabled when `replacementReason` is set. */
-  puncture: boolean;
-  /** Target wheel position when relocating a tyre. `null` if not relocating. */
+  selectedActionCodes: number[];
+  selectedReasonCodes: number[];
+  reasonActionMap: Record<number, number>;
   movedToWheel: string | null;
-  /** Primary action mode; drives which UI section is expanded in TirePopup. */
   mode: TireIssueMode;
-  /** Human-readable summary of the work, used in RequestDetail / history display. */
   reason: string;
+}
+
+export interface ActionCodeItem {
+  code: number;
+  label_he?: string;
+  label_ar?: string;
+  label_ru?: string;
+}
+
+export interface ReasonCodeItem {
+  code: number;
+  linked_action_code: number;
+  label_he?: string;
+  label_ar?: string;
+  label_ru?: string;
 }
 
 interface TirePopupProps {
@@ -65,6 +68,8 @@ interface TirePopupProps {
   spareTireEnabled?: boolean;
   wheelCount?: VehicleWheelCount;
   initialData?: WheelData;
+  actions: ActionCodeItem[];
+  reasons: ReasonCodeItem[];
 }
 
 const WHEEL_POS_KEYS: Record<string, string> = {
@@ -76,8 +81,6 @@ const WHEEL_POS_KEYS: Record<string, string> = {
   "rear-left-inner":  "wheels.rearLeftInner",
   "spare-tire":       "wheels.spareTire",
 };
-
-const REPLACEMENT_REASONS: ReplacementReason[] = ["wear", "damage", "fitment"];
 
 function otherWheelPositions(
   current: string,
@@ -120,24 +123,20 @@ export function TirePopup({
   spareTireEnabled = false,
   wheelCount = 4,
   initialData,
+  actions,
+  reasons,
 }: TirePopupProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
-  const [replacementReason, setReplacementReason] = useState<ReplacementReason | null>(null);
-  const [sensor, setSensor] = useState(false);
-  const [tpmsValve, setTpmsValve] = useState(false);
-  const [balancing, setBalancing] = useState(false);
-  const [rimRepair, setRimRepair] = useState(false);
-  const [puncture, setPuncture] = useState(false);
+  const [selectedActionCodes, setSelectedActionCodes] = useState<number[]>([]);
+  const [selectedReasonCodes, setSelectedReasonCodes] = useState<number[]>([]);
+  const [reasonActionMap, setReasonActionMap] = useState<Record<number, number>>({});
   const [movedToWheel, setMovedToWheel] = useState<string | null>(null);
 
   const reset = useCallback(() => {
-    setReplacementReason(initialData?.replacementReason ?? null);
-    setSensor(initialData?.sensor ?? false);
-    setTpmsValve(initialData?.tpmsValve ?? false);
-    setBalancing(initialData?.balancing ?? false);
-    setRimRepair(initialData?.rimRepair ?? false);
-    setPuncture(initialData?.puncture ?? false);
+    setSelectedActionCodes(initialData?.selectedActionCodes ?? []);
+    setSelectedReasonCodes(initialData?.selectedReasonCodes ?? []);
+    setReasonActionMap(initialData?.reasonActionMap ?? {});
     setMovedToWheel(initialData?.movedToWheel ?? null);
   }, [initialData]);
 
@@ -147,32 +146,26 @@ export function TirePopup({
 
   if (!isOpen) return null;
 
-  const hasReplacement = replacementReason !== null;
-  const effectivePuncture = puncture && !hasReplacement;
-
   const canContinue =
-    hasReplacement ||
-    sensor || tpmsValve || balancing || rimRepair || effectivePuncture ||
+    selectedActionCodes.length > 0 ||
+    selectedReasonCodes.length > 0 ||
     movedToWheel !== null;
 
   const handleContinue = () => {
     if (!canContinue) return;
-    const mode: TireIssueMode = hasReplacement
+    const mode: TireIssueMode = selectedReasonCodes.length > 0
       ? "replacement"
       : movedToWheel
         ? "relocation"
         : "repair";
 
     onSubmit(wheelPosition, {
-      replacementReason,
-      sensor,
-      tpmsValve,
-      balancing,
-      rimRepair,
-      puncture: effectivePuncture,
+      selectedActionCodes,
+      selectedReasonCodes,
+      reasonActionMap,
       movedToWheel,
       mode,
-      reason: replacementReason ?? "",
+      reason: "",
     });
     reset();
     onClose();
@@ -183,6 +176,22 @@ export function TirePopup({
 
   const title = WHEEL_POS_KEYS[wheelPosition] ? t(WHEEL_POS_KEYS[wheelPosition]) : wheelPosition;
   const relocationTargets = otherWheelPositions(wheelPosition, spareTireEnabled, wheelCount);
+  const actionCodeToReasons = new Map<number, ReasonCodeItem[]>();
+  for (const reason of reasons) {
+    if (!actionCodeToReasons.has(reason.linked_action_code)) {
+      actionCodeToReasons.set(reason.linked_action_code, []);
+    }
+    actionCodeToReasons.get(reason.linked_action_code)?.push(reason);
+  }
+  const displayActions = actions.filter((action) => action.code !== 6 && action.code !== 2);
+  const reasonedActions = displayActions.filter((action) => (actionCodeToReasons.get(action.code)?.length ?? 0) > 0);
+  const toggleActions = displayActions.filter((action) => (actionCodeToReasons.get(action.code)?.length ?? 0) === 0);
+  const labelFor = (item: { label_he?: string; label_ar?: string; label_ru?: string }) => {
+    const language = i18n.language?.split("-")[0] ?? "he";
+    if (language === "ar" && item.label_ar && item.label_ar.trim().length > 0) return item.label_ar;
+    if (language === "ru" && item.label_ru && item.label_ru.trim().length > 0) return item.label_ru;
+    return item.label_he || "";
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -204,52 +213,60 @@ export function TirePopup({
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
 
-        {/* החלפה */}
+        {reasonedActions.map((action) => (
+          <section key={action.code}>
+            <SectionLabel>{labelFor(action)}</SectionLabel>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {(actionCodeToReasons.get(action.code) ?? []).map((reason) => {
+                const active = selectedReasonCodes.includes(reason.code);
+                return (
+                  <button
+                    key={reason.code}
+                    type="button"
+                    onClick={() => {
+                      setSelectedReasonCodes((prev) =>
+                        prev.includes(reason.code) ? prev.filter((code) => code !== reason.code) : [...prev, reason.code]
+                      );
+                      setSelectedActionCodes((prev) =>
+                        prev.includes(action.code) ? prev : [...prev, action.code]
+                      );
+                      setReasonActionMap((prev) => ({ ...prev, [reason.code]: action.code }));
+                    }}
+                    className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                      active
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                        : "border-border bg-card text-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    {labelFor(reason)}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+
         <section>
-          <SectionLabel>{t("tirePopup.sectionReplacement")}</SectionLabel>
-          <div className="grid grid-cols-3 gap-2 mt-2">
-            {REPLACEMENT_REASONS.map((r) => (
+          <SectionLabel>{t("tirePopup.sectionRepair")}</SectionLabel>
+          <div className="flex flex-col gap-2 mt-2">
+            {toggleActions.map((action) => (
               <button
-                key={r}
+                key={action.code}
                 type="button"
-                onClick={() => setReplacementReason(replacementReason === r ? null : r)}
+                onClick={() =>
+                  setSelectedActionCodes((prev) =>
+                    prev.includes(action.code)
+                      ? prev.filter((code) => code !== action.code)
+                      : [...prev, action.code]
+                  )
+                }
                 className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
-                  replacementReason === r
+                  selectedActionCodes.includes(action.code)
                     ? "border-primary bg-primary text-primary-foreground shadow-sm"
                     : "border-border bg-card text-foreground hover:border-primary/50"
                 }`}
               >
-                {t(`tirePopup.replacementReason.${r}`)}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* תיקון */}
-        <section>
-          <SectionLabel>{t("tirePopup.sectionRepair")}</SectionLabel>
-          <div className="flex flex-col gap-2 mt-2">
-            {([
-              { key: "sensor",    label: t("services.sensor"),    value: sensor,    set: setSensor },
-              { key: "tpmsValve", label: t("services.tpmsValve"), value: tpmsValve, set: setTpmsValve },
-              { key: "balancing", label: t("services.balancing"), value: balancing, set: setBalancing },
-              { key: "rimRepair", label: t("services.rimRepair"), value: rimRepair, set: setRimRepair },
-              { key: "puncture",  label: t("services.puncture"),  value: effectivePuncture, set: setPuncture, disabled: hasReplacement },
-            ] as const).map(({ key, label, value, set, disabled }) => (
-              <button
-                key={key}
-                type="button"
-                disabled={disabled}
-                onClick={() => !disabled && set(!value)}
-                className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
-                  disabled
-                    ? "opacity-35 border-border bg-card text-foreground cursor-not-allowed"
-                    : value
-                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                      : "border-border bg-card text-foreground hover:border-primary/50"
-                }`}
-              >
-                {label}
+                {labelFor(action)}
               </button>
             ))}
           </div>

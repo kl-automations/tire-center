@@ -19,10 +19,40 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from logging_utils import log, log_error
 from middleware.auth import get_current_shop
-from models.schemas import CarLookupRequest, LastMileageRequest, LastMileageResponse
+from models.schemas import CarLookupRequest, CodesResponse, LastMileageRequest, LastMileageResponse
 from adapters import erp
 
 router = APIRouter(prefix="/api", tags=["car"])
+
+@router.get(
+    "/codes",
+    summary="Fetch ERP action/reason codes",
+    description=(
+        "Returns the live action and reason code tables directly from the DB. "
+        "No auth required and no caching is applied."
+    ),
+    response_model=CodesResponse,
+)
+async def get_codes(request: Request):
+    db = request.app.state.db
+    actions_rows = await db.fetch(
+        """
+        SELECT code, label_he, label_ar, label_ru
+        FROM erp_action_codes
+        ORDER BY code
+        """
+    )
+    reasons_rows = await db.fetch(
+        """
+        SELECT code, label_he, label_ar, label_ru, linked_action_code
+        FROM erp_reason_codes
+        ORDER BY linked_action_code, code
+        """
+    )
+    return {
+        "actions": [dict(row) for row in actions_rows],
+        "reasons": [dict(row) for row in reasons_rows],
+    }
 
 
 @router.post(
@@ -77,7 +107,11 @@ async def car_lookup(
     """
     log(
         "ROUTER/car",
-        f"car_lookup received shop_id={shop['shop_id']} plate={body.license_plate} mileage={body.mileage}",
+        (
+            "car_lookup received "
+            f"shop_id={shop['shop_id']} plate={body.license_plate} mileage={body.mileage} "
+            f"last_mileage_hint={body.last_mileage_hint}"
+        ),
     )
 
     db = request.app.state.db
@@ -129,15 +163,26 @@ async def car_lookup(
         )
         return {
             "order_id": str(existing["id"]),
+            "existing_lines": [],
             **stored_car_data,
         }
 
+    should_override_km = (
+        body.last_mileage_hint is not None
+        and body.mileage is not None
+        and body.mileage < body.last_mileage_hint
+    )
+    override_km = body.last_mileage_hint + 1 if should_override_km else None
     car_data = await erp.lookup_car(
         license_plate=body.license_plate,
         mileage=body.mileage,
         shop_id=shop["shop_id"],
         erp_hash=shop["erp_hash"],
+        override_km=override_km,
     )
+    if should_override_km:
+        car_data["actual_mileage"] = body.mileage
+        car_data["mileage_overridden"] = True
 
     if not car_data["recognized"]:
         log_error(
@@ -209,7 +254,7 @@ async def car_last_mileage(
         f"last_mileage received shop_id={shop['shop_id']} plate={body.license_plate}",
     )
     try:
-        last_mileage = await erp.get_last_mileage(
+        mileage_data = await erp.get_last_mileage(
             license_plate=body.license_plate,
             shop_id=shop["shop_id"],
             erp_hash=shop["erp_hash"],
@@ -222,10 +267,17 @@ async def car_last_mileage(
             "car",
             f"GetLastMileage failed plate={body.license_plate}: {e}; returning last_mileage=null",
         )
-        return LastMileageResponse(last_mileage=None)
+        return LastMileageResponse(last_mileage=None, max_mileage=None)
 
     log(
         "ROUTER/car",
-        f"last_mileage success plate={body.license_plate} value={last_mileage}",
+        (
+            "last_mileage success "
+            f"plate={body.license_plate} value={mileage_data.get('last_mileage')} "
+            f"max={mileage_data.get('max_mileage')}"
+        ),
     )
-    return LastMileageResponse(last_mileage=last_mileage)
+    return LastMileageResponse(
+        last_mileage=mileage_data.get("last_mileage"),
+        max_mileage=mileage_data.get("max_mileage"),
+    )

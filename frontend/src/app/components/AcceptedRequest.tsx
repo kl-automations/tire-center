@@ -4,13 +4,13 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { AxlesDiagram } from "./AxlesDiagram";
 import { LicensePlate } from "./LicensePlate";
-import { TirePopup, type WheelData } from "./TirePopup";
+import { TirePopup, type ActionCodeItem, type ReasonCodeItem, type WheelData } from "./TirePopup";
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 
 /** Wire-shape of one entry in `DiagnosisRequest.tires[wheel]`. */
 type DiagnosisTireAction = {
-  action: "replacement" | "puncture" | "sensor" | "tpms_valve" | "balancing" | "rim_repair" | "relocation";
-  reason?: string;
+  action: number;
+  reason?: number;
   transfer_target?: string;
 };
 
@@ -45,41 +45,28 @@ function affectedWheelsFromDiagnosisTires(
   const result: Record<string, WheelData> = {};
   for (const [wheel, actions] of Object.entries(tires)) {
     const data: WheelData = {
-      replacementReason: null,
-      sensor: false,
-      tpmsValve: false,
-      balancing: false,
-      rimRepair: false,
-      puncture: false,
+      selectedActionCodes: [],
+      selectedReasonCodes: [],
+      reasonActionMap: {},
       movedToWheel: null,
       mode: "repair",
       reason: "",
     };
     for (const a of actions) {
       switch (a.action) {
-        case "replacement":
-          data.replacementReason = (a.reason as WheelData["replacementReason"]) ?? null;
-          data.mode = "replacement";
-          if (a.reason) data.reason = a.reason;
+        case 2:
+          if (a.transfer_target) {
+            data.movedToWheel = a.transfer_target;
+            data.mode = "relocation";
+          }
           break;
-        case "puncture":
-          data.puncture = true;
-          break;
-        case "sensor":
-          data.sensor = true;
-          break;
-        case "tpms_valve":
-          data.tpmsValve = true;
-          break;
-        case "balancing":
-          data.balancing = true;
-          break;
-        case "rim_repair":
-          data.rimRepair = true;
-          break;
-        case "relocation":
-          data.movedToWheel = a.transfer_target ?? null;
-          data.mode = "relocation";
+        default:
+          data.selectedActionCodes.push(a.action);
+          if (typeof a.reason === "number" && a.reason > 0) {
+            data.selectedReasonCodes.push(a.reason);
+            data.reasonActionMap[a.reason] = a.action;
+            data.mode = "replacement";
+          }
           break;
       }
     }
@@ -118,6 +105,7 @@ export function AcceptedRequest() {
     tireLevel,
     wheelCount: wheelCountHint,
     caroolNeeded,
+    existingLines,
   } = screen;
   const wheelCount = resolveVehicleWheelCount(
     licensePlate,
@@ -149,6 +137,8 @@ export function AcceptedRequest() {
   // of truth — the worst case from this default is a single failed request
   // that the gated handlers respond to with `{ skipped: true }`.
   const [caroolEnabled, setCaroolEnabled] = useState(true);
+  const [actionCodes, setActionCodes] = useState<ActionCodeItem[]>([]);
+  const [reasonCodes, setReasonCodes] = useState<ReasonCodeItem[]>([]);
 
   useEffect(() => {
     navigator.mediaDevices?.getUserMedia({ video: true })
@@ -168,6 +158,49 @@ export function AcceptedRequest() {
             data.carool_enabled,
           );
         }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(affectedWheels).length > 0 || !existingLines?.length) return;
+    const restored: Record<string, WheelData> = {};
+    for (const line of existingLines) {
+      if (!restored[line.wheel]) {
+        restored[line.wheel] = {
+          selectedActionCodes: [],
+          selectedReasonCodes: [],
+          reasonActionMap: {},
+          movedToWheel: null,
+          mode: "repair",
+          reason: "",
+        };
+      }
+      const data = restored[line.wheel];
+      if (line.reason > 0) {
+        data.selectedReasonCodes.push(line.reason);
+        data.selectedActionCodes.push(line.action);
+        data.reasonActionMap[line.reason] = line.action;
+        data.mode = "replacement";
+      } else {
+        data.selectedActionCodes.push(line.action);
+      }
+    }
+    setAffectedWheels(restored);
+    sessionStorage.setItem(`affected-wheels-${licensePlate}`, JSON.stringify(restored));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/codes")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setActionCodes(Array.isArray(data.actions) ? data.actions : []);
+        setReasonCodes(Array.isArray(data.reasons) ? data.reasons : []);
       })
       .catch(() => {});
     return () => {
@@ -240,7 +273,7 @@ export function AcceptedRequest() {
       );
       const photoDoneSet = new Set(photoDone);
       const missing = Object.entries(affectedWheels)
-        .filter(([wheel, data]) => !NO_CAROOL_WHEELS.has(wheel) && (data.replacementReason !== null || data.puncture))
+        .filter(([wheel, data]) => !NO_CAROOL_WHEELS.has(wheel) && data.selectedReasonCodes.length > 0)
         .filter(([wheel]) => !photoDoneSet.has(wheel))
         .map(([wheel]) => wheel);
       if (missing.length > 0) {
@@ -252,13 +285,24 @@ export function AcceptedRequest() {
     const tires: Record<string, DiagnosisTireAction[]> = {};
     for (const [wheel, data] of Object.entries(affectedWheels)) {
       const actions: DiagnosisTireAction[] = [];
-      if (data.replacementReason) actions.push({ action: "replacement", reason: data.replacementReason });
-      if (data.puncture) actions.push({ action: "puncture" });
-      if (data.sensor) actions.push({ action: "sensor" });
-      if (data.tpmsValve) actions.push({ action: "tpms_valve" });
-      if (data.balancing) actions.push({ action: "balancing" });
-      if (data.rimRepair) actions.push({ action: "rim_repair" });
-      if (data.movedToWheel) actions.push({ action: "relocation", transfer_target: data.movedToWheel });
+      const reasonBackedActionCodes = new Set(
+        data.selectedReasonCodes
+          .map((reasonCode) => data.reasonActionMap[reasonCode])
+          .filter((actionCode): actionCode is number => typeof actionCode === "number")
+      );
+      for (const actionCode of data.selectedActionCodes) {
+        if (reasonBackedActionCodes.has(actionCode)) continue;
+        actions.push({ action: actionCode });
+      }
+      for (const reasonCode of data.selectedReasonCodes) {
+        const actionCode = data.reasonActionMap[reasonCode];
+        if (typeof actionCode === "number") {
+          actions.push({ action: actionCode, reason: reasonCode });
+        }
+      }
+      if (data.movedToWheel) {
+        actions.push({ action: 2, transfer_target: data.movedToWheel });
+      }
       if (actions.length > 0) tires[wheel] = actions;
     }
 
@@ -525,6 +569,8 @@ export function AcceptedRequest() {
         spareTireEnabled={spareTire}
         wheelCount={wheelCount}
         initialData={popupWheel ? affectedWheels[popupWheel] : undefined}
+        actions={actionCodes}
+        reasons={reasonCodes}
       />
     </div>
   );

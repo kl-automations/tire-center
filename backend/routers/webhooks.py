@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from logging_utils import log, log_error
 from models.schemas import ErpWebhookPayload, CaroolWebhookPayload
 from config import CAROOL_API_KEY
-from routers.diagnosis import _submit_to_erp
+from routers.diagnosis import _coerce_jsonb, _submit_to_erp
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 
@@ -75,26 +75,40 @@ def _firestore_signal(app, shop_id: str, order_id: str, status: str):
     ),
     response_description="Acknowledgement that the status update was persisted.",
 )
-async def erp_webhook(payload: ErpWebhookPayload, request: Request):
+async def erp_webhook(request: Request):
     """
     Process an ERP per-line approval payload, derive per-wheel + overall status,
     and propagate the result to Firestore.
 
     Steps:
-      1. Look up the order by str(payload.request_id) — DB stores request_id as text.
+      1. Look up the order by payload.request_id (text key in open_orders).
       2. Group DiagnoseData by Location.
-      3. For each non-front-alignment location, compute "full" / "puncture-only" / "none".
-      4. For the front-alignment line (Location='6', Action='2'), record its Confirmed flag.
-      5. Compute overall status from all non-alignment items:
+      3. Build a per-wheel ActionCode → bool map (`action_approvals`) so the
+         frontend can render the exact per-line decision for every action,
+         not just the rolled-up wheel summary.
+      4. For each non-front-alignment location, compute "full" / "puncture-only" / "none".
+      5. For the front-alignment line (Location='6', Action='2'), record its Confirmed flag.
+      6. Compute overall status from all non-alignment items:
             all '1' → 'approved', all '0' → 'declined', mix → 'partly-approved'.
-      6. Persist under open_orders.diagnosis['erp_response'], update status / declined_at,
-         and signal Firestore.
+      7. Persist under open_orders.diagnosis['erp_response'] (including
+         `action_approvals`), update status / declined_at, and signal Firestore.
 
     TODO: verify X-ERP-Hash header once auth method confirmed with ERP team (open Q4).
 
     Raises:
         404: No order with the given request_id found in the database.
     """
+    raw = await request.body()
+    raw_text = raw.decode("utf-8", errors="replace")
+    log("WEBHOOK/erp", f"raw body: {raw_text}")
+    try:
+        import json as _json
+        data = _json.loads(raw.decode("utf-8", errors="replace"))
+        payload = ErpWebhookPayload(**data)
+    except Exception as e:
+        log_error("erp_webhook", f"payload parse failed: {e} | raw={raw_text[:500]}")
+        raise HTTPException(status_code=400, detail=str(e))
+
     log(
         "WEBHOOK/erp",
         f"received request_id={payload.request_id} lines={len(payload.DiagnoseData)}",
@@ -104,7 +118,7 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     log("DB", f"SELECT open_orders WHERE request_id={payload.request_id}")
     order = await db.fetchrow(
         "SELECT id, shop_id FROM open_orders WHERE request_id = $1",
-        str(payload.request_id),
+        payload.request_id,
     )
     if not order:
         log_error("erp_webhook", f"order not found for request_id={payload.request_id}")
@@ -113,6 +127,20 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     items_by_location: dict[str, list] = {}
     for item in payload.DiagnoseData:
         items_by_location.setdefault(item.Location, []).append(item)
+
+    # Per-wheel approval map keyed by ActionCode string. Mirrors what the ERP
+    # actually returned in DiagnoseData so the frontend can render exact
+    # per-line approvals without re-deriving them from the wheels summary.
+    action_approvals: dict[str, dict[str, bool]] = {}
+    for item in payload.DiagnoseData:
+        if item.Location == _FRONT_ALIGNMENT_LOCATION:
+            continue
+        position = _LOCATION_TO_POSITION.get(item.Location)
+        if not position:
+            continue
+        if position not in action_approvals:
+            action_approvals[position] = {}
+        action_approvals[position][item.Action] = item.Confirmed == "1"
 
     wheels: dict[str, str] = {}
     front_alignment_confirmed = False
@@ -171,6 +199,7 @@ async def erp_webhook(payload: ErpWebhookPayload, request: Request):
     erp_response = {
         "wheels": wheels,
         "front_alignment_confirmed": front_alignment_confirmed,
+        "action_approvals": action_approvals,
     }
 
     declined_at = datetime.now(timezone.utc) if status == "declined" else None
@@ -288,7 +317,7 @@ async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
     full_order = await db.fetchrow(
         """
         SELECT id, shop_id, request_id, carool_diagnosis_id,
-               license_plate, diagnosis, erp_hash
+               license_plate, diagnosis, car_data, erp_hash
         FROM open_orders
         WHERE id = $1
         """,
@@ -305,6 +334,7 @@ async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
     try:
         await _submit_to_erp(
             full_order,
+            _coerce_jsonb(full_order["car_data"]),
             full_order["shop_id"],
             full_order["erp_hash"],
             db,

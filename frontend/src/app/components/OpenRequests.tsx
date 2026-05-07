@@ -5,6 +5,7 @@ import { ArrowRight, Loader2, Search } from "lucide-react";
 import type { VehicleWheelCount } from "../vehicleWheelLayout";
 import type { QualityTier } from "../qualityTier";
 import { LicensePlate, type PlateType } from "./LicensePlate";
+import type { ActionCodeItem, ReasonCodeItem } from "./TirePopup";
 
 /**
  * Lifecycle status of a service order.
@@ -29,30 +30,44 @@ export type RequestStatus = "open" | "waiting" | "approved" | "partly-approved" 
 export type WheelApproval = "full" | "puncture-only" | "none";
 
 /**
+ * One action persisted under `open_orders.diagnosis.tires[position]`,
+ * preserved verbatim as the numeric ERP codes the backend resolved at
+ * submission time. The frontend never hard-codes these values — both
+ * `code` and `reason` are looked up against the live `/api/codes`
+ * response (`erp_action_codes` / `erp_reason_codes`).
+ */
+export interface WheelAction {
+  /** ERP action code (PK in `erp_action_codes`). */
+  code: number;
+  /** ERP reason code (PK in `erp_reason_codes`), present for replacement-style actions. */
+  reason?: number;
+  /** Wheel position the tyre was relocated to, present only when this is a relocation. */
+  transferTarget?: string | null;
+}
+
+/**
  * All work recorded for a single wheel position during one service visit.
  *
  * This shape lives inside `OpenRequest.wheels` keyed by position string
- * (e.g. `"front-left"`, `"rear-right-inner"`).
- * It is persisted in `open_orders.diagnosis` JSONB and kept in sync with
- * `WheelData` from TirePopup.tsx (which is the edit-time representation).
+ * (e.g. `"front-left"`, `"rear-right-inner"`). It is persisted in
+ * `open_orders.diagnosis` JSONB and kept in sync with `WheelData` from
+ * TirePopup.tsx (which is the edit-time representation).
+ *
+ * The raw per-action records are kept on `actions`; rendering code looks
+ * up labels against the live `/api/codes` response so we never bake any
+ * specific ERP code into the UI.
  */
 export interface WheelWork {
-  /** Human-readable summary of the work performed on this wheel. */
-  reason: string;
-  /** Whether a puncture repair was performed. */
-  puncture: boolean;
-  /** Whether wheel balancing was performed. */
-  balancing: boolean;
-  /** Whether a TPMS sensor was replaced. */
-  sensor: boolean;
+  /** All actions performed on this wheel, preserved as raw ERP records. */
+  actions: WheelAction[];
   /** Manager's approval decision for this wheel, filled after ERP webhook fires. */
   approval: WheelApproval;
-  /** Reason for tyre replacement. `null` when no replacement was done. */
-  replacementReason?: "wear" | "damage" | "fitment" | null;
-  /** Whether a TPMS valve was replaced (separate from the sensor itself). */
-  tpmsValve?: boolean;
-  /** Whether rim repair was performed. */
-  rimRepair?: boolean;
+  /**
+   * Replacement-reason label resolved from the numeric reason code via
+   * `/api/codes`. `null` when no replacement-style action was performed
+   * or when the reason couldn't be resolved (unknown code / no codes loaded).
+   */
+  replacementReason?: string | null;
   /** Target wheel position when a tyre was relocated. `null` if not relocated. */
   movedToWheel?: string | null;
   /**
@@ -62,6 +77,60 @@ export interface WheelWork {
   caroolStatus?: string | null;
   /** Carool session ID linked to this wheel's photo analysis. */
   caroolId?: string | null;
+  /**
+   * Per-action approval flags returned by the ERP webhook, keyed by ERP
+   * ActionCode as a string (e.g. `"3"`, `"4"`, `"23"`). `true` = approved,
+   * `false` = declined, missing key = ERP did not return a decision for
+   * that action. Sourced from `erp_response.action_approvals[position]`.
+   */
+  actionApprovals?: Record<string, boolean>;
+}
+
+/**
+ * Pick the right localized label out of an `erp_action_codes` /
+ * `erp_reason_codes` row. Mirrors the helper of the same name in
+ * `TirePopup.tsx` so the read-side and the edit-side render identical
+ * text. Falls back to Hebrew when the requested language is missing.
+ */
+type LabeledRow = { label_he?: string | null; label_ar?: string | null; label_ru?: string | null };
+function labelFor(item: LabeledRow | undefined, language: string): string {
+  if (!item) return "";
+  const lang = language?.split("-")[0] ?? "he";
+  if (lang === "ar" && item.label_ar && item.label_ar.trim().length > 0) return item.label_ar;
+  if (lang === "ru" && item.label_ru && item.label_ru.trim().length > 0) return item.label_ru;
+  return item.label_he || "";
+}
+
+export interface OrderCodes {
+  actions: ActionCodeItem[];
+  reasons: ReasonCodeItem[];
+}
+
+/**
+ * Fetch the live `/api/codes` table (action + reason codes) once per
+ * mount. Public endpoint, no auth header. Returns empty arrays until
+ * the request completes; consumers that depend on labels should treat
+ * an empty `actions` array as "not loaded yet" rather than "no codes".
+ */
+export function useCodes(): OrderCodes {
+  const [codes, setCodes] = useState<OrderCodes>({ actions: [], reasons: [] });
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/codes")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setCodes({
+          actions: Array.isArray(data.actions) ? data.actions : [],
+          reasons: Array.isArray(data.reasons) ? data.reasons : [],
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return codes;
 }
 
 /**
@@ -169,7 +238,10 @@ const WHEEL_POS_KEYS: Record<string, string> = {
 
 function buildLineItems(
   request: OpenRequest,
-  t: (key: string, opts?: Record<string, unknown>) => string
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  actions: ActionCodeItem[],
+  reasons: ReasonCodeItem[],
+  language: string,
 ): { text: string; approved: boolean | null }[] {
   const items: { text: string; approved: boolean | null }[] = [];
 
@@ -181,44 +253,68 @@ function buildLineItems(
     });
   }
 
+  // Build the lookup tables from the live `/api/codes` response. Empty
+  // arrays just mean codes haven't loaded yet — every lookup will miss
+  // and the loop below skips actions whose label can't be resolved.
+  const actionByCode = new Map<number, ActionCodeItem>(actions.map((a) => [a.code, a]));
+  const reasonByCode = new Map<number, ReasonCodeItem>(reasons.map((r) => [r.code, r]));
+  const replacementActionCodes = new Set(reasons.map((r) => r.linked_action_code));
+
   for (const [pos, work] of Object.entries(request.wheels)) {
     const wheelLabel = WHEEL_POS_KEYS[pos] ? t(WHEEL_POS_KEYS[pos]) : pos;
 
-    const actionApproved = (action: string): boolean => {
-      if (work.approval === "full") return true;
-      if (work.approval === "puncture-only") return action === "puncture";
-      return false;
+    // Look up the per-action decision the ERP returned for this wheel.
+    // While the order is still `waiting`, we deliberately skip the lookup
+    // and surface `null` so the UI shows the muted "no decision yet" style
+    // instead of a stale or guessed approval flag.
+    const actionApproved = (actionCode: number): boolean | null => {
+      if (request.status === "waiting") return null;
+      const val = work.actionApprovals?.[String(actionCode)];
+      return typeof val === "boolean" ? val : null;
     };
 
-    if (work.replacementReason) {
-      const reasonText = t(`tirePopup.replacementReason.${work.replacementReason}`);
-      const caroolPart = work.caroolId ? ` | ${[work.caroolStatus, work.caroolId].filter(Boolean).join(" ")}` : "";
-      items.push({
-        text: `${wheelLabel} | ${t("tirePopup.sectionReplacement")} | ${reasonText}${caroolPart}`,
-        approved: actionApproved("replacement"),
-      });
-    } else if (work.reason) {
-      // legacy reason without explicit replacementReason — skip (shown per-action below)
-    }
+    for (const action of work.actions) {
+      const approved = actionApproved(action.code);
+      const actionLabel = labelFor(actionByCode.get(action.code), language);
 
-    if (work.puncture) {
-      items.push({ text: `${wheelLabel} | ${t("services.puncture")}`, approved: actionApproved("puncture") });
-    }
-    if (work.sensor) {
-      items.push({ text: `${wheelLabel} | ${t("services.sensor")}`, approved: actionApproved("sensor") });
-    }
-    if (work.tpmsValve) {
-      items.push({ text: `${wheelLabel} | ${t("services.tpmsValve")}`, approved: actionApproved("tpmsValve") });
-    }
-    if (work.balancing) {
-      items.push({ text: `${wheelLabel} | ${t("services.balancing")}`, approved: actionApproved("balancing") });
-    }
-    if (work.rimRepair) {
-      items.push({ text: `${wheelLabel} | ${t("services.rimRepair")}`, approved: actionApproved("rimRepair") });
-    }
-    if (work.movedToWheel) {
-      const targetLabel = WHEEL_POS_KEYS[work.movedToWheel] ? t(WHEEL_POS_KEYS[work.movedToWheel]) : work.movedToWheel;
-      items.push({ text: `${wheelLabel} | ${t("tirePopup.sectionRelocation")} → ${targetLabel}`, approved: actionApproved("relocation") });
+      // Relocation lines carry a `transferTarget` and render with the
+      // arrow-to-target suffix. Fall back to the i18n relocation header
+      // when the action label hasn't loaded yet so the row never shows
+      // a blank prefix.
+      if (action.transferTarget) {
+        const targetLabel = WHEEL_POS_KEYS[action.transferTarget]
+          ? t(WHEEL_POS_KEYS[action.transferTarget])
+          : action.transferTarget;
+        const prefix = actionLabel || t("tirePopup.sectionRelocation");
+        items.push({
+          text: `${wheelLabel} | ${prefix} → ${targetLabel}`,
+          approved,
+        });
+        continue;
+      }
+
+      // Replacement-style action: append the resolved reason label, plus
+      // the optional Carool status/id suffix carried over from before.
+      if (replacementActionCodes.has(action.code)) {
+        const reasonLabel =
+          typeof action.reason === "number"
+            ? labelFor(reasonByCode.get(action.reason), language)
+            : "";
+        const caroolPart = work.caroolId
+          ? ` | ${[work.caroolStatus, work.caroolId].filter(Boolean).join(" ")}`
+          : "";
+        if (!actionLabel && !reasonLabel) continue;
+        const text = reasonLabel
+          ? `${wheelLabel} | ${actionLabel} | ${reasonLabel}${caroolPart}`
+          : `${wheelLabel} | ${actionLabel}${caroolPart}`;
+        items.push({ text, approved });
+        continue;
+      }
+
+      // Plain action — the DB label is the line's body. Skip silently
+      // if codes haven't loaded yet (re-render with codes will fill it).
+      if (!actionLabel) continue;
+      items.push({ text: `${wheelLabel} | ${actionLabel}`, approved });
     }
   }
 
@@ -288,10 +384,17 @@ function setSeenStatuses(map: Record<string, RequestStatus>): void {
   sessionStorage.setItem(SEEN_STATUSES_KEY, JSON.stringify(map));
 }
 
-/** Single action entry as stored in `open_orders.diagnosis.tires[position]`. */
+/**
+ * Single action entry as stored in `open_orders.diagnosis.tires[position]`.
+ *
+ * `action` and `reason` are numeric ERP codes — the backend resolves the
+ * original string labels submitted by the frontend to integer codes from
+ * `erp_action_codes` / `erp_reason_codes` before persisting (see
+ * `_normalize_tires_actions` in `backend/routers/diagnosis.py`).
+ */
 type RawAction = {
-  action?: string;
-  reason?: string;
+  action?: number;
+  reason?: number;
   transfer_target?: string | null;
 };
 
@@ -312,6 +415,7 @@ type RawOrderRow = {
     tires?: Record<string, RawAction[]> | null;
     erp_response?: {
       wheels?: Record<string, WheelApproval>;
+      action_approvals?: Record<string, Record<string, boolean>>;
     } | null;
   } | null;
 };
@@ -320,34 +424,74 @@ type RawOrderRow = {
  * Map the raw `GET /api/orders` response (or a single-row response wrapped in
  * an array) into the `OpenRequest[]` shape used by the UI.
  *
+ * `actions` and `reasons` are the live `/api/codes` rows — passed in so the
+ * function can stay outside React. The function uses them to:
+ *   1. Identify which action codes are "replacement-style" (any code with at
+ *      least one linked reason in `erp_reason_codes`).
+ *   2. Resolve the persisted reason code into a human-readable label
+ *      (`replacementReason`) in the requested `language`.
+ *
+ * No ERP code is hard-coded here — every code/label decision is driven by
+ * the DB tables. When `actions`/`reasons` are still loading (empty arrays),
+ * each `WheelWork` is built with `replacementReason: null` and the raw codes
+ * preserved on `actions[]`, so a re-render after `/api/codes` resolves can
+ * fill in the labels correctly.
+ *
  * `hasUpdate` is initialised to `false`; the caller is responsible for
  * comparing statuses against a previously-seen snapshot and flipping it on.
  */
-export function mapOrdersResponse(raw: unknown[]): OpenRequest[] {
+export function mapOrdersResponse(
+  raw: unknown[],
+  reasons: ReasonCodeItem[],
+  language: string,
+): OpenRequest[] {
+  // An action is "replacement-style" iff at least one reason is linked to
+  // it in erp_reason_codes. Mirrors TirePopup's `actionCodeToReasons` /
+  // `reasonedActions` logic so edit and read sides agree on which actions
+  // require a reason.
+  const replacementActionCodes = new Set(reasons.map((r) => r.linked_action_code));
+  const reasonByCode = new Map<number, ReasonCodeItem>(reasons.map((r) => [r.code, r]));
+
   const rows = Array.isArray(raw) ? raw : [];
   return rows.map((item) => {
     const row = (item ?? {}) as RawOrderRow;
     const tires = row.diagnosis?.tires ?? {};
     const erpWheels = row.diagnosis?.erp_response?.wheels ?? {};
+    const erpActionApprovals = row.diagnosis?.erp_response?.action_approvals ?? {};
 
     const wheels: Record<string, WheelWork> = {};
-    for (const [position, actions] of Object.entries(tires)) {
-      const list: RawAction[] = Array.isArray(actions) ? actions : [];
-      const replacement = list.find((a) => a?.action === "replacement");
-      const relocation = list.find((a) => a?.action === "relocation");
+    for (const [position, rawActions] of Object.entries(tires)) {
+      const list: RawAction[] = Array.isArray(rawActions) ? rawActions : [];
+      const wheelActions: WheelAction[] = list
+        .filter((a): a is RawAction & { action: number } => !!a && typeof a.action === "number")
+        .map((a) => ({
+          code: a.action,
+          reason: typeof a.reason === "number" ? a.reason : undefined,
+          transferTarget: a.transfer_target ?? null,
+        }));
+
+      // Pick the first replacement-style action and resolve its reason code
+      // to a localized label. Multiple replacements per wheel are unusual
+      // but harmless — the rendered list still shows every action.
+      const replacement = wheelActions.find(
+        (a) => replacementActionCodes.has(a.code) && typeof a.reason === "number",
+      );
       const replacementReason =
-        (replacement?.reason as "wear" | "damage" | "fitment" | undefined) ?? null;
+        replacement && typeof replacement.reason === "number"
+          ? labelFor(reasonByCode.get(replacement.reason), language) || null
+          : null;
+
+      // Relocation is identified by `transfer_target` presence, not by action
+      // code — `transfer_target` is set authoritatively at submission time by
+      // AcceptedRequest and is unambiguous regardless of what code the DB holds.
+      const relocation = wheelActions.find((a) => !!a.transferTarget);
 
       wheels[position] = {
-        reason: replacementReason ?? "",
-        puncture: list.some((a) => a?.action === "puncture"),
-        balancing: list.some((a) => a?.action === "balancing"),
-        sensor: list.some((a) => a?.action === "sensor"),
-        tpmsValve: list.some((a) => a?.action === "tpms_valve"),
-        rimRepair: list.some((a) => a?.action === "rim_repair"),
-        replacementReason,
-        movedToWheel: relocation?.transfer_target ?? null,
+        actions: wheelActions,
         approval: (erpWheels[position] ?? "none") as WheelApproval,
+        replacementReason,
+        movedToWheel: relocation?.transferTarget ?? null,
+        actionApprovals: erpActionApprovals[position],
       };
     }
 
@@ -425,6 +569,8 @@ interface UseOrdersSummaryResult {
  * mechanic actually opens the list.
  */
 export function useOrdersSummary(): UseOrdersSummaryResult {
+  const { i18n } = useTranslation();
+  const codes = useCodes();
   const [orders, setOrders] = useState<OpenRequest[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -441,7 +587,11 @@ export function useOrdersSummary(): UseOrdersSummaryResult {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const mapped = mapOrdersResponse(data?.orders ?? []);
+        const mapped = mapOrdersResponse(
+          data?.orders ?? [],
+          codes.reasons,
+          i18n.language,
+        );
         const dismissed = new Set(getDismissedOrderIds());
         const visible = mapped.filter((r) => !dismissed.has(r.id));
         if (!cancelled) {
@@ -459,7 +609,7 @@ export function useOrdersSummary(): UseOrdersSummaryResult {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [codes, i18n.language]);
 
   return useMemo(() => {
     const seen = getSeenStatuses();
@@ -491,7 +641,8 @@ type StatusFilter = "approved" | "waiting" | "declined";
  * on row tap.
  */
 export function OpenRequests() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const codes = useCodes();
   const { navigate } = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null);
@@ -513,7 +664,11 @@ export function OpenRequests() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const mapped = mapOrdersResponse(data?.orders ?? []);
+        const mapped = mapOrdersResponse(
+          data?.orders ?? [],
+          codes.reasons,
+          i18n.language,
+        );
 
         const dismissed = new Set(getDismissedOrderIds());
         const visible = mapped.filter((r) => !dismissed.has(r.id));
@@ -547,7 +702,7 @@ export function OpenRequests() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [codes, i18n.language]);
 
   const dismissRequest = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -654,7 +809,9 @@ export function OpenRequests() {
             filtered.map((request) => {
               const styles = STATUS_STYLES[request.status];
               const isExpanded = expandedId === request.id;
-              const lineItems = isExpanded ? buildLineItems(request, t) : [];
+              const lineItems = isExpanded
+                ? buildLineItems(request, t, codes.actions, codes.reasons, i18n.language)
+                : [];
               return (
                 <div
                   key={request.id}

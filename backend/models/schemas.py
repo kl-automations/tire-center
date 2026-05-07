@@ -6,7 +6,7 @@ JSON against them) and the OpenAPI schema source (FastAPI serialises them
 into /openapi.json, which powers Swagger UI at /docs and the Mintlify site).
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any
 
 
@@ -71,6 +71,13 @@ class CarLookupRequest(BaseModel):
         default=None,
         description="Current odometer reading in kilometres, as entered by the mechanic. Optional.",
     )
+    last_mileage_hint: int | None = Field(
+        default=None,
+        description=(
+            "Last mileage value already shown to the mechanic by the pre-check flow. "
+            "Used to safely override Apply KM when entered mileage is lower."
+        ),
+    )
 
 
 class LastMileageRequest(BaseModel):
@@ -95,6 +102,36 @@ class LastMileageResponse(BaseModel):
             "validation entirely when this is null."
         ),
     )
+    max_mileage: int | None = Field(
+        default=None,
+        description="Maximum allowed mileage for this vehicle. Null means no limit.",
+    )
+
+
+class ActionCodeItem(BaseModel):
+    """One ERP action code row as exposed to the frontend."""
+
+    code: int
+    label_he: str | None = ""
+    label_ar: str | None = ""
+    label_ru: str | None = ""
+
+
+class ReasonCodeItem(BaseModel):
+    """One ERP reason code row as exposed to the frontend."""
+
+    code: int
+    label_he: str | None = ""
+    label_ar: str | None = ""
+    label_ru: str | None = ""
+    linked_action_code: int
+
+
+class CodesResponse(BaseModel):
+    """Response shape for GET /api/codes."""
+
+    actions: list[ActionCodeItem]
+    reasons: list[ReasonCodeItem]
 
 
 # ---------- Carool ----------
@@ -128,17 +165,17 @@ class CaroolFinalizeRequest(BaseModel):
 class TireAction(BaseModel):
     """A single action performed on one tyre during a service visit."""
 
-    action: str = Field(
+    action: int | str = Field(
         description=(
-            "Action code. One of: 'replacement', 'repair', 'relocation', "
-            "'balancing', 'sensor', 'tpms_valve', 'rim_repair', 'puncture'."
+            "ERP action code integer. Legacy string action IDs are also accepted "
+            "for backward compatibility."
         )
     )
-    reason: str | None = Field(
+    reason: int | str | None = Field(
         default=None,
         description=(
-            "Human-readable reason for the action (e.g. 'wear', 'damage', 'fitment'). "
-            "Required when action='replacement'."
+            "ERP reason code integer when applicable. Legacy string reason IDs "
+            "are accepted for backward compatibility."
         ),
     )
     transfer_target: str | None = Field(
@@ -206,6 +243,7 @@ class ErpDiagnoseItem(BaseModel):
     originally submitted, plus an additional line for front-alignment when
     applicable (Action='2', Location='6').
     """
+    model_config = ConfigDict(extra="ignore")
 
     Action: str = Field(
         description=(
@@ -239,11 +277,10 @@ class ErpWebhookPayload(BaseModel):
     and writes a Firestore signal so the browser receives a live status update.
     """
 
-    request_id: int = Field(
+    request_id: str = Field(
         description=(
-            "The ERP's own reference ID for the service visit. Sent as an integer "
-            "by the ERP; the backend stores open_orders.request_id as text and "
-            "looks it up via str(request_id)."
+            "The ERP's own reference ID for the service visit. Stored in "
+            "open_orders.request_id as text and used directly for lookups."
         )
     )
     DiagnoseData: list[ErpDiagnoseItem] = Field(
