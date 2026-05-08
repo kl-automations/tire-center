@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Loader2, Search } from "lucide-react";
 import type { VehicleWheelCount } from "../vehicleWheelLayout";
@@ -643,7 +643,7 @@ type StatusFilter = "approved" | "waiting" | "declined";
 export function OpenRequests() {
   const { t, i18n } = useTranslation();
   const codes = useCodes();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -735,7 +735,7 @@ export function OpenRequests() {
       <div className="bg-primary p-4 shadow-md shrink-0">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate({ name: "dashboard" })}
+            onClick={() => navigate("/dashboard")}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />

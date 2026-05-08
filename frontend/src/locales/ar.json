@@ -18,7 +18,14 @@
       "chinese": "أساسي",
       "upgraded": "محسّن",
       "premium": "ممتاز"
-    }
+    },
+    "pressAgainToExit": "اضغط مرة أخرى للخروج"
+  },
+  "confirmLeave": {
+    "title": "لم يتم حفظ المعلومات!",
+    "subtitle": "اضغط على «متابعة» للحفظ",
+    "continue": "متابعة التشخيص",
+    "discard": "خروج وحذف التشخيص"
   },
   "wheels": {
     "frontRight": "أمامي أيمن",
@@ -137,7 +144,8 @@
     "mileageWarningTitle": "قراءة العداد لا تتطابق مع السجل",
     "mileageWarningLastReported": "آخر قراءة مسجّلة في النظام: {{lastMileage}} كم",
     "mileageWarningEditButton": "تصحيح قراءة العداد الحالية",
-    "caroolPhotosRequired": "يجب تصوير جميع الإطارات عبر Carool قبل الإرسال"
+    "caroolPhotosRequired": "يجب تصوير جميع الإطارات عبر Carool قبل الإرسال",
+    "diagnosisError": "حدث خطأ أثناء إرسال التشخيص. حاول مرة أخرى."
   },
   "declinedRequest": {
     "title": "تقرير جديد",

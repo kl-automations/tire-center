@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { FileText, FolderOpen, History, Menu } from "lucide-react";
 import { LicensePlateModal } from "./LicensePlateModal";
 import { ExportHistoryModal } from "./ExportHistoryModal";
 import { useOrdersSummary } from "./OpenRequests";
 import { SettingsMenu } from "./SettingsMenu";
+import { usePhoneBackSync } from "../usePhoneBackSync";
+import { useToast } from "./Toast";
 
 /**
  * Main hub screen shown after a successful login.
@@ -21,21 +23,33 @@ import { SettingsMenu } from "./SettingsMenu";
  */
 export function Dashboard() {
   const { t } = useTranslation();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isExportHistoryOpen, setIsExportHistoryOpen] = useState(false);
   const { counts: openRequestCounts, hasUnread: hasUnreadUpdates } = useOrdersSummary();
+  const { showToast, toast } = useToast();
+  const lastBackRef = useRef(0);
+
+  // Dashboard is the second root screen — Login pattern. First system back
+  // shows a toast; second within 2s lets the system handle it (PWA exit).
+  usePhoneBackSync(() => {
+    if (Date.now() - lastBackRef.current < 2000) return false;
+    lastBackRef.current = Date.now();
+    showToast(t("common.pressAgainToExit"));
+    return true;
+  });
 
   const handleNewRequest = () => {
     setIsModalOpen(true);
   };
 
   const handleOpenRequests = () => {
-    navigate({ name: "open-requests" });
+    navigate("/open-requests");
   };
 
   return (
+    <>
     <div className="size-full flex flex-col min-h-0">
       {/* Header */}
       <header className="bg-primary text-primary-foreground px-4 py-3 sm:px-6 sm:py-4 shadow-md shrink-0">
@@ -176,5 +190,7 @@ export function Dashboard() {
         onClose={() => setIsExportHistoryOpen(false)}
       />
     </div>
+    {toast}
+    </>
   );
 }

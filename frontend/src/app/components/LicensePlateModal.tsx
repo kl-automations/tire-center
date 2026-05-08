@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { TriangleAlert, X } from "lucide-react";
 import type { PlateType } from "./LicensePlate";
@@ -66,7 +66,7 @@ interface LicensePlateModalProps {
  */
 export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const { t } = useTranslation();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const [licensePlate, setLicensePlate] = useState("");
   const [plateType, setPlateType] = useState<PlateType>("civilian");
   const [mileage, setMileage] = useState("");
@@ -205,12 +205,15 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       }
 
       if (res.ok && data?.recognized === true) {
-        navigate({
-          name: "accepted-request",
+        const orderId = data.order_id ?? "";
+        // Seed the screen cache with all of the ERP-supplied props so the
+        // AcceptedRequest screen can hydrate synchronously on mount and
+        // — critically — survives a full page reload via sessionStorage.
+        const cachePayload = {
           plate: licensePlate,
           plateType,
           mileage: trimmedMileage,
-          order_id: data.order_id ?? "",
+          order_id: orderId,
           request_id: data.request_id,
           carModel: data.car_model,
           lastMileage: typeof data.last_mileage === "number" ? data.last_mileage : null,
@@ -223,15 +226,36 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           wheelCount: typeof data.wheel_count === "number" ? data.wheel_count : null,
           caroolNeeded: typeof data.carool_needed === "number" ? data.carool_needed : null,
           existingLines: Array.isArray(data.existing_lines) ? data.existing_lines : [],
-        });
+          frontAlignment: false,
+        };
+        try {
+          sessionStorage.setItem(`route-order-${orderId}`, JSON.stringify(cachePayload));
+        } catch {}
+        navigate(`/order/${encodeURIComponent(orderId)}`);
       } else {
         const reason =
           (data && typeof data.detail === "string" && data.detail) || genericFallback;
-        navigate({ name: "declined-request", plate: licensePlate, plateType, reason });
+        // Synthetic "declined" key — there's no real order_id, so we use a
+        // stable per-plate slug. Reload would reopen the same declined view.
+        const slug = `np-${encodeURIComponent(licensePlate)}`;
+        try {
+          sessionStorage.setItem(
+            `route-declined-${slug}`,
+            JSON.stringify({ plate: licensePlate, plateType, reason }),
+          );
+        } catch {}
+        navigate(`/order/${slug}/declined`);
       }
       onClose();
     } catch {
-      navigate({ name: "declined-request", plate: licensePlate, plateType, reason: genericFallback });
+      const slug = `np-${encodeURIComponent(licensePlate)}`;
+      try {
+        sessionStorage.setItem(
+          `route-declined-${slug}`,
+          JSON.stringify({ plate: licensePlate, plateType, reason: genericFallback }),
+        );
+      } catch {}
+      navigate(`/order/${slug}/declined`);
       onClose();
     } finally {
       setIsSubmitting(false);

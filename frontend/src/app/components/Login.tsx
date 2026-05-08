@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Sun, Moon, Globe, ArrowLeft } from "lucide-react";
 import { APP_LANGUAGES, type Language, useTheme } from "../ThemeContext";
+import { usePhoneBackSync } from "../usePhoneBackSync";
+import { useToast } from "./Toast";
 
 /** Short labels for the language pill */
 const LANG_ABBREV: Record<Language, string> = {
@@ -35,8 +37,20 @@ export function Login() {
   const [cooldownUntil, setCooldownUntil] = useState<number>(0);
   const [now, setNow] = useState<number>(Date.now());
   const langMenuRef = useRef<HTMLDivElement>(null);
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
+  const { showToast, toast } = useToast();
+  const lastBackRef = useRef(0);
+
+  // Root screen back-press: first press shows a toast, second within 2s
+  // allows the system back to proceed (default popstate handling exits the
+  // PWA on Android).
+  usePhoneBackSync(() => {
+    if (Date.now() - lastBackRef.current < 2000) return false;
+    lastBackRef.current = Date.now();
+    showToast(t("common.pressAgainToExit"));
+    return true;
+  });
 
   useEffect(() => {
     if (cooldownUntil <= Date.now()) return;
@@ -109,7 +123,7 @@ export function Login() {
       }
       const data: { token: string } = await res.json();
       localStorage.setItem("token", data.token);
-      navigate({ name: "dashboard" });
+      navigate("/dashboard", { replace: true });
     } catch {
       setCodeError(true);
     }
@@ -125,6 +139,7 @@ export function Login() {
   const cooldownSeconds = Math.ceil((cooldownUntil - now) / 1000);
 
   return (
+    <>
     <div className="min-h-screen flex items-center justify-center relative">
       {/* Top bar controls */}
       <div className="absolute top-4 start-4 flex items-center gap-2">
@@ -288,5 +303,7 @@ export function Login() {
         </div>
       </div>
     </div>
+    {toast}
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { getRoadWheelPositions, type VehicleWheelCount } from "../vehicleWheelLayout";
@@ -56,6 +56,21 @@ export interface ReasonCodeItem {
 interface TirePopupProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Called when the mechanic taps the in-popup ← arrow. Receives the
+   * popup's current dirty state so the parent can decide whether to show
+   * the discard-confirm modal or close the popup outright. `dirty` mirrors
+   * what `onDirtyChange` reports for this popup instance.
+   */
+  onAttemptClose?: (dirty: boolean) => void;
+  /**
+   * Notifies the parent whenever the popup's dirty state changes, so a
+   * single shared back-press handler in `AcceptedRequest` can decide
+   * whether to show the discard-confirm modal. Avoids attaching a second
+   * `usePhoneBackSync` listener inside the popup, which would otherwise
+   * accumulate phantom history states every time the popup opens.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
   wheelPosition: string;
   licensePlate: string;
   onSubmit: (wheelPosition: string, data: WheelData) => void;
@@ -116,6 +131,8 @@ function otherWheelPositions(
 export function TirePopup({
   isOpen,
   onClose,
+  onAttemptClose,
+  onDirtyChange,
   wheelPosition,
   onSubmit,
   onNavigateToCaroolCheck,
@@ -143,6 +160,34 @@ export function TirePopup({
   useEffect(() => {
     if (isOpen) reset();
   }, [isOpen, wheelPosition, reset]);
+
+  // Compare current popup state to the initialData snapshot to know if the
+  // user has touched anything since opening; drives the discard-confirm
+  // modal when they try to back out. The boolean is reported up to the
+  // parent via `onDirtyChange` so a single shared back-press handler can
+  // decide what to do.
+  const isDirty = useMemo(() => {
+    if (!isOpen) return false;
+    const initActions = (initialData?.selectedActionCodes ?? []).slice().sort();
+    const curActions = selectedActionCodes.slice().sort();
+    if (initActions.join(",") !== curActions.join(",")) return true;
+    const initReasons = (initialData?.selectedReasonCodes ?? []).slice().sort();
+    const curReasons = selectedReasonCodes.slice().sort();
+    if (initReasons.join(",") !== curReasons.join(",")) return true;
+    if ((initialData?.movedToWheel ?? null) !== movedToWheel) return true;
+    const initMap = JSON.stringify(initialData?.reasonActionMap ?? {});
+    const curMap = JSON.stringify(reasonActionMap);
+    if (initMap !== curMap) return true;
+    return false;
+  }, [isOpen, initialData, selectedActionCodes, selectedReasonCodes, reasonActionMap, movedToWheel]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const handleHeaderBack = () => {
+    onAttemptClose?.(isDirty);
+  };
 
   if (!isOpen) return null;
 
@@ -200,7 +245,7 @@ export function TirePopup({
         <div className="flex items-center justify-between">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleHeaderBack}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-5 h-5" />
@@ -307,7 +352,6 @@ export function TirePopup({
           {caroolEnabled ? t("tirePopup.continueToCheck") : t("common.continue")}
         </button>
       </div>
-
     </div>
   );
 }

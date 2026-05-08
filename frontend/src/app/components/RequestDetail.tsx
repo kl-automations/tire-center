@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Check, Loader2, X as XIcon } from "lucide-react";
 import { LicensePlate } from "./LicensePlate";
@@ -225,14 +225,15 @@ function ConfirmationPopup({
 export function RequestDetail() {
   const { t, i18n } = useTranslation();
   const codes = useCodes();
-  const { screen, navigate } = useNavigation();
+  const navigate = useNavigate();
+  const params = useParams<{ id: string }>();
   const [detailWheel, setDetailWheel] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [request, setRequest] = useState<OpenRequest | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
 
-  const id = screen.name === "request-detail" ? screen.id : null;
+  const id = params.id ?? null;
 
   useEffect(() => {
     if (!id) return;
@@ -273,7 +274,7 @@ export function RequestDetail() {
     };
   }, [id, codes, i18n.language]);
 
-  if (screen.name !== "request-detail") return null;
+  if (!id) return null;
 
   if (isLoading) {
     return (
@@ -300,7 +301,7 @@ export function RequestDetail() {
     console.log("Request confirmed:", request.id, "Notes:", notes);
     addDismissedOrderId(request.id);
     setShowConfirmation(false);
-    navigate({ name: "open-requests" });
+    navigate("/open-requests");
   };
 
   return (
@@ -309,7 +310,7 @@ export function RequestDetail() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
-            onClick={() => navigate({ name: "open-requests" })}
+            onClick={() => navigate("/open-requests")}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />

@@ -18,7 +18,14 @@
       "chinese": "בסיסי",
       "upgraded": "משודרג",
       "premium": "פרימיום"
-    }
+    },
+    "pressAgainToExit": "לחץ שוב כדי לצאת"
+  },
+  "confirmLeave": {
+    "title": "המידע לא נשמר!",
+    "subtitle": "לשמירה לחץ על המשך",
+    "continue": "המשך אבחנה",
+    "discard": "צא ומחק אבחנה"
   },
   "wheels": {
     "frontRight": "ימין קדמי",
@@ -137,7 +144,8 @@
     "mileageWarningTitle": "קילומטרז' לא תואם היסטוריה",
     "mileageWarningLastReported": "דיווח אחרון במערכת {{lastMileage}} ק\"מ",
     "mileageWarningEditButton": "תיקון לקילומטרז' עדכני",
-    "caroolPhotosRequired": "יש לצלם תמונות קארול לכל הגלגלים לפני השליחה"
+    "caroolPhotosRequired": "יש לצלם תמונות קארול לכל הגלגלים לפני השליחה",
+    "diagnosisError": "שגיאה בשליחת האבחון. נסו שוב."
   },
   "declinedRequest": {
     "title": "דיווח חדש",

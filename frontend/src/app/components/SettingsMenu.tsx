@@ -1,4 +1,4 @@
-import { useNavigation } from "../NavigationContext";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { X, Sun, Moon, LogOut, User, Globe } from "lucide-react";
 import { APP_LANGUAGES, useTheme } from "../ThemeContext";
@@ -19,7 +19,7 @@ interface SettingsMenuProps {
  */
 export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   const { t } = useTranslation();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
 
   const userCode = (() => {
@@ -39,8 +39,13 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
   const handleSignOut = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userCode");
+    // Clear any in-progress route caches so a stale session doesn't bleed
+    // into the next mechanic's login.
+    try {
+      sessionStorage.clear();
+    } catch {}
     onClose();
-    navigate({ name: "login" });
+    navigate("/", { replace: true });
   };
 
   if (!isOpen) return null;

@@ -1,24 +1,40 @@
-import { useNavigation } from "../NavigationContext";
+import { useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, ArrowRight } from "lucide-react";
 import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
-import { LicensePlate } from "./LicensePlate";
+import { LicensePlate, type PlateType } from "./LicensePlate";
+import { useScreenCache } from "../useScreenCache";
+
+interface DeclinedCache {
+  plate: string;
+  plateType: PlateType;
+  reason?: string;
+}
 
 /**
  * Screen shown when the ERP rejects a licence-plate lookup (vehicle not recognised
  * or service not approved at the time of lookup).
  *
- * Displays the licence plate, plate type, and the rejection reason from the ERP.
- * Provides a button to return to the dashboard.
- *
- * Navigation: reached from `LicensePlateModal` via `{ name: "declined-request" }`.
+ * Reads the plate / plateType / reason from `route-declined-{orderId}` in
+ * sessionStorage so a full page reload restores the same view. The route's
+ * `:orderId` segment is the synthetic slug `LicensePlateModal` writes when
+ * the ERP rejects (no real order exists yet).
  */
 export function DeclinedRequest() {
   const { t } = useTranslation();
-  const { screen, navigate } = useNavigation();
-  if (screen.name !== "declined-request") return null;
+  const navigate = useNavigate();
+  const params = useParams<{ orderId: string }>();
+  const orderId = params.orderId ?? "";
+  const [cache] = useScreenCache<DeclinedCache>(`route-declined-${orderId}`);
 
-  const { plate: licensePlate, plateType, reason } = screen;
+  useEffect(() => {
+    if (!cache) navigate("/dashboard", { replace: true });
+  }, [cache, navigate]);
+
+  if (!cache) return null;
+
+  const { plate: licensePlate, plateType, reason } = cache;
   const rejectionReason = reason ?? MOCK_REJECTION_REASON_EXAMPLE;
 
   return (
@@ -27,7 +43,7 @@ export function DeclinedRequest() {
       <div className="bg-primary p-4 shadow-md">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <button
-            onClick={() => navigate({ name: "dashboard" })}
+            onClick={() => navigate("/dashboard")}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6" />
@@ -58,7 +74,7 @@ export function DeclinedRequest() {
 
           {/* Back Button */}
           <button
-            onClick={() => navigate({ name: "dashboard" })}
+            onClick={() => navigate("/dashboard")}
             className="w-full bg-primary hover:bg-secondary text-primary-foreground py-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg font-semibold"
           >
             {t("declinedRequest.backHome")}

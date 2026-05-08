@@ -18,7 +18,14 @@
       "chinese": "Базовый",
       "upgraded": "Улучшенный",
       "premium": "Премиум"
-    }
+    },
+    "pressAgainToExit": "Нажмите ещё раз для выхода"
+  },
+  "confirmLeave": {
+    "title": "Данные не сохранены!",
+    "subtitle": "Нажмите «Продолжить», чтобы сохранить",
+    "continue": "Продолжить диагностику",
+    "discard": "Выйти и удалить диагноз"
   },
   "wheels": {
     "frontRight": "Переднее правое",
@@ -137,7 +144,8 @@
     "mileageWarningTitle": "Пробег не соответствует истории",
     "mileageWarningLastReported": "Последний зафиксированный пробег: {{lastMileage}} км",
     "mileageWarningEditButton": "Исправить актуальный пробег",
-    "caroolPhotosRequired": "Необходимо сфотографировать все колёса через Carool перед отправкой"
+    "caroolPhotosRequired": "Необходимо сфотографировать все колёса через Carool перед отправкой",
+    "diagnosisError": "Ошибка отправки диагноза. Попробуйте ещё раз."
   },
   "declinedRequest": {
     "title": "Новый отчет",

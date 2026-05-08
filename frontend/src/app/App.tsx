@@ -1,10 +1,10 @@
-import { NavigationProvider } from "./NavigationContext";
 import { ThemeProvider } from "./ThemeContext";
+import { AppRouter } from "./router";
 
 export default function App() {
   return (
     <ThemeProvider>
-      <NavigationProvider />
+      <AppRouter />
     </ThemeProvider>
   );
 }

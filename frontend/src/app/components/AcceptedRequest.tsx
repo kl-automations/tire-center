@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { AxlesDiagram } from "./AxlesDiagram";
-import { LicensePlate } from "./LicensePlate";
+import { LicensePlate, type PlateType } from "./LicensePlate";
 import { TirePopup, type ActionCodeItem, type ReasonCodeItem, type WheelData } from "./TirePopup";
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
+import { useScreenCache } from "../useScreenCache";
+import { usePhoneBackSync } from "../usePhoneBackSync";
+import { ConfirmModal } from "./ConfirmModal";
 
 /** Wire-shape of one entry in `DiagnosisRequest.tires[wheel]`. */
 type DiagnosisTireAction = {
@@ -13,6 +16,24 @@ type DiagnosisTireAction = {
   reason?: number;
   transfer_target?: string;
 };
+
+interface OrderCache {
+  plate: string;
+  plateType: PlateType;
+  mileage?: string;
+  request_id?: string;
+  carModel?: string;
+  lastMileage?: number | null;
+  tireSizes?: { front: string; rear: string };
+  ownershipId?: string;
+  tireLevel?: string | null;
+  wheelCount?: number | null;
+  caroolNeeded?: number | null;
+  existingLines?: Array<{ wheel: string; action: number; reason: number }>;
+  frontAlignment: boolean;
+  /** Tracks the order_id alongside the cache entry so we can pass it through. */
+  order_id: string;
+}
 
 function getStoredAffectedWheels(plate: string): Record<string, WheelData> {
   try {
@@ -30,49 +51,83 @@ function storeAffectedWheel(plate: string, wheel: string, data: WheelData) {
 }
 
 /**
- * Best-effort inverse of the action-builder loop in `handleSubmitDiagnosis`.
- *
- * Used only by the Carool waiting-overlay timeout to repopulate
- * `affected-wheels-{plate}` so the mechanic can retry without losing their
- * wheel selections. `mode` is reconstructed conservatively (replacement /
- * relocation / repair) and `reason` defaults to the replacement reason or
- * an empty string — the source-of-truth payload (`DiagnosisRequest.tires`)
- * doesn't carry the human-readable summary the popup builds.
+ * Map a single `existing_lines` array (from ERP) into the `WheelData` shape
+ * the popup uses. Replicated outside the component so it can run during the
+ * initial state factory rather than waiting for an effect.
  */
-function affectedWheelsFromDiagnosisTires(
-  tires: Record<string, DiagnosisTireAction[]>,
+function existingLinesToAffectedWheels(
+  lines: Array<{ wheel: string; action: number; reason: number }>,
 ): Record<string, WheelData> {
-  const result: Record<string, WheelData> = {};
-  for (const [wheel, actions] of Object.entries(tires)) {
-    const data: WheelData = {
-      selectedActionCodes: [],
-      selectedReasonCodes: [],
-      reasonActionMap: {},
-      movedToWheel: null,
-      mode: "repair",
-      reason: "",
-    };
-    for (const a of actions) {
-      switch (a.action) {
-        case 2:
-          if (a.transfer_target) {
-            data.movedToWheel = a.transfer_target;
-            data.mode = "relocation";
-          }
-          break;
-        default:
-          data.selectedActionCodes.push(a.action);
-          if (typeof a.reason === "number" && a.reason > 0) {
-            data.selectedReasonCodes.push(a.reason);
-            data.reasonActionMap[a.reason] = a.action;
-            data.mode = "replacement";
-          }
-          break;
-      }
+  const restored: Record<string, WheelData> = {};
+  for (const line of lines) {
+    if (!restored[line.wheel]) {
+      restored[line.wheel] = {
+        selectedActionCodes: [],
+        selectedReasonCodes: [],
+        reasonActionMap: {},
+        movedToWheel: null,
+        mode: "repair",
+        reason: "",
+      };
     }
-    result[wheel] = data;
+    const data = restored[line.wheel];
+    if (line.reason > 0) {
+      data.selectedReasonCodes.push(line.reason);
+      data.selectedActionCodes.push(line.action);
+      data.reasonActionMap[line.reason] = line.action;
+      data.mode = "replacement";
+    } else {
+      data.selectedActionCodes.push(line.action);
+    }
   }
-  return result;
+  return restored;
+}
+
+/**
+ * Normalise the response from `GET /api/order/:order_id` into the same
+ * `OrderCache` shape that `LicensePlateModal` writes on a fresh lookup.
+ *
+ * The backend reuses the row-fetch shape from `POST /api/car`, so we read
+ * the same field names but flatten them out here.
+ */
+function buildCacheFromOrderResponse(
+  data: {
+    order_id?: string;
+    license_plate?: string;
+    plate_type?: string;
+    mileage?: number | null;
+    request_id?: string;
+    car_model?: string;
+    last_mileage?: number | null;
+    tire_sizes?: { front?: string; rear?: string };
+    ownership_id?: string;
+    tire_level?: string | null;
+    wheel_count?: number | null;
+    carool_needed?: number | null;
+    existing_lines?: Array<{ wheel: string; action: number; reason: number }>;
+    front_alignment?: boolean;
+  },
+  fallbackOrderId: string,
+): OrderCache {
+  return {
+    plate: data.license_plate ?? "",
+    plateType: ((data.plate_type as PlateType) ?? "civilian") as PlateType,
+    mileage: typeof data.mileage === "number" ? String(data.mileage) : "",
+    order_id: data.order_id ?? fallbackOrderId,
+    request_id: data.request_id,
+    carModel: data.car_model,
+    lastMileage: typeof data.last_mileage === "number" ? data.last_mileage : null,
+    tireSizes: {
+      front: data.tire_sizes?.front ?? "",
+      rear: data.tire_sizes?.rear ?? "",
+    },
+    ownershipId: data.ownership_id,
+    tireLevel: data.tire_level ?? null,
+    wheelCount: typeof data.wheel_count === "number" ? data.wheel_count : null,
+    caroolNeeded: typeof data.carool_needed === "number" ? data.carool_needed : null,
+    existingLines: Array.isArray(data.existing_lines) ? data.existing_lines : [],
+    frontAlignment: data.front_alignment === true,
+  };
 }
 
 /**
@@ -81,118 +136,67 @@ function affectedWheelsFromDiagnosisTires(
  * Displays the axle diagram for the vehicle. The mechanic taps each wheel to open
  * `TirePopup` and record the work performed (replacement, repair, relocation, etc.).
  * Optionally launches the Carool AI photo flow via `CaroolCheck`.
- * On completion, submits the diagnosis via `POST /api/diagnosis` and navigates
- * back to `dashboard`.
+ * On completion, submits the diagnosis via `POST /api/diagnosis` (or the staged
+ * `/api/diagnosis/draft` + `/api/carool/finalize` pair when Carool is active —
+ * the ERP submission then happens server-side from the Carool webhook) and
+ * navigates back to `/dashboard`.
  *
  * Per-wheel data is persisted in `sessionStorage` (key `affected-wheels-{plate}`)
- * so work is not lost if the user navigates away and returns mid-session.
- *
- * Navigation: reached from `LicensePlateModal` via `{ name: "accepted-request" }`.
+ * and ERP-supplied props in `route-order-{orderId}` so a full page reload
+ * restores the screen exactly where the mechanic left off.
  */
 export function AcceptedRequest() {
   const { t } = useTranslation();
-  const { screen, navigate } = useNavigation();
-  if (screen.name !== "accepted-request") return null;
-  const {
-    plate: licensePlate,
-    plateType,
-    mileage,
-    order_id,
-    request_id,
-    tireSizes,
-    ownershipId,
-    lastMileage,
-    tireLevel,
-    wheelCount: wheelCountHint,
-    caroolNeeded,
-    existingLines,
-  } = screen;
-  const wheelCount = resolveVehicleWheelCount(
-    licensePlate,
-    wheelCountHint === 4 || wheelCountHint === 6 ? wheelCountHint : undefined,
-  );
-  const [spareTire, setSpareTire] = useState(
-    () => "spare-tire" in getStoredAffectedWheels(licensePlate)
-  );
-  const [frontAlignment, setFrontAlignment] = useState(false);
-  const [selectedWheel, setSelectedWheel] = useState<string | null>(null);
-  const [popupWheel, setPopupWheel] = useState<string | null>(null);
-  const [affectedWheels, setAffectedWheels] = useState<Record<string, WheelData>>(
-    () => getStoredAffectedWheels(licensePlate)
-  );
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showCaroolWaiting, setShowCaroolWaiting] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  // Watchdog around the Carool waiting overlay: if Firestore doesn't navigate
-  // us off this screen within ~2 minutes we assume the analysis silently
-  // failed, drop the spinner, surface an alert, and put the mechanic's wheel
-  // selections back so they can retry.
-  const caroolWaitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSubmittedDiagnosisRef = useRef<{
-    tires: Record<string, DiagnosisTireAction[]>;
-    front_alignment: boolean;
-  } | null>(null);
-  // Default to `true` so the Carool entry points don't flash off and back on
-  // before the runtime-config response arrives. The backend gate is the source
-  // of truth — the worst case from this default is a single failed request
-  // that the gated handlers respond to with `{ skipped: true }`.
-  const [caroolEnabled, setCaroolEnabled] = useState(true);
-  const [actionCodes, setActionCodes] = useState<ActionCodeItem[]>([]);
-  const [reasonCodes, setReasonCodes] = useState<ReasonCodeItem[]>([]);
+  const navigate = useNavigate();
+  const params = useParams<{ orderId: string }>();
+  const orderId = params.orderId ?? "";
+  const [cache, setCache] = useScreenCache<OrderCache>(`route-order-${orderId}`);
 
-  useEffect(() => {
-    navigator.mediaDevices?.getUserMedia({ video: true })
-      .then((s) => s.getTracks().forEach((t) => t.stop()))
-      .catch(() => {});
-  }, []);
+  const [refetching, setRefetching] = useState<boolean>(!cache);
+  const [refetchFailed, setRefetchFailed] = useState(false);
 
+  // Refetch the cache from the backend on a fresh reload that lost the
+  // sessionStorage entry. The ERP cannot transition state during the
+  // open→waiting window (that transition is itself triggered by us), so a
+  // pure cache replay is enough.
   useEffect(() => {
+    if (cache || !orderId) return;
     let cancelled = false;
-    fetch("/api/config")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data && typeof data.carool_enabled === "boolean") {
-          setCaroolEnabled(data.carool_enabled);
-          console.log(
-            "[AcceptedRequest] /api/config carool_enabled =",
-            data.carool_enabled,
-          );
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`/api/order/${encodeURIComponent(orderId)}`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        if (cancelled) return;
+        if (res.status === 410) {
+          // Order has moved past the open / pending_carool window — go look
+          // at it on the appropriate result screen.
+          navigate("/open-requests", { replace: true });
+          return;
         }
-      })
-      .catch(() => {});
+        if (!res.ok) {
+          setRefetchFailed(true);
+          return;
+        }
+        const data = await res.json();
+        const built = buildCacheFromOrderResponse(data, orderId);
+        setCache(built);
+      } catch {
+        if (!cancelled) setRefetchFailed(true);
+      } finally {
+        if (!cancelled) setRefetching(false);
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [orderId, cache, navigate, setCache]);
 
-  useEffect(() => {
-    if (Object.keys(affectedWheels).length > 0 || !existingLines?.length) return;
-    const restored: Record<string, WheelData> = {};
-    for (const line of existingLines) {
-      if (!restored[line.wheel]) {
-        restored[line.wheel] = {
-          selectedActionCodes: [],
-          selectedReasonCodes: [],
-          reasonActionMap: {},
-          movedToWheel: null,
-          mode: "repair",
-          reason: "",
-        };
-      }
-      const data = restored[line.wheel];
-      if (line.reason > 0) {
-        data.selectedReasonCodes.push(line.reason);
-        data.selectedActionCodes.push(line.action);
-        data.reasonActionMap[line.reason] = line.action;
-        data.mode = "replacement";
-      } else {
-        data.selectedActionCodes.push(line.action);
-      }
-    }
-    setAffectedWheels(restored);
-    sessionStorage.setItem(`affected-wheels-${licensePlate}`, JSON.stringify(restored));
-  }, []);
-
+  // Codes are pure server data — refetch every mount, keeping them out of
+  // the screen cache (per spec).
+  const [actionCodes, setActionCodes] = useState<ActionCodeItem[]>([]);
+  const [reasonCodes, setReasonCodes] = useState<ReasonCodeItem[]>([]);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/codes")
@@ -208,41 +212,129 @@ export function AcceptedRequest() {
     };
   }, []);
 
-  // Carool waiting-overlay watchdog. The cleanup runs in two scenarios:
-  //   1. Firestore listener navigates us off the screen → AcceptedRequest
-  //      unmounts → cleanup clears the timeout so it can't fire late on
-  //      the dashboard.
-  //   2. The timeout itself flips showCaroolWaiting back to false → this
-  //      effect re-runs; the previous cleanup clears the (now-fired)
-  //      handle and we exit early because !showCaroolWaiting.
+  // Default to `true` so the Carool entry points don't flash off and back on
+  // before the runtime-config response arrives. The backend gate is the
+  // source of truth — the worst case from this default is a single failed
+  // request that the gated handlers respond to with `{ skipped: true }`.
+  const [caroolEnabled, setCaroolEnabled] = useState(true);
   useEffect(() => {
-    if (!showCaroolWaiting) return;
-
-    caroolWaitingTimeoutRef.current = setTimeout(() => {
-      caroolWaitingTimeoutRef.current = null;
-      setShowCaroolWaiting(false);
-
-      const submitted = lastSubmittedDiagnosisRef.current;
-      if (submitted) {
-        const restored = affectedWheelsFromDiagnosisTires(submitted.tires);
-        sessionStorage.setItem(
-          `affected-wheels-${licensePlate}`,
-          JSON.stringify(restored),
-        );
-        setAffectedWheels(restored);
-        setFrontAlignment(submitted.front_alignment);
-      }
-
-      alert("הניתוח נכשל. בדוק את החיבור ונסה שוב.");
-    }, 120_000);
-
+    let cancelled = false;
+    fetch("/api/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data && typeof data.carool_enabled === "boolean") {
+          setCaroolEnabled(data.carool_enabled);
+        }
+      })
+      .catch(() => {});
     return () => {
-      if (caroolWaitingTimeoutRef.current) {
-        clearTimeout(caroolWaitingTimeoutRef.current);
-        caroolWaitingTimeoutRef.current = null;
-      }
+      cancelled = true;
     };
-  }, [showCaroolWaiting, licensePlate]);
+  }, []);
+
+  // Camera permission warm-up is best done on mount, but only once we have
+  // the cache (and therefore know we're going to actually render the
+  // screen).
+  useEffect(() => {
+    if (!cache) return;
+    navigator.mediaDevices?.getUserMedia({ video: true })
+      .then((s) => s.getTracks().forEach((t) => t.stop()))
+      .catch(() => {});
+  }, [cache]);
+
+  const [selectedWheel, setSelectedWheel] = useState<string | null>(null);
+  const [popupWheel, setPopupWheel] = useState<string | null>(null);
+  const [popupDirty, setPopupDirty] = useState(false);
+  const [popupDiscardConfirm, setPopupDiscardConfirm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  const licensePlate = cache?.plate ?? "";
+
+  const [affectedWheels, setAffectedWheels] = useState<Record<string, WheelData>>(
+    () => (licensePlate ? getStoredAffectedWheels(licensePlate) : {}),
+  );
+  // When the cache shows up after a refetch, hydrate affectedWheels from
+  // both sessionStorage (any in-progress entries) and the ERP existing
+  // lines. The OR-empty check matches the previous one-shot existingLines
+  // restoration in this component.
+  useEffect(() => {
+    if (!licensePlate) return;
+    const stored = getStoredAffectedWheels(licensePlate);
+    if (Object.keys(stored).length > 0) {
+      setAffectedWheels(stored);
+      return;
+    }
+    const lines = cache?.existingLines ?? [];
+    if (lines.length === 0) {
+      setAffectedWheels({});
+      return;
+    }
+    const restored = existingLinesToAffectedWheels(lines);
+    setAffectedWheels(restored);
+    sessionStorage.setItem(
+      `affected-wheels-${licensePlate}`,
+      JSON.stringify(restored),
+    );
+  }, [licensePlate, cache?.existingLines]);
+
+  const [spareTire, setSpareTire] = useState<boolean>(() =>
+    licensePlate ? "spare-tire" in getStoredAffectedWheels(licensePlate) : false,
+  );
+  useEffect(() => {
+    if (!licensePlate) return;
+    setSpareTire("spare-tire" in getStoredAffectedWheels(licensePlate));
+  }, [licensePlate]);
+
+  const wheelCount = resolveVehicleWheelCount(
+    licensePlate,
+    cache?.wheelCount === 4 || cache?.wheelCount === 6 ? cache.wheelCount : undefined,
+  );
+
+  const frontAlignment = cache?.frontAlignment ?? false;
+
+  // Dirty = mechanic has touched at least one wheel. Drives the discard
+  // confirmation modal both for the in-UI ← arrow and the system back.
+  const isDirty = Object.keys(affectedWheels).length > 0;
+
+  const closePopup = () => {
+    setPopupWheel(null);
+    setPopupDirty(false);
+    setPopupDiscardConfirm(false);
+  };
+
+  // Single shared back-press handler for everything on this route. Order
+  // of precedence: popup modal > popup itself > order modal > order dirty
+  // > default navigate(-1).
+  usePhoneBackSync(() => {
+    if (popupDiscardConfirm) {
+      setPopupDiscardConfirm(false);
+      return true;
+    }
+    if (popupWheel) {
+      if (popupDirty) {
+        setPopupDiscardConfirm(true);
+      } else {
+        closePopup();
+      }
+      return true;
+    }
+    if (showDiscardConfirm) {
+      setShowDiscardConfirm(false);
+      return true;
+    }
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+      return true;
+    }
+    return false;
+  });
+
+  const setFrontAlignment = (value: boolean) => {
+    if (!cache) return;
+    setCache({ ...cache, frontAlignment: value });
+  };
 
   const handleWheelClick = (wheelPosition: string) => {
     setSelectedWheel(wheelPosition);
@@ -255,21 +347,62 @@ export function AcceptedRequest() {
   };
 
   const handleNavigateToCaroolCheck = (wheel: string) => {
-    if (!caroolEnabled || (caroolNeeded != null && caroolNeeded !== 1)) return;
+    if (!cache) return;
+    if (!caroolEnabled || (cache.caroolNeeded != null && cache.caroolNeeded !== 1)) return;
     const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
-    if (!noCarool) {
-      navigate({ name: "carool-check", plate: licensePlate, plateType, wheels: [wheel], order_id });
-    }
+    if (noCarool) return;
+    try {
+      sessionStorage.setItem(
+        `route-carool-${orderId}-${wheel}`,
+        JSON.stringify({ plate: cache.plate, plateType: cache.plateType }),
+      );
+    } catch {}
+    navigate(`/order/${encodeURIComponent(orderId)}/carool/${encodeURIComponent(wheel)}`);
   };
 
   const NO_CAROOL_WHEELS = new Set(["spare-tire", "rear-right-inner", "rear-left-inner"]);
 
-  const handleSubmitDiagnosis = async () => {
-    if (isSubmitting) return;
+  const handleHeaderBack = () => {
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    navigate(-1);
+  };
 
-    if (caroolEnabled && caroolNeeded === 1) {
+  const handleDiscardAndLeave = () => {
+    setShowDiscardConfirm(false);
+    try {
+      if (licensePlate) {
+        sessionStorage.removeItem(`affected-wheels-${licensePlate}`);
+        sessionStorage.removeItem(`carool-photos-done-${licensePlate}`);
+      }
+      sessionStorage.removeItem(`route-order-${orderId}`);
+    } catch {}
+    navigate(-1);
+  };
+
+  const handleSpareTireChange = (enabled: boolean) => {
+    setSpareTire(enabled);
+    if (!enabled) {
+      setAffectedWheels((prev) => {
+        if (!("spare-tire" in prev)) return prev;
+        const next = { ...prev };
+        delete next["spare-tire"];
+        sessionStorage.setItem(`affected-wheels-${licensePlate}`, JSON.stringify(next));
+        return next;
+      });
+      setSelectedWheel((s) => (s === "spare-tire" ? null : s));
+      setPopupWheel((p) => (p === "spare-tire" ? null : p));
+    }
+  };
+
+  const handleSubmitDiagnosis = async () => {
+    if (isSubmitting || !cache) return;
+
+    if (caroolEnabled && cache.caroolNeeded === 1) {
       const photoDone: string[] = JSON.parse(
-        sessionStorage.getItem(`carool-photos-done-${licensePlate}`) || "[]"
+        sessionStorage.getItem(`carool-photos-done-${licensePlate}`) || "[]",
       );
       const photoDoneSet = new Set(photoDone);
       const missing = Object.entries(affectedWheels)
@@ -288,7 +421,7 @@ export function AcceptedRequest() {
       const reasonBackedActionCodes = new Set(
         data.selectedReasonCodes
           .map((reasonCode) => data.reasonActionMap[reasonCode])
-          .filter((actionCode): actionCode is number => typeof actionCode === "number")
+          .filter((actionCode): actionCode is number => typeof actionCode === "number"),
       );
       for (const actionCode of data.selectedActionCodes) {
         if (reasonBackedActionCodes.has(actionCode)) continue;
@@ -306,12 +439,12 @@ export function AcceptedRequest() {
       if (actions.length > 0) tires[wheel] = actions;
     }
 
-    const sourceMileage = mileage ?? "";
+    const sourceMileage = cache.mileage ?? "";
     const parsed = sourceMileage ? parseInt(sourceMileage, 10) : NaN;
     const parsedMileage = Number.isFinite(parsed) ? parsed : null;
 
     const diagnosisPayload = {
-      order_id,
+      order_id: orderId,
       mileage_update: parsedMileage,
       front_alignment: frontAlignment,
       tires,
@@ -324,88 +457,84 @@ export function AcceptedRequest() {
 
     setIsSubmitting(true);
     try {
-      // Carool-active path: stage the mechanic's inputs, kick off Carool's
-      // async analysis, and wait. The Carool webhook merges the AI results
-      // into the order and submits to the ERP server-side; the order's
-      // Firestore listener fires when status flips to 'waiting' and the
-      // dashboard view picks it up from there.
-      if (caroolEnabled && caroolNeeded === 1) {
+      // Carool-active path: stage the mechanic's inputs and kick off Carool's
+      // async analysis. The Carool webhook merges the AI results into the
+      // order and submits to the ERP server-side; the dashboard / open
+      // requests list will surface the new status whenever the mechanic
+      // returns. Frontend is fire-and-forget — no spinner, no watchdog.
+      if (caroolEnabled && cache.caroolNeeded === 1) {
         const draftRes = await fetch("/api/diagnosis/draft", {
           method: "POST",
           headers: jsonHeaders,
           body: JSON.stringify(diagnosisPayload),
         });
         if (!draftRes.ok) {
-          alert("שגיאה בשליחת האבחון. נסו שוב.");
+          alert(t("acceptedRequest.diagnosisError"));
           return;
         }
 
         const finalizeRes = await fetch("/api/carool/finalize", {
           method: "POST",
           headers: jsonHeaders,
-          body: JSON.stringify({ order_id }),
+          body: JSON.stringify({ order_id: orderId }),
         });
         if (!finalizeRes.ok) {
-          // Leave sessionStorage intact so the mechanic can retry without
-          // having to re-enter every wheel selection.
-          alert("שגיאה בשליחת האבחון. נסו שוב.");
+          alert(t("acceptedRequest.diagnosisError"));
           return;
         }
+        // Fall through to the shared success path below.
+      } else {
+        // Direct ERP submission path — Carool disabled or not needed.
+        const res = await fetch("/api/diagnosis", {
+          method: "POST",
+          headers: jsonHeaders,
+          body: JSON.stringify(diagnosisPayload),
+        });
+        if (!res.ok) {
+          alert(t("acceptedRequest.diagnosisError"));
+          return;
+        }
+      }
 
-        // Both backend hops accepted the work — safe to drop the local
-        // scratchpads now. The watchdog timeout below restores them from
-        // `lastSubmittedDiagnosisRef` if Carool never calls back.
+      try {
         sessionStorage.removeItem(`carool-photos-done-${licensePlate}`);
         sessionStorage.removeItem(`affected-wheels-${licensePlate}`);
-
-        lastSubmittedDiagnosisRef.current = {
-          tires: diagnosisPayload.tires,
-          front_alignment: diagnosisPayload.front_alignment,
-        };
-        setShowCaroolWaiting(true);
-        return;
-      }
-
-      // Fallback: Carool disabled or not needed for this order — submit to
-      // the ERP directly, exactly as before.
-      const res = await fetch("/api/diagnosis", {
-        method: "POST",
-        headers: jsonHeaders,
-        body: JSON.stringify(diagnosisPayload),
-      });
-
-      if (!res.ok) {
-        alert("שגיאה בשליחת האבחון. נסו שוב.");
-        return;
-      }
-
-      sessionStorage.removeItem(`affected-wheels-${licensePlate}`);
+        sessionStorage.removeItem(`route-order-${orderId}`);
+      } catch {}
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
-        navigate({ name: "dashboard" });
+        navigate("/dashboard", { replace: true });
       }, 1500);
     } catch {
-      alert("שגיאה בשליחת האבחון. נסו שוב.");
+      alert(t("acceptedRequest.diagnosisError"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSpareTireChange = (enabled: boolean) => {
-    setSpareTire(enabled);
-    if (!enabled) {
-      setAffectedWheels((prev) => {
-        if (!("spare-tire" in prev)) return prev;
-        const next = { ...prev };
-        delete next["spare-tire"];
-        sessionStorage.setItem(`affected-wheels-${licensePlate}`, JSON.stringify(next));
-        return next;
-      });
-      setSelectedWheel((s) => (s === "spare-tire" ? null : s));
-      setPopupWheel((p) => (p === "spare-tire" ? null : p));
-    }
-  };
+  if (refetching) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+      </div>
+    );
+  }
+  if (refetchFailed || !cache) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="text-center space-y-4">
+          <p className="text-muted-foreground">{t("common.requestNotFound")}</p>
+          <button
+            onClick={() => navigate("/dashboard", { replace: true })}
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg"
+          >
+            {t("declinedRequest.backHome")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-background flex flex-col relative overflow-hidden" style={{ height: "100dvh" }}>
@@ -413,7 +542,7 @@ export function AcceptedRequest() {
       <div className="bg-primary px-4 py-2.5 shadow-md">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => navigate({ name: "dashboard" })}
+            onClick={handleHeaderBack}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-5 h-5" />
@@ -428,31 +557,31 @@ export function AcceptedRequest() {
         <div className="space-y-2">
 
           {/* License Plate */}
-          <LicensePlate plateNumber={licensePlate} plateType={plateType} className="max-w-[260px] mx-auto" />
+          <LicensePlate plateNumber={licensePlate} plateType={cache.plateType} className="max-w-[260px] mx-auto" />
 
           {/* Info chips — 2x2 grid */}
           <div className="grid grid-cols-2 gap-1.5">
-            {plateType === "civilian" ? (
+            {cache.plateType === "civilian" ? (
               <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
                 <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.customerLabel")}</p>
-                <p className="text-sm font-semibold text-foreground leading-tight truncate">{ownershipId ?? "—"}</p>
+                <p className="text-sm font-semibold text-foreground leading-tight truncate">{cache.ownershipId ?? "—"}</p>
               </div>
             ) : (
               <div />
             )}
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
               <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.requestNumberLabel")}</p>
-              <p className="text-sm font-semibold text-foreground tabular-nums leading-tight truncate">{request_id ?? order_id}</p>
+              <p className="text-sm font-semibold text-foreground tabular-nums leading-tight truncate">{cache.request_id ?? orderId}</p>
             </div>
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
               <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.mileage")}</p>
               <p className="text-sm font-semibold text-foreground tabular-nums leading-tight" dir="ltr">
-                {mileage ? `${Number(mileage).toLocaleString()} ${t("acceptedRequest.km")}` : "—"}
+                {cache.mileage ? `${Number(cache.mileage).toLocaleString()} ${t("acceptedRequest.km")}` : "—"}
               </p>
             </div>
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
               <p className="text-[10px] text-muted-foreground leading-tight truncate">איכות</p>
-              <p className="text-sm font-semibold text-foreground leading-tight truncate">{tireLevel && tireLevel.length > 0 ? tireLevel : "—"}</p>
+              <p className="text-sm font-semibold text-foreground leading-tight truncate">{cache.tireLevel && cache.tireLevel.length > 0 ? cache.tireLevel : "—"}</p>
             </div>
           </div>
 
@@ -468,14 +597,14 @@ export function AcceptedRequest() {
                 wheelCount={wheelCount}
               />
               {/* Tire size badges overlaid — top edge (above front tires) and bottom edge (below rear tires) */}
-              {tireSizes?.front && (
+              {cache.tireSizes?.front && (
                 <div className="absolute inset-x-0 top-0 flex justify-center pointer-events-none">
-                  <TireSizeBadge size={tireSizes.front} />
+                  <TireSizeBadge size={cache.tireSizes.front} />
                 </div>
               )}
-              {tireSizes?.rear && (
+              {cache.tireSizes?.rear && (
                 <div className="absolute inset-x-0 flex justify-center pointer-events-none" style={{ top: "76%" }}>
-                  <TireSizeBadge size={tireSizes.rear} />
+                  <TireSizeBadge size={cache.tireSizes.rear} />
                 </div>
               )}
             </div>
@@ -544,23 +673,14 @@ export function AcceptedRequest() {
         </div>
       )}
 
-      {/* Carool analysis waiting overlay — Firestore listener handles the
-          transition once the backend has merged the AI results and submitted
-          to the ERP (status flips to 'waiting'). */}
-      {showCaroolWaiting && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 bg-card border border-border rounded-2xl px-10 py-8 shadow-xl">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="w-9 h-9 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
-            </div>
-            <span className="text-lg font-bold text-foreground">מנתח צמיגים...</span>
-          </div>
-        </div>
-      )}
-
       <TirePopup
         isOpen={popupWheel !== null}
-        onClose={() => setPopupWheel(null)}
+        onClose={closePopup}
+        onAttemptClose={(dirty) => {
+          if (dirty) setPopupDiscardConfirm(true);
+          else closePopup();
+        }}
+        onDirtyChange={setPopupDirty}
         wheelPosition={popupWheel || ""}
         licensePlate={licensePlate}
         onSubmit={handlePopupSubmit}
@@ -571,6 +691,26 @@ export function AcceptedRequest() {
         initialData={popupWheel ? affectedWheels[popupWheel] : undefined}
         actions={actionCodes}
         reasons={reasonCodes}
+      />
+
+      <ConfirmModal
+        open={popupDiscardConfirm}
+        title={t("confirmLeave.title")}
+        subtitle={t("confirmLeave.subtitle")}
+        primaryLabel={t("confirmLeave.continue")}
+        destructiveLabel={t("confirmLeave.discard")}
+        onPrimary={() => setPopupDiscardConfirm(false)}
+        onDestructive={closePopup}
+      />
+
+      <ConfirmModal
+        open={showDiscardConfirm}
+        title={t("confirmLeave.title")}
+        subtitle={t("confirmLeave.subtitle")}
+        primaryLabel={t("confirmLeave.continue")}
+        destructiveLabel={t("confirmLeave.discard")}
+        onPrimary={() => setShowDiscardConfirm(false)}
+        onDestructive={handleDiscardAndLeave}
       />
     </div>
   );

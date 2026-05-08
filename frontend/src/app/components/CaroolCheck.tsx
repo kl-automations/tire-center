@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigation } from "../NavigationContext";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, RotateCcw, Check } from "lucide-react";
 import { WearMask } from "./masks/WearMask";
 import { ReferenceMask } from "./masks/ReferenceMask";
+import { useScreenCache } from "../useScreenCache";
+import type { PlateType } from "./LicensePlate";
 
 type PhotoStep = "sidewall" | "tread";
+
+interface CaroolCache {
+  plate: string;
+  plateType: PlateType;
+}
 
 const WHEEL_LABEL_KEYS: Record<string, string> = {
   "front-right": "wheels.frontRight",
@@ -109,32 +116,22 @@ function dataUrlToBlob(dataUrl: string): Blob {
 /**
  * Guided camera flow for capturing Carool AI tyre-analysis photos.
  *
- * Activated from `AcceptedRequest` when the mechanic taps the Carool button
- * for a wheel. Walks through the selected wheel positions step-by-step,
- * prompting for a sidewall photo then a tread photo per wheel.
+ * Reached via `/order/:orderId/carool/:wheel`. The wheel-position string is
+ * read straight from the path; the per-route cache (`route-carool-{orderId}-
+ * {wheel}`) carries plate / plateType so the screen still renders correctly
+ * after a full page reload.
  *
- * Photo upload flow:
- *  1. On the first photo, calls `POST /api/carool/session` with `order_id`
- *     to open a Carool session; the returned `carool_id` is held locally.
- *  2. Each captured frame is cropped to a square matching the on-screen mask
- *     and uploaded via `POST /api/carool/photo` (multipart form with
- *     `order_id`, `wheel`, `photo_type`, `file`).
- *  3. After the final wheel's tread photo, calls `POST /api/carool/finalize`
- *     to tell Carool analysis can begin. Results arrive asynchronously via
- *     the `/api/webhook/carool` webhook handled elsewhere.
- *
- * All three endpoints require an `Authorization: Bearer <token>` header
- * built from the JWT in `localStorage`.
- *
- * Uses the device camera via `getUserMedia`. Falls back gracefully if camera
- * access is denied or unavailable.
- *
- * Navigation: reached from `accepted-request` via `{ name: "carool-check" }`;
- * navigates back to `accepted-request` when complete.
+ * The current single-wheel flow walks through sidewall and tread for the
+ * wheel in `:wheel` and then navigates back to the parent order screen.
  */
 export function CaroolCheck() {
   const { t } = useTranslation();
-  const { screen, navigate } = useNavigation();
+  const navigate = useNavigate();
+  const params = useParams<{ orderId: string; wheel: string }>();
+  const orderId = params.orderId ?? "";
+  const currentWheel = params.wheel ?? "";
+  const cacheKey = `route-carool-${orderId}-${currentWheel}`;
+  const [cache] = useScreenCache<CaroolCache>(cacheKey);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -146,7 +143,6 @@ export function CaroolCheck() {
   const cropRectRef = useRef<CropRect | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState(false);
-  const [wheelIndex, setWheelIndex] = useState(0);
   const [photoStep, setPhotoStep] = useState<PhotoStep>("sidewall");
   const [preview, setPreview] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
@@ -154,7 +150,12 @@ export function CaroolCheck() {
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    if (screen.name !== "carool-check") return;
+    if (!cache || !currentWheel) {
+      navigate(`/order/${encodeURIComponent(orderId)}`, { replace: true });
+    }
+  }, [cache, currentWheel, orderId, navigate]);
+
+  useEffect(() => {
     let cancelled = false;
 
     navigator.mediaDevices
@@ -174,25 +175,18 @@ export function CaroolCheck() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
-  }, [screen.name]);
+  }, []);
 
-  if (screen.name !== "carool-check") return null;
-  const { plate, plateType, wheels, order_id } = screen;
+  if (!cache || !currentWheel) return null;
 
-  if (wheels.length === 0) {
-    navigate({ name: "accepted-request", plate, plateType, order_id });
-    return null;
-  }
-
-  const currentWheel = wheels[wheelIndex];
-  const isLastWheel = wheelIndex === wheels.length - 1;
-  const totalSteps = wheels.length * 2;
-  const completedSteps = wheelIndex * 2 + (photoStep === "tread" ? 1 : 0);
+  const { plate, plateType: _plateType } = cache;
+  void _plateType;
+  const totalSteps = 2;
+  const completedSteps = photoStep === "tread" ? 1 : 0;
   const wheelLabel = WHEEL_LABEL_KEYS[currentWheel] ? t(WHEEL_LABEL_KEYS[currentWheel]) : currentWheel;
   const stepLabel = t(`caroolCheck.${photoStep}`);
 
   const handleBack = () => {
-    // In preview: back = retake. In live: no escape back to AcceptedRequest — photos are required.
     if (preview) {
       setPreview(null);
       cropRectRef.current = null;
@@ -207,10 +201,6 @@ export function CaroolCheck() {
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 720;
     canvas.getContext("2d")!.drawImage(video, 0, 0);
-    // Snapshot the crop geometry now, while the video and mask are both live
-    // and laid out. `handleApprove` will use this rect instead of re-reading
-    // the DOM. If it's null (no metadata yet) the approve step uploads the
-    // uncropped frame as a safe fallback.
     cropRectRef.current = mask ? computeCropRect(mask, video) : null;
     setPreview(canvas.toDataURL("image/jpeg", 0.9));
   };
@@ -240,7 +230,7 @@ export function CaroolCheck() {
         const res = await fetch("/api/carool/session", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getToken() },
-          body: JSON.stringify({ order_id }),
+          body: JSON.stringify({ order_id: orderId }),
         });
         if (!res.ok) throw new Error("session failed");
         const data = (await res.json()) as { carool_id: string };
@@ -249,7 +239,7 @@ export function CaroolCheck() {
       }
 
       const formData = new FormData();
-      formData.append("order_id", order_id);
+      formData.append("order_id", orderId);
       formData.append("wheel", currentWheel.toUpperCase().replace("-", "_"));
       formData.append("photo_type", photoStep);
       formData.append("file", blob, "photo.jpg");
@@ -263,23 +253,23 @@ export function CaroolCheck() {
       setPreview(null);
       cropRectRef.current = null;
 
-      if (isLastWheel && photoStep === "tread") {
+      if (photoStep === "sidewall") {
+        setPhotoStep("tread");
+      } else {
+        // Tread photo — last step for this wheel.
         await fetch("/api/carool/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getToken() },
-          body: JSON.stringify({ order_id }),
+          body: JSON.stringify({ order_id: orderId }),
         });
         setShowDone(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
         const doneKey = `carool-photos-done-${plate}`;
         const existing: string[] = JSON.parse(sessionStorage.getItem(doneKey) || "[]");
-        sessionStorage.setItem(doneKey, JSON.stringify([...new Set([...existing, ...wheels])]));
-        setTimeout(() => navigate({ name: "accepted-request", plate, plateType, order_id }), 1500);
-      } else if (photoStep === "sidewall") {
-        setPhotoStep("tread");
-      } else {
-        setPhotoStep("sidewall");
-        setWheelIndex((i) => i + 1);
+        sessionStorage.setItem(doneKey, JSON.stringify([...new Set([...existing, currentWheel])]));
+        // Drop this route's cache — we're going back to the order screen.
+        try { sessionStorage.removeItem(cacheKey); } catch {}
+        setTimeout(() => navigate(`/order/${encodeURIComponent(orderId)}`, { replace: true }), 1500);
       }
     } catch {
       // On failure, keep preview visible so the mechanic can retake or retry.

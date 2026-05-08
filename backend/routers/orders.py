@@ -16,6 +16,13 @@ from middleware.auth import get_current_shop
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
+# Companion router exposing a singular `/api/order/{order_id}` path, used by
+# the frontend to rehydrate the AcceptedRequest screen after a full page
+# reload that lost the sessionStorage cache. Same auth / shop scoping as the
+# plural router; different status-code semantics (200 / 404 / 410) so the
+# client knows whether the order is still open.
+order_singular_router = APIRouter(prefix="/api/order", tags=["orders"])
+
 
 def _decode_jsonb_columns(record: dict) -> None:
     """
@@ -126,3 +133,116 @@ async def get_order(
     _decode_jsonb_columns(result)
     log("ROUTER/orders", f"get_order success order_id={order_id} status={result.get('status')}")
     return result
+
+
+# Statuses for which the AcceptedRequest screen is still valid. Anything
+# outside this set means the order has already been submitted to the ERP
+# (or finalised), so the client should redirect to a result screen rather
+# than try to keep editing.
+_ACTIVE_ORDER_STATUSES = {"open", "pending_carool"}
+
+
+@order_singular_router.get(
+    "/{order_id}",
+    summary="Rehydrate an in-progress order for the AcceptedRequest screen",
+    description=(
+        "Returns enough data to repopulate the AcceptedRequest screen after a "
+        "page reload that lost the sessionStorage cache. Reuses the exact "
+        "shape POST /api/car returns on an existing-order reuse: `order_id` "
+        "plus all keys of the stored `car_data` JSONB, with the addition of "
+        "`license_plate`, `plate_type`, `mileage` and `front_alignment` so "
+        "the screen can render without a second round-trip.\n\n"
+        "Status-code semantics:\n"
+        "- **200** — order is still active (`open` or `pending_carool`).\n"
+        "- **404** — no such order, or it belongs to a different shop.\n"
+        "- **410** — order has moved past the editable window (`waiting`, "
+        "`approved`, `partly-approved`, `declined`); the client should "
+        "redirect to the appropriate result screen."
+    ),
+    response_description="Flattened car_data + per-row metadata for AcceptedRequest.",
+)
+async def get_order_for_rehydrate(
+    order_id: str,
+    request: Request,
+    shop: dict = Depends(get_current_shop),
+):
+    """
+    Lightweight rehydrate-only endpoint for the AcceptedRequest screen.
+
+    Pure cache replay — no ERP call. The order cannot transition state during
+    the open→waiting window because that transition is itself triggered by
+    submitting our diagnosis; ERP is otherwise idle.
+
+    Raises:
+        404: Order not found, or belongs to a different shop.
+        410: Order has moved past the editable lifecycle (waiting/approved/
+             partly-approved/declined).
+    """
+    log(
+        "ROUTER/orders",
+        f"get_order_for_rehydrate received order_id={order_id} shop_id={shop['shop_id']}",
+    )
+    db = request.app.state.db
+    log(
+        "DB",
+        f"SELECT open_orders WHERE id={order_id} AND shop_id={shop['shop_id']}",
+    )
+    row = await db.fetchrow(
+        """
+        SELECT id, request_id, license_plate, plate_type, mileage,
+               car_data, diagnosis, status
+        FROM open_orders
+        WHERE id = $1 AND shop_id = $2
+        """,
+        order_id,
+        shop["shop_id"],
+    )
+    if not row:
+        log_error(
+            "orders",
+            f"get_order_for_rehydrate not found order_id={order_id} shop_id={shop['shop_id']}",
+        )
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    status = row["status"]
+    if status not in _ACTIVE_ORDER_STATUSES:
+        log(
+            "ROUTER/orders",
+            f"get_order_for_rehydrate gone (410) order_id={order_id} status={status}",
+        )
+        raise HTTPException(status_code=410, detail=f"Order is {status}")
+
+    car_data = row["car_data"]
+    if isinstance(car_data, str):
+        try:
+            car_data = json.loads(car_data)
+        except json.JSONDecodeError:
+            car_data = {}
+    if not isinstance(car_data, dict):
+        car_data = {}
+
+    diagnosis = row["diagnosis"]
+    if isinstance(diagnosis, str):
+        try:
+            diagnosis = json.loads(diagnosis)
+        except json.JSONDecodeError:
+            diagnosis = None
+    front_alignment = bool(
+        diagnosis.get("front_alignment") if isinstance(diagnosis, dict) else False
+    )
+
+    log(
+        "ROUTER/orders",
+        f"get_order_for_rehydrate success order_id={order_id} status={status}",
+    )
+    return {
+        "order_id": str(row["id"]),
+        "license_plate": row["license_plate"],
+        "plate_type": row["plate_type"],
+        "mileage": row["mileage"],
+        "front_alignment": front_alignment,
+        # Carry through the stored car_data so the response shape mirrors the
+        # POST /api/car reuse path; existing_lines defaults to empty here.
+        "existing_lines": [],
+        **car_data,
+    }
