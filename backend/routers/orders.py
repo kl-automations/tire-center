@@ -8,11 +8,33 @@ nightly by /internal/cleanup) but remain accessible by direct ID lookup
 until deleted.
 """
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+
+def _decode_jsonb_columns(record: dict) -> None:
+    """
+    Decode JSONB columns returned as raw strings by asyncpg.
+
+    No JSONB codec is registered on the connection pool, so asyncpg returns
+    JSONB columns as plain strings. The frontend expects parsed objects
+    (e.g. ``row.diagnosis.tires``), so we eagerly decode in place.
+
+    Mutates ``record`` so callers don't need to reassign. On decode failure
+    the column is set to ``None`` rather than left as a misleading string.
+    """
+    for col in ("diagnosis", "car_data"):
+        val = record.get(col)
+        if isinstance(val, str):
+            try:
+                record[col] = json.loads(val)
+            except (json.JSONDecodeError, TypeError):
+                record[col] = None
 
 
 @router.get(
@@ -54,6 +76,7 @@ async def list_orders(
     orders = [dict(r) for r in rows]
     for o in orders:
         o["id"] = str(o["id"])
+        _decode_jsonb_columns(o)
     log("ROUTER/orders", f"list_orders returning {len(orders)} orders shop_id={shop['shop_id']}")
     return {"total": len(orders), "orders": orders}
 
@@ -100,5 +123,6 @@ async def get_order(
         raise HTTPException(status_code=404, detail="Order not found")
     result = dict(row)
     result["id"] = str(result["id"])
+    _decode_jsonb_columns(result)
     log("ROUTER/orders", f"get_order success order_id={order_id} status={result.get('status')}")
     return result

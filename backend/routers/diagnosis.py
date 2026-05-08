@@ -355,6 +355,25 @@ async def submit_diagnosis(
         "diagnosis": {"mechanic_inputs": _build_mechanic_inputs(body)},
     }
 
+    diagnosis_seed = {
+        "mileage_update": body.mileage_update,
+        "front_alignment": body.front_alignment,
+        "tires": order_for_submit["diagnosis"]["mechanic_inputs"]["tires"],
+    }
+    log(
+        "ROUTER/diagnosis",
+        f"persisting diagnosis.tires before ERP submit order_id={body.order_id} tires={json.dumps(diagnosis_seed['tires'], ensure_ascii=False)}",
+    )
+    await db.execute(
+        """
+        UPDATE open_orders
+        SET diagnosis = COALESCE(diagnosis, '{}'::jsonb) || $1::jsonb
+        WHERE id = $2
+        """,
+        json.dumps(diagnosis_seed),
+        body.order_id,
+    )
+
     await _submit_to_erp(
         order_for_submit,
         _coerce_jsonb(order_row["car_data"]),

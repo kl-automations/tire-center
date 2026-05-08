@@ -22,23 +22,14 @@ from routers.diagnosis import _coerce_jsonb, _submit_to_erp
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 
 
-# Inverse of the lookup tables in adapters/erp.py — maps ERP codes back to
-# the wheel-position / action-name strings used internally and by the frontend.
+# Inverse of the lookup tables in adapters/erp.py — maps ERP location codes
+# back to the wheel-position strings used internally and by the frontend.
 _LOCATION_TO_POSITION = {
     "1": "front-left", "2": "front-right", "3": "rear-right",
     "4": "rear-left",  "5": "spare-tire",  "7": "rear-left-inner",
     "8": "rear-right-inner",
 }
-_ACTION_TO_NAME = {
-    "3": "wear", "23": "damage", "25": "fitment",
-    "4": "puncture", "2": "front_alignment",
-}
 _FRONT_ALIGNMENT_LOCATION = "6"
-_FRONT_ALIGNMENT_ACTION = "2"
-
-# Replacement-action codes (any approved replacement → wheel marked "full")
-_REPLACEMENT_ACTIONS = {"3", "23", "25"}
-_PUNCTURE_ACTION = "4"
 
 
 def _firestore_signal(app, shop_id: str, order_id: str, status: str):
@@ -86,10 +77,11 @@ async def erp_webhook(request: Request):
       3. Build a per-wheel ActionCode → bool map (`action_approvals`) so the
          frontend can render the exact per-line decision for every action,
          not just the rolled-up wheel summary.
-      4. For each non-front-alignment location, compute "full" / "puncture-only" / "none".
-      5. For the front-alignment line (Location='6', Action='2'), record its Confirmed flag.
-      6. Compute overall status from all non-alignment items:
-            all '1' → 'approved', all '0' → 'declined', mix → 'partly-approved'.
+      4. Load submitted diagnosis JSONB and treat diagnosis.tires as source of truth
+         for which approval lines exist.
+      5. For each submitted wheel, compute "full" / "none" from returned approvals.
+      6. Compute overall status by cross-referencing submitted lines:
+            all approved → 'approved', none approved → 'declined', mixed → 'partly-approved'.
       7. Persist under open_orders.diagnosis['erp_response'] (including
          `action_approvals`), update status / declined_at, and signal Firestore.
 
@@ -117,7 +109,7 @@ async def erp_webhook(request: Request):
 
     log("DB", f"SELECT open_orders WHERE request_id={payload.request_id}")
     order = await db.fetchrow(
-        "SELECT id, shop_id FROM open_orders WHERE request_id = $1",
+        "SELECT id, shop_id, diagnosis FROM open_orders WHERE request_id = $1",
         payload.request_id,
     )
     if not order:
@@ -144,13 +136,12 @@ async def erp_webhook(request: Request):
 
     wheels: dict[str, str] = {}
     front_alignment_confirmed = False
-    non_alignment_items = []
 
     for location, items in items_by_location.items():
         if location == _FRONT_ALIGNMENT_LOCATION:
             for item in items:
-                if item.Action == _FRONT_ALIGNMENT_ACTION:
-                    front_alignment_confirmed = item.Confirmed == "1"
+                if item.Confirmed == "1":
+                    front_alignment_confirmed = True
             continue
 
         position = _LOCATION_TO_POSITION.get(location)
@@ -158,43 +149,55 @@ async def erp_webhook(request: Request):
             # Unknown location code — skip but keep auditing via raw payload below.
             continue
 
-        non_alignment_items.extend(items)
+    diagnosis = _coerce_jsonb(order["diagnosis"])
+    submitted_tires = diagnosis.get("tires") or {}
+    submitted_front_alignment = bool(diagnosis.get("front_alignment"))
 
-        replacement_present = any(
-            item.Action in _REPLACEMENT_ACTIONS for item in items
-        )
-        replacement_approved = any(
-            item.Action in _REPLACEMENT_ACTIONS and item.Confirmed == "1"
-            for item in items
-        )
-        puncture_approved = any(
-            item.Action == _PUNCTURE_ACTION and item.Confirmed == "1"
-            for item in items
-        )
+    # Cross-reference action_approvals against what the mechanic actually
+    # submitted: any submitted action the ERP did not echo back is treated
+    # as declined (False) so the frontend renders an explicit red ✗ badge
+    # rather than nothing. Relocation source lines are not approval lines
+    # and are skipped here (matches the totals loop below).
+    #
+    # front_alignment is intentionally not touched: it is tracked separately
+    # via `front_alignment_confirmed` and rendered from that flag, not from
+    # action_approvals.
+    for position, actions in submitted_tires.items():
+        for action in actions or []:
+            if action.get("transfer_target"):
+                continue
+            action_code = str(action.get("action"))
+            if position not in action_approvals:
+                action_approvals[position] = {}
+            if action_code not in action_approvals[position]:
+                action_approvals[position][action_code] = False
 
-        if replacement_approved:
-            wheels[position] = "full"
-        elif puncture_approved:
-            # "puncture-only" specifically means the mechanic asked for a
-            # replacement and the ERP downgraded it to a puncture repair.
-            # If puncture was the only submitted action, an approval is "full".
-            wheels[position] = "puncture-only" if replacement_present else "full"
-        else:
-            wheels[position] = "none"
+    total_submitted_lines = 0
+    approved_submitted_lines = 0
 
-    if non_alignment_items:
-        confirmed_flags = {item.Confirmed for item in non_alignment_items}
-        if confirmed_flags == {"1"}:
-            status = "approved"
-        elif confirmed_flags == {"0"}:
-            status = "declined"
-        else:
-            status = "partly-approved"
+    for position, actions in submitted_tires.items():
+        wheel_approvals = action_approvals.get(position, {})
+        wheels[position] = "full" if any(wheel_approvals.values()) else "none"
+        for action in actions or []:
+            if action.get("transfer_target"):
+                # Relocation source lines are never approval lines.
+                continue
+            action_code = str(action.get("action"))
+            total_submitted_lines += 1
+            if wheel_approvals.get(action_code) is True:
+                approved_submitted_lines += 1
+
+    if submitted_front_alignment:
+        total_submitted_lines += 1
+        if front_alignment_confirmed:
+            approved_submitted_lines += 1
+
+    if total_submitted_lines == 0 or approved_submitted_lines == 0:
+        status = "declined"
+    elif approved_submitted_lines == total_submitted_lines:
+        status = "approved"
     else:
-        # Edge case: payload contains only the front-alignment line (no per-wheel
-        # items), e.g. when alignment was the sole submitted action. Derive the
-        # overall status from the alignment flag — wheels{} will be empty.
-        status = "approved" if front_alignment_confirmed else "declined"
+        status = "partly-approved"
 
     erp_response = {
         "wheels": wheels,
