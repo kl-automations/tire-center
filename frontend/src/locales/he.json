@@ -27,6 +27,12 @@
     "continue": "המשך אבחנה",
     "discard": "צא ומחק אבחנה"
   },
+  "confirmLeaveOrder": {
+    "title": "האבחון לא נשלח!",
+    "subtitle": "לשליחה לחץ על המשך",
+    "continue": "המשך",
+    "discard": "צא בלי לשלוח"
+  },
   "wheels": {
     "frontRight": "ימין קדמי",
     "frontLeft": "שמאל קדמי",
@@ -68,7 +74,12 @@
     "submitUserCode": "שלח קוד",
     "submitCode": "כניסה",
     "backToUserCode": "חזרה",
-    "changeLanguage": "שנה שפה"
+    "changeLanguage": "שנה שפה",
+    "langAbbrev": {
+      "he": "עב",
+      "ru": "РУ",
+      "ar": "عر"
+    }
   },
   "dashboard": {
     "title": "דיווח שירות קוגול",
@@ -132,7 +143,14 @@
   "licensePlateModal": {
     "title": "דיווח חדש",
     "subtitle": "הזן מספר רישוי של הרכב",
-    "mileageBelowLastWarning": "הקילומטרז' האחרון במערכת גבוה יותר — אנא ודא את הקילומטרז'."
+    "warningMileageBelowLast": "הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!",
+    "warningMileageAboveMax": "הקילומטרז' שהוזן גבוה מהמקסימום המותר לרכב זה",
+    "mileageAboveMaxInline": "קילומטרז' גבוה מהמקסימום המותר לרכב זה",
+    "genericCarLookupError": "שגיאה בבדיקת הרכב. נסו שוב.",
+    "mileageAttentionTitle": "שים לב!",
+    "mileageVerifyHint": "אנא וודא שהוזן קילומטרז' תקין",
+    "updateMileage": "עדכן קילומטרז'",
+    "proceedAnyway": "המשך בכל זאת"
   },
   "acceptedRequest": {
     "title": "דיווח חדש",
@@ -145,7 +163,8 @@
     "mileageWarningLastReported": "דיווח אחרון במערכת {{lastMileage}} ק\"מ",
     "mileageWarningEditButton": "תיקון לקילומטרז' עדכני",
     "caroolPhotosRequired": "יש לצלם תמונות קארול לכל הגלגלים לפני השליחה",
-    "diagnosisError": "שגיאה בשליחת האבחון. נסו שוב."
+    "diagnosisError": "שגיאה בשליחת האבחון. נסו שוב.",
+    "sentSuccess": "נשלח בהצלחה"
   },
   "declinedRequest": {
     "title": "דיווח חדש",
@@ -164,6 +183,10 @@
     "retake": "צלם שוב",
     "cameraError": "לא ניתן לגשת למצלמה",
     "cameraErrorHint": "אפשר גישה למצלמה בהגדרות הדפדפן"
+  },
+  "errorBoundary": {
+    "title": "משהו השתבש",
+    "returnHome": "חזרה למסך הראשי"
   },
   "exportHistory": {
     "title": "ייצוא היסטוריה",

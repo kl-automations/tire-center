@@ -27,6 +27,12 @@
     "continue": "متابعة التشخيص",
     "discard": "خروج وحذف التشخيص"
   },
+  "confirmLeaveOrder": {
+    "title": "لم يُرسل التشخيص بعد!",
+    "subtitle": "اضغط «متابعة» للإرسال",
+    "continue": "متابعة",
+    "discard": "خروج دون إرسال"
+  },
   "wheels": {
     "frontRight": "أمامي أيمن",
     "frontLeft": "أمامي أيسر",
@@ -68,7 +74,12 @@
     "submitUserCode": "إرسال الرمز",
     "submitCode": "دخول",
     "backToUserCode": "رجوع",
-    "changeLanguage": "تغيير اللغة"
+    "changeLanguage": "تغيير اللغة",
+    "langAbbrev": {
+      "he": "עב",
+      "ru": "РУ",
+      "ar": "عر"
+    }
   },
   "dashboard": {
     "title": "تقرير خدمة كوغل",
@@ -132,7 +143,14 @@
   "licensePlateModal": {
     "title": "تقرير جديد",
     "subtitle": "أدخل رقم لوحة المركبة",
-    "mileageBelowLastWarning": "آخر قراءة مسجّلة للعداد كانت أعلى — يُرجى التحقق من قراءة العداد."
+    "warningMileageBelowLast": "قراءة العداد المدخلة أقل من آخر قراءة مسجّلة في النظام!",
+    "warningMileageAboveMax": "قراءة العداد المدخلة أعلى من الحد الأقصى المسموح لهذه المركبة",
+    "mileageAboveMaxInline": "قراءة العداد أعلى من الحد الأقصى المسموح لهذه المركبة",
+    "genericCarLookupError": "خطأ في التحقق من المركبة. حاولوا مرة أخرى.",
+    "mileageAttentionTitle": "تنبيه!",
+    "mileageVerifyHint": "يُرجى التأكد من إدخال قراءة عداد صحيحة",
+    "updateMileage": "تصحيح قراءة العداد",
+    "proceedAnyway": "المتابعة على أي حال"
   },
   "acceptedRequest": {
     "title": "تقرير جديد",
@@ -145,7 +163,8 @@
     "mileageWarningLastReported": "آخر قراءة مسجّلة في النظام: {{lastMileage}} كم",
     "mileageWarningEditButton": "تصحيح قراءة العداد الحالية",
     "caroolPhotosRequired": "يجب تصوير جميع الإطارات عبر Carool قبل الإرسال",
-    "diagnosisError": "حدث خطأ أثناء إرسال التشخيص. حاول مرة أخرى."
+    "diagnosisError": "حدث خطأ أثناء إرسال التشخيص. حاول مرة أخرى.",
+    "sentSuccess": "تم الإرسال بنجاح"
   },
   "declinedRequest": {
     "title": "تقرير جديد",
@@ -164,6 +183,10 @@
     "retake": "إعادة التصوير",
     "cameraError": "تعذّر الوصول إلى الكاميرا",
     "cameraErrorHint": "فعّل وصول الكاميرا من إعدادات المتصفح"
+  },
+  "errorBoundary": {
+    "title": "حدث خطأ ما",
+    "returnHome": "العودة للرئيسية"
   },
   "exportHistory": {
     "title": "تصدير السجل",

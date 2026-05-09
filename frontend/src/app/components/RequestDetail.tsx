@@ -14,6 +14,7 @@ import {
 } from "./OpenRequests";
 import type { ActionCodeItem, ReasonCodeItem } from "./TirePopup";
 import { translateQualityTier } from "../qualityTier";
+import { usePhoneBackSync } from "../usePhoneBackSync";
 
 type LabeledRow = { label_he?: string | null; label_ar?: string | null; label_ru?: string | null };
 function labelFor(item: LabeledRow | undefined, language: string): string {
@@ -226,6 +227,7 @@ export function RequestDetail() {
   const { t, i18n } = useTranslation();
   const codes = useCodes();
   const navigate = useNavigate();
+  usePhoneBackSync({ fallback: "/open-requests" });
   const params = useParams<{ id: string }>();
   const [detailWheel, setDetailWheel] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);

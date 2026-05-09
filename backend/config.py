@@ -11,7 +11,7 @@ DB routing:
   Switching between the two requires no code changes — only update the secret value
   in the relevant GCP project.
 
-Optional secrets (CAROOL_*, FIREBASE_SERVICE_ACCOUNT):
+Optional secrets (CAROOL_*, FIREBASE_SERVICE_ACCOUNT, FIREBASE_WEB_CONFIG):
   Loaded with a warning if absent so the app can start while those integrations
   are still being configured.
 """
@@ -67,6 +67,9 @@ CAROOL_BASE_URL = _require("CAROOL_BASE_URL")
 CAROOL_API_KEY      = _optional("CAROOL_API_KEY")
 CAROOL_PAGE_ORIGIN  = _optional("CAROOL_PAGE_ORIGIN")
 FIREBASE_SERVICE_ACCOUNT = _optional("FIREBASE_SERVICE_ACCOUNT")  # JSON string
+# Optional Firebase JS SDK config (JSON) for the mechanic PWA — apiKey, authDomain,
+# projectId, appId, etc. Exposed via GET /api/config when present.
+FIREBASE_WEB_CONFIG = _optional("FIREBASE_WEB_CONFIG")
 
 # Master kill-switch for the Carool integration. Default is ON: any value other
 # than "0" (including a missing secret) leaves Carool enabled. Set the

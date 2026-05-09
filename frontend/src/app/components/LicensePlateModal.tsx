@@ -77,9 +77,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const [lastMileage, setLastMileage] = useState<number | null>(null);
   const [maxMileage, setMaxMileage] = useState<number | null>(null);
   const [showMileagePopup, setShowMileagePopup] = useState(false);
-  const [mileageWarningMessage, setMileageWarningMessage] = useState<string>(
-    "הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!",
-  );
+  const [mileageWarningMessage, setMileageWarningMessage] = useState("");
   // Track the in-flight request (plate it was issued for + its AbortController)
   // so a stale response from a previous LP doesn't overwrite a fresh one, and
   // so changing the LP cancels the obsolete request before kicking a new one.
@@ -165,7 +163,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     options: SubmitToCarOptions = {},
   ) => {
     const { lastMileageHint = null } = options;
-    const genericFallback = "שגיאה בבדיקת הרכב. נסו שוב.";
+    const genericFallback = t("licensePlateModal.genericCarLookupError");
 
     setIsSubmitting(true);
     try {
@@ -281,7 +279,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       Number.isFinite(parsedMileage) &&
       parsedMileage < lastMileage
     ) {
-      setMileageWarningMessage("הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!");
+      setMileageWarningMessage(t("licensePlateModal.warningMileageBelowLast"));
       setShowMileagePopup(true);
       return;
     }
@@ -292,7 +290,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       Number.isFinite(parsedMileage) &&
       parsedMileage > maxMileage
     ) {
-      setMileageWarningMessage("הקילומטרז' שהוזן גבוה מהמקסימום המותר לרכב זה");
+      setMileageWarningMessage(t("licensePlateModal.warningMileageAboveMax"));
       setShowMileagePopup(true);
       return;
     }
@@ -478,7 +476,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           </div>
           {isMileageAboveMax && (
             <p className="text-sm text-red-500">
-              {"קילומטרז' גבוה מהמקסימום המותר לרכב זה"}
+              {t("licensePlateModal.mileageAboveMaxInline")}
             </p>
           )}
 
@@ -515,13 +513,15 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           <div className="flex justify-center mb-4">
             <TriangleAlert className="w-16 h-16 text-amber-500" strokeWidth={2} />
           </div>
-          <h3 className="text-2xl font-bold text-foreground mb-3">שים לב!</h3>
+          <h3 className="text-2xl font-bold text-foreground mb-3">
+            {t("licensePlateModal.mileageAttentionTitle")}
+          </h3>
           <div className="space-y-1 mb-6">
             <p className="text-foreground">
               {mileageWarningMessage}
             </p>
             <p className="text-foreground">
-              {"אנא וודא שהוזן קילומטרז' תקין"}
+              {t("licensePlateModal.mileageVerifyHint")}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -530,7 +530,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
               onClick={() => setShowMileagePopup(false)}
               className="flex-1 bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
             >
-              {"עדכן קילומטרז'"}
+              {t("licensePlateModal.updateMileage")}
             </button>
             <button
               type="button"
@@ -544,7 +544,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                   {t("common.loading")}
                 </span>
               ) : (
-                "המשך בכל זאת"
+                t("licensePlateModal.proceedAnyway")
               )}
             </button>
           </div>

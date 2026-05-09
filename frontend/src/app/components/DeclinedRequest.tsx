@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight } from "lucide-react";
 import { MOCK_REJECTION_REASON_EXAMPLE } from "../mockRejectionReason";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 import { useScreenCache } from "../useScreenCache";
+import { usePhoneBackSync } from "../usePhoneBackSync";
 
 interface DeclinedCache {
   plate: string;
@@ -27,6 +28,7 @@ export function DeclinedRequest() {
   const params = useParams<{ orderId: string }>();
   const orderId = params.orderId ?? "";
   const [cache] = useScreenCache<DeclinedCache>(`route-declined-${orderId}`);
+  usePhoneBackSync({ fallback: "/dashboard" });
 
   useEffect(() => {
     if (!cache) navigate("/dashboard", { replace: true });

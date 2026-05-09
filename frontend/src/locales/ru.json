@@ -27,6 +27,12 @@
     "continue": "Продолжить диагностику",
     "discard": "Выйти и удалить диагноз"
   },
+  "confirmLeaveOrder": {
+    "title": "Диагностика ещё не отправлена!",
+    "subtitle": "Нажмите «Продолжить», чтобы отправить",
+    "continue": "Продолжить",
+    "discard": "Выйти без отправки"
+  },
   "wheels": {
     "frontRight": "Переднее правое",
     "frontLeft": "Переднее левое",
@@ -68,7 +74,12 @@
     "submitUserCode": "Отправить код",
     "submitCode": "Войти",
     "backToUserCode": "Назад",
-    "changeLanguage": "Изменить язык"
+    "changeLanguage": "Изменить язык",
+    "langAbbrev": {
+      "he": "עב",
+      "ru": "РУ",
+      "ar": "عر"
+    }
   },
   "dashboard": {
     "title": "Сервисный отчет Когель",
@@ -132,7 +143,14 @@
   "licensePlateModal": {
     "title": "Новый отчет",
     "subtitle": "Введите номер автомобиля",
-    "mileageBelowLastWarning": "Последний зафиксированный пробег был выше — пожалуйста, проверьте пробег."
+    "warningMileageBelowLast": "Введённый пробег ниже последнего значения в системе!",
+    "warningMileageAboveMax": "Введённый пробег выше допустимого максимума для этого автомобиля",
+    "mileageAboveMaxInline": "Пробег выше допустимого максимума для этого автомобиля",
+    "genericCarLookupError": "Ошибка проверки автомобиля. Попробуйте снова.",
+    "mileageAttentionTitle": "Внимание!",
+    "mileageVerifyHint": "Убедитесь, что пробег введён верно",
+    "updateMileage": "Исправить пробег",
+    "proceedAnyway": "Всё равно продолжить"
   },
   "acceptedRequest": {
     "title": "Новый отчет",
@@ -145,7 +163,8 @@
     "mileageWarningLastReported": "Последний зафиксированный пробег: {{lastMileage}} км",
     "mileageWarningEditButton": "Исправить актуальный пробег",
     "caroolPhotosRequired": "Необходимо сфотографировать все колёса через Carool перед отправкой",
-    "diagnosisError": "Ошибка отправки диагноза. Попробуйте ещё раз."
+    "diagnosisError": "Ошибка отправки диагноза. Попробуйте ещё раз.",
+    "sentSuccess": "Успешно отправлено"
   },
   "declinedRequest": {
     "title": "Новый отчет",
@@ -164,6 +183,10 @@
     "retake": "Переснять",
     "cameraError": "Нет доступа к камере",
     "cameraErrorHint": "Разрешите доступ к камере в настройках браузера"
+  },
+  "errorBoundary": {
+    "title": "Что-то пошло не так",
+    "returnHome": "На главную"
   },
   "exportHistory": {
     "title": "Экспорт истории",

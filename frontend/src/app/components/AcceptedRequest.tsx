@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { AxlesDiagram } from "./AxlesDiagram";
@@ -9,6 +9,7 @@ import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 import { useScreenCache } from "../useScreenCache";
 import { usePhoneBackSync } from "../usePhoneBackSync";
 import { ConfirmModal } from "./ConfirmModal";
+import { useToast } from "./Toast";
 
 /** Wire-shape of one entry in `DiagnosisRequest.tires[wheel]`. */
 type DiagnosisTireAction = {
@@ -147,6 +148,8 @@ function buildCacheFromOrderResponse(
  */
 export function AcceptedRequest() {
   const { t } = useTranslation();
+  const { showToast, toast } = useToast();
+  const location = useLocation();
   const navigate = useNavigate();
   const params = useParams<{ orderId: string }>();
   const orderId = params.orderId ?? "";
@@ -232,13 +235,22 @@ export function AcceptedRequest() {
     };
   }, []);
 
-  // Camera permission warm-up is best done on mount, but only once we have
-  // the cache (and therefore know we're going to actually render the
-  // screen).
+  // Camera permission warm-up: once per browser tab session — avoids
+  // re-prompts on react-router remounts (independent of Carool API flag).
   useEffect(() => {
     if (!cache) return;
+    try {
+      if (sessionStorage.getItem("camPrimed")) return;
+    } catch {
+      return;
+    }
     navigator.mediaDevices?.getUserMedia({ video: true })
-      .then((s) => s.getTracks().forEach((t) => t.stop()))
+      .then((s) => {
+        try {
+          sessionStorage.setItem("camPrimed", "1");
+        } catch {}
+        s.getTracks().forEach((t) => t.stop());
+      })
       .catch(() => {});
   }, [cache]);
 
@@ -307,28 +319,31 @@ export function AcceptedRequest() {
   // Single shared back-press handler for everything on this route. Order
   // of precedence: popup modal > popup itself > order modal > order dirty
   // > default navigate(-1).
-  usePhoneBackSync(() => {
-    if (popupDiscardConfirm) {
-      setPopupDiscardConfirm(false);
-      return true;
-    }
-    if (popupWheel) {
-      if (popupDirty) {
-        setPopupDiscardConfirm(true);
-      } else {
-        closePopup();
+  usePhoneBackSync({
+    fallback: "/dashboard",
+    onBack: () => {
+      if (popupDiscardConfirm) {
+        setPopupDiscardConfirm(false);
+        return true;
       }
-      return true;
-    }
-    if (showDiscardConfirm) {
-      setShowDiscardConfirm(false);
-      return true;
-    }
-    if (isDirty) {
-      setShowDiscardConfirm(true);
-      return true;
-    }
-    return false;
+      if (popupWheel) {
+        if (popupDirty) {
+          setPopupDiscardConfirm(true);
+        } else {
+          closePopup();
+        }
+        return true;
+      }
+      if (showDiscardConfirm) {
+        setShowDiscardConfirm(false);
+        return true;
+      }
+      if (isDirty) {
+        setShowDiscardConfirm(true);
+        return true;
+      }
+      return false;
+    },
   });
 
   const setFrontAlignment = (value: boolean) => {
@@ -348,7 +363,6 @@ export function AcceptedRequest() {
 
   const handleNavigateToCaroolCheck = (wheel: string) => {
     if (!cache) return;
-    if (!caroolEnabled || (cache.caroolNeeded != null && cache.caroolNeeded !== 1)) return;
     const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
     if (noCarool) return;
     try {
@@ -362,12 +376,20 @@ export function AcceptedRequest() {
 
   const NO_CAROOL_WHEELS = new Set(["spare-tire", "rear-right-inner", "rear-left-inner"]);
 
+  const goBackToDashboard = () => {
+    if (location.key === "default") {
+      navigate("/dashboard", { replace: true });
+    } else {
+      navigate(-1);
+    }
+  };
+
   const handleHeaderBack = () => {
     if (isDirty) {
       setShowDiscardConfirm(true);
       return;
     }
-    navigate(-1);
+    goBackToDashboard();
   };
 
   const handleDiscardAndLeave = () => {
@@ -379,7 +401,8 @@ export function AcceptedRequest() {
       }
       sessionStorage.removeItem(`route-order-${orderId}`);
     } catch {}
-    navigate(-1);
+    setAffectedWheels({});
+    goBackToDashboard();
   };
 
   const handleSpareTireChange = (enabled: boolean) => {
@@ -400,19 +423,17 @@ export function AcceptedRequest() {
   const handleSubmitDiagnosis = async () => {
     if (isSubmitting || !cache) return;
 
-    if (caroolEnabled && cache.caroolNeeded === 1) {
-      const photoDone: string[] = JSON.parse(
-        sessionStorage.getItem(`carool-photos-done-${licensePlate}`) || "[]",
-      );
-      const photoDoneSet = new Set(photoDone);
-      const missing = Object.entries(affectedWheels)
-        .filter(([wheel, data]) => !NO_CAROOL_WHEELS.has(wheel) && data.selectedReasonCodes.length > 0)
-        .filter(([wheel]) => !photoDoneSet.has(wheel))
-        .map(([wheel]) => wheel);
-      if (missing.length > 0) {
-        alert(t("acceptedRequest.caroolPhotosRequired"));
-        return;
-      }
+    const photoDone: string[] = JSON.parse(
+      sessionStorage.getItem(`carool-photos-done-${licensePlate}`) || "[]",
+    );
+    const photoDoneSet = new Set(photoDone);
+    const missing = Object.entries(affectedWheels)
+      .filter(([wheel, data]) => !NO_CAROOL_WHEELS.has(wheel) && data.selectedReasonCodes.length > 0)
+      .filter(([wheel]) => !photoDoneSet.has(wheel))
+      .map(([wheel]) => wheel);
+    if (missing.length > 0) {
+      showToast(t("acceptedRequest.caroolPhotosRequired"));
+      return;
     }
 
     const tires: Record<string, DiagnosisTireAction[]> = {};
@@ -462,36 +483,28 @@ export function AcceptedRequest() {
       // order and submits to the ERP server-side; the dashboard / open
       // requests list will surface the new status whenever the mechanic
       // returns. Frontend is fire-and-forget — no spinner, no watchdog.
-      if (caroolEnabled && cache.caroolNeeded === 1) {
+      if (caroolEnabled) {
         const draftRes = await fetch("/api/diagnosis/draft", {
           method: "POST",
           headers: jsonHeaders,
           body: JSON.stringify(diagnosisPayload),
         });
         if (!draftRes.ok) {
-          alert(t("acceptedRequest.diagnosisError"));
+          showToast(t("acceptedRequest.diagnosisError"));
           return;
         }
 
-        const finalizeRes = await fetch("/api/carool/finalize", {
-          method: "POST",
-          headers: jsonHeaders,
-          body: JSON.stringify({ order_id: orderId }),
-        });
-        if (!finalizeRes.ok) {
-          alert(t("acceptedRequest.diagnosisError"));
-          return;
-        }
+        // Finalize happens in CaroolCheck after photo capture completes.
         // Fall through to the shared success path below.
       } else {
-        // Direct ERP submission path — Carool disabled or not needed.
+        // Direct ERP submission path — Carool disabled.
         const res = await fetch("/api/diagnosis", {
           method: "POST",
           headers: jsonHeaders,
           body: JSON.stringify(diagnosisPayload),
         });
         if (!res.ok) {
-          alert(t("acceptedRequest.diagnosisError"));
+          showToast(t("acceptedRequest.diagnosisError"));
           return;
         }
       }
@@ -507,7 +520,7 @@ export function AcceptedRequest() {
         navigate("/dashboard", { replace: true });
       }, 1500);
     } catch {
-      alert(t("acceptedRequest.diagnosisError"));
+      showToast(t("acceptedRequest.diagnosisError"));
     } finally {
       setIsSubmitting(false);
     }
@@ -580,7 +593,7 @@ export function AcceptedRequest() {
               </p>
             </div>
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
-              <p className="text-[10px] text-muted-foreground leading-tight truncate">איכות</p>
+              <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
               <p className="text-sm font-semibold text-foreground leading-tight truncate">{cache.tireLevel && cache.tireLevel.length > 0 ? cache.tireLevel : "—"}</p>
             </div>
           </div>
@@ -668,7 +681,7 @@ export function AcceptedRequest() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <span className="text-lg font-bold text-foreground">נשלח בהצלחה</span>
+            <span className="text-lg font-bold text-foreground">{t("acceptedRequest.sentSuccess")}</span>
           </div>
         </div>
       )}
@@ -685,7 +698,6 @@ export function AcceptedRequest() {
         licensePlate={licensePlate}
         onSubmit={handlePopupSubmit}
         onNavigateToCaroolCheck={handleNavigateToCaroolCheck}
-        caroolEnabled={caroolEnabled}
         spareTireEnabled={spareTire}
         wheelCount={wheelCount}
         initialData={popupWheel ? affectedWheels[popupWheel] : undefined}
@@ -705,13 +717,14 @@ export function AcceptedRequest() {
 
       <ConfirmModal
         open={showDiscardConfirm}
-        title={t("confirmLeave.title")}
-        subtitle={t("confirmLeave.subtitle")}
-        primaryLabel={t("confirmLeave.continue")}
-        destructiveLabel={t("confirmLeave.discard")}
+        title={t("confirmLeaveOrder.title")}
+        subtitle={t("confirmLeaveOrder.subtitle")}
+        primaryLabel={t("confirmLeaveOrder.continue")}
+        destructiveLabel={t("confirmLeaveOrder.discard")}
         onPrimary={() => setShowDiscardConfirm(false)}
         onDestructive={handleDiscardAndLeave}
       />
+      {toast}
     </div>
   );
 }

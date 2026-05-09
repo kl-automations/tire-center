@@ -8,3 +8,5 @@ guidelines/
 quick-tools.md
 .env
 backend/.env
+__pycache__/
+*.py[cod]

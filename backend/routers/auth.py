@@ -9,18 +9,32 @@ The JWT payload is { shop_id, erp_hash, exp }. All protected routes read
 shop_id and erp_hash from the token via the get_current_shop dependency.
 """
 
+import hashlib
+import os
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from firebase_admin import auth as firebase_admin_auth
 from jose import jwt
+
+from adapters import erp
 from config import JWT_SECRET
 from logging_utils import log, log_error
-from models.schemas import RequestCodeRequest, RequestCodeResponse, VerifyOtpRequest, VerifyOtpResponse
-from adapters import erp
+from middleware.auth import get_current_shop
+from models.schemas import (
+    FirebaseCustomTokenResponse,
+    RequestCodeRequest,
+    RequestCodeResponse,
+    VerifyOtpRequest,
+    VerifyOtpResponse,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 ALGORITHM = "HS256"
 TOKEN_TTL_DAYS = 180
+# Local HTTP dev: set COOKIE_SECURE=0 so the browser accepts Set-Cookie without Secure.
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "1").strip().lower() in ("1", "true", "yes")
 
 
 def _make_token(user_code: str, otp: str) -> str:
@@ -68,13 +82,14 @@ async def request_code(body: RequestCodeRequest):
     summary="Verify OTP and receive JWT (step 2 of login)",
     description=(
         "Submits the mechanic's user code and OTP to the ERP **Login** SOAP method. "
-        "On success a signed JWT (HS256, 30-day TTL) is returned. "
-        "Include it as **Authorization: Bearer \\<token\\>** on every subsequent request."
+        "On success a signed JWT (HS256) is returned in the body **and** set as an "
+        "HttpOnly cookie (`token`, Path=/api). Clients may use either the cookie or "
+        "**Authorization: Bearer** until the frontend migrates to cookie-only auth."
     ),
-    response_description="Signed JWT to use as Bearer token on all protected endpoints.",
+    response_description="Signed JWT (also mirrored in HttpOnly cookie for PR-A rollout).",
 )
-async def verify(body: VerifyOtpRequest):
-    """Step 2 — verify OTP via ERP Login; return a signed JWT on success."""
+async def verify(response: Response, body: VerifyOtpRequest):
+    """Step 2 — verify OTP via ERP Login; return JWT in body and Set-Cookie."""
     log("ROUTER/auth", f"verify received userCode={body.userCode}")
     result = await erp.verify_login(body.userCode, body.otp)
     if not result["success"]:
@@ -82,4 +97,61 @@ async def verify(body: VerifyOtpRequest):
         raise HTTPException(status_code=401, detail="invalid_otp")
     token = _make_token(body.userCode, body.otp)
     log("ROUTER/auth", f"verify success userCode={body.userCode} JWT issued (TTL={TOKEN_TTL_DAYS}d)")
+    max_age = TOKEN_TTL_DAYS * 24 * 3600
+    response.set_cookie(
+        key="token",
+        value=token,
+        max_age=max_age,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="strict",
+        path="/api",
+    )
     return VerifyOtpResponse(success=True, token=token)
+
+
+@router.post(
+    "/logout",
+    summary="Clear session cookie",
+    description=(
+        "Clears the HttpOnly `token` cookie. Does not require a valid JWT — idempotent. "
+        "PR-B: call from the PWA on logout alongside clearing any legacy client state."
+    ),
+)
+async def logout(response: Response):
+    """Expire the session cookie."""
+    response.set_cookie(
+        key="token",
+        value="",
+        max_age=0,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="strict",
+        path="/api",
+    )
+    return {"ok": True}
+
+
+@router.post(
+    "/firebase-custom-token",
+    response_model=FirebaseCustomTokenResponse,
+    summary="Mint a Firebase custom token for Firestore listeners",
+    description=(
+        "Returns a Firebase Auth custom token for the authenticated mechanic's shop. "
+        "The client signs in with `signInWithCustomToken` and subscribes to "
+        "`orders/{shop_id}/updates` via onSnapshot. Requires the same Bearer JWT as "
+        "all other protected routes."
+    ),
+)
+async def firebase_custom_token(shop: dict = Depends(get_current_shop)):
+    """Mint a custom token with claim `shop_id` for Firestore security rules."""
+    shop_id = shop["shop_id"]
+    uid = "m_" + hashlib.sha256(shop_id.encode("utf-8")).hexdigest()
+    try:
+        tok = firebase_admin_auth.create_custom_token(uid, {"shop_id": shop_id})
+    except Exception as e:
+        log_error("auth", f"firebase custom token failed shop_id={shop_id}: {e}")
+        raise HTTPException(status_code=503, detail="firebase_token_unavailable") from e
+    token_str = tok.decode("utf-8") if isinstance(tok, bytes) else str(tok)
+    log("ROUTER/auth", f"firebase-custom-token issued shop_id={shop_id}")
+    return FirebaseCustomTokenResponse(custom_token=token_str, shop_id=shop_id)

@@ -75,11 +75,6 @@ interface TirePopupProps {
   licensePlate: string;
   onSubmit: (wheelPosition: string, data: WheelData) => void;
   onNavigateToCaroolCheck: (wheel: string) => void;
-  /**
-   * When `false`, the continue button submits the wheel data and closes the
-   * popup without navigating to the Carool photo flow. Defaults to `true`.
-   */
-  caroolEnabled?: boolean;
   spareTireEnabled?: boolean;
   wheelCount?: VehicleWheelCount;
   initialData?: WheelData;
@@ -136,7 +131,6 @@ export function TirePopup({
   wheelPosition,
   onSubmit,
   onNavigateToCaroolCheck,
-  caroolEnabled = true,
   spareTireEnabled = false,
   wheelCount = 4,
   initialData,
@@ -214,9 +208,7 @@ export function TirePopup({
     });
     reset();
     onClose();
-    if (caroolEnabled) {
-      onNavigateToCaroolCheck(wheelPosition);
-    }
+    onNavigateToCaroolCheck(wheelPosition);
   };
 
   const title = WHEEL_POS_KEYS[wheelPosition] ? t(WHEEL_POS_KEYS[wheelPosition]) : wheelPosition;
@@ -317,7 +309,7 @@ export function TirePopup({
           </div>
         </section>
 
-        {/* העברה — not available for spare tire */}
+        {/* Relocation — not available for spare tire */}
         {wheelPosition !== "spare-tire" && (
           <section>
             <SectionLabel>{t("tirePopup.sectionRelocation")}</SectionLabel>
@@ -349,7 +341,7 @@ export function TirePopup({
           disabled={!canContinue}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl font-semibold transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {caroolEnabled ? t("tirePopup.continueToCheck") : t("common.continue")}
+          {t("tirePopup.continueToCheck")}
         </button>
       </div>
     </div>

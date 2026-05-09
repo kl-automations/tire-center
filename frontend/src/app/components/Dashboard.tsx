@@ -31,13 +31,15 @@ export function Dashboard() {
   const { showToast, toast } = useToast();
   const lastBackRef = useRef(0);
 
-  // Dashboard is the second root screen — Login pattern. First system back
-  // shows a toast; second within 2s lets the system handle it (PWA exit).
-  usePhoneBackSync(() => {
-    if (Date.now() - lastBackRef.current < 2000) return false;
-    lastBackRef.current = Date.now();
-    showToast(t("common.pressAgainToExit"));
-    return true;
+  // Same root back pattern as Login — second press within 2s is `passthrough`
+  // so Android can exit the installed PWA. Confirm on device.
+  usePhoneBackSync({
+    onBack: () => {
+      if (Date.now() - lastBackRef.current < 2000) return "passthrough";
+      lastBackRef.current = Date.now();
+      showToast(t("common.pressAgainToExit"));
+      return true;
+    },
   });
 
   const handleNewRequest = () => {

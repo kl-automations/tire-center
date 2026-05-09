@@ -59,6 +59,15 @@ class VerifyOtpResponse(BaseModel):
     )
 
 
+class FirebaseCustomTokenResponse(BaseModel):
+    """Short-lived Firebase Auth custom token for Firestore client listeners."""
+
+    custom_token: str = Field(description="Pass to Firebase JS signInWithCustomToken.")
+    shop_id: str = Field(
+        description="Shop scope matching Firestore path orders/{shop_id}/updates/*."
+    )
+
+
 # ---------- Car lookup ----------
 
 class CarLookupRequest(BaseModel):

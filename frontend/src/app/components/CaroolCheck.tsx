@@ -5,13 +5,12 @@ import { ArrowRight, RotateCcw, Check } from "lucide-react";
 import { WearMask } from "./masks/WearMask";
 import { ReferenceMask } from "./masks/ReferenceMask";
 import { useScreenCache } from "../useScreenCache";
-import type { PlateType } from "./LicensePlate";
+import { usePhoneBackSync } from "../usePhoneBackSync";
 
 type PhotoStep = "sidewall" | "tread";
 
 interface CaroolCache {
   plate: string;
-  plateType: PlateType;
 }
 
 const WHEEL_LABEL_KEYS: Record<string, string> = {
@@ -118,8 +117,8 @@ function dataUrlToBlob(dataUrl: string): Blob {
  *
  * Reached via `/order/:orderId/carool/:wheel`. The wheel-position string is
  * read straight from the path; the per-route cache (`route-carool-{orderId}-
- * {wheel}`) carries plate / plateType so the screen still renders correctly
- * after a full page reload.
+ * {wheel}`) carries the plate so session keys stay consistent after a full
+ * page reload (extra fields from the parent screen are ignored).
  *
  * The current single-wheel flow walks through sidewall and tread for the
  * wheel in `:wheel` and then navigates back to the parent order screen.
@@ -130,6 +129,7 @@ export function CaroolCheck() {
   const params = useParams<{ orderId: string; wheel: string }>();
   const orderId = params.orderId ?? "";
   const currentWheel = params.wheel ?? "";
+  usePhoneBackSync({ fallback: `/order/${encodeURIComponent(orderId)}` });
   const cacheKey = `route-carool-${orderId}-${currentWheel}`;
   const [cache] = useScreenCache<CaroolCache>(cacheKey);
 
@@ -148,6 +148,26 @@ export function CaroolCheck() {
   const [showDone, setShowDone] = useState(false);
   const [caroolId, setCaroolId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [caroolEnabled, setCaroolEnabled] = useState(true);
+  const [caroolConfigReady, setCaroolConfigReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data && typeof data.carool_enabled === "boolean") {
+          setCaroolEnabled(data.carool_enabled);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setCaroolConfigReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!cache || !currentWheel) {
@@ -179,8 +199,7 @@ export function CaroolCheck() {
 
   if (!cache || !currentWheel) return null;
 
-  const { plate, plateType: _plateType } = cache;
-  void _plateType;
+  const { plate } = cache;
   const totalSteps = 2;
   const completedSteps = photoStep === "tread" ? 1 : 0;
   const wheelLabel = WHEEL_LABEL_KEYS[currentWheel] ? t(WHEEL_LABEL_KEYS[currentWheel]) : currentWheel;
@@ -223,32 +242,33 @@ export function CaroolCheck() {
           cropped = preview;
         }
       }
-      const blob = dataUrlToBlob(cropped);
+      if (caroolConfigReady && caroolEnabled) {
+        const blob = dataUrlToBlob(cropped);
+        let sessionId = caroolId;
+        if (!sessionId) {
+          const res = await fetch("/api/carool/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getToken() },
+            body: JSON.stringify({ order_id: orderId }),
+          });
+          if (!res.ok) throw new Error("session failed");
+          const data = (await res.json()) as { carool_id: string };
+          sessionId = data.carool_id;
+          setCaroolId(sessionId);
+        }
 
-      let sessionId = caroolId;
-      if (!sessionId) {
-        const res = await fetch("/api/carool/session", {
+        const formData = new FormData();
+        formData.append("order_id", orderId);
+        formData.append("wheel", currentWheel.toUpperCase().replace("-", "_"));
+        formData.append("photo_type", photoStep);
+        formData.append("file", blob, "photo.jpg");
+        const uploadRes = await fetch("/api/carool/photo", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...getToken() },
-          body: JSON.stringify({ order_id: orderId }),
+          headers: { ...getToken() },
+          body: formData,
         });
-        if (!res.ok) throw new Error("session failed");
-        const data = (await res.json()) as { carool_id: string };
-        sessionId = data.carool_id;
-        setCaroolId(sessionId);
+        if (!uploadRes.ok) throw new Error("upload failed");
       }
-
-      const formData = new FormData();
-      formData.append("order_id", orderId);
-      formData.append("wheel", currentWheel.toUpperCase().replace("-", "_"));
-      formData.append("photo_type", photoStep);
-      formData.append("file", blob, "photo.jpg");
-      const uploadRes = await fetch("/api/carool/photo", {
-        method: "POST",
-        headers: { ...getToken() },
-        body: formData,
-      });
-      if (!uploadRes.ok) throw new Error("upload failed");
 
       setPreview(null);
       cropRectRef.current = null;
@@ -257,11 +277,13 @@ export function CaroolCheck() {
         setPhotoStep("tread");
       } else {
         // Tread photo — last step for this wheel.
-        await fetch("/api/carool/finalize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getToken() },
-          body: JSON.stringify({ order_id: orderId }),
-        });
+        if (caroolConfigReady && caroolEnabled) {
+          await fetch("/api/carool/finalize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getToken() },
+            body: JSON.stringify({ order_id: orderId }),
+          });
+        }
         setShowDone(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
         const doneKey = `carool-photos-done-${plate}`;
@@ -373,7 +395,7 @@ export function CaroolCheck() {
             </button>
             <button
               onClick={handleApprove}
-              disabled={isUploading}
+              disabled={isUploading || !caroolConfigReady}
               className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-white text-black font-semibold text-base active:opacity-70 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? (

@@ -6,6 +6,8 @@ import type { VehicleWheelCount } from "../vehicleWheelLayout";
 import type { QualityTier } from "../qualityTier";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 import type { ActionCodeItem, ReasonCodeItem } from "./TirePopup";
+import { usePhoneBackSync } from "../usePhoneBackSync";
+import { attachShopOrderSignalsListener } from "../../firebase";
 
 /**
  * Lifecycle status of a service order.
@@ -562,11 +564,10 @@ interface UseOrdersSummaryResult {
 }
 
 /**
- * Polls `GET /api/orders` every 30 seconds and exposes a lightweight summary
- * suitable for the dashboard badge + counts. The seen-statuses snapshot is
- * read from `sessionStorage` but never written here — only the Open Requests
- * screen marks orders as seen, so badges persist on the Dashboard until the
- * mechanic actually opens the list.
+ * Loads `GET /api/orders` for dashboard badge + counts. Subscribes to Firestore
+ * shop signals when `/api/config` exposes Firebase web config; otherwise falls
+ * back to a 30s poll. When live listeners are active, only a 5-minute backup
+ * poll runs (resilience if a signal is missed).
  */
 export function useOrdersSummary(): UseOrdersSummaryResult {
   const { i18n } = useTranslation();
@@ -576,6 +577,8 @@ export function useOrdersSummary(): UseOrdersSummaryResult {
 
   useEffect(() => {
     let cancelled = false;
+    let fireUnsub: (() => void) | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const load = async () => {
       try {
@@ -603,11 +606,31 @@ export function useOrdersSummary(): UseOrdersSummaryResult {
       }
     };
 
+    const setFallbackInterval = (ms: number) => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(() => void load(), ms);
+    };
+
     void load();
-    const interval = setInterval(() => void load(), 30_000);
+    setFallbackInterval(30_000);
+
+    void attachShopOrderSignalsListener(() => {
+      if (!cancelled) void load();
+    }).then((unsub) => {
+      if (cancelled) {
+        unsub?.();
+        return;
+      }
+      fireUnsub = unsub;
+      if (intervalId) clearInterval(intervalId);
+      intervalId = null;
+      setFallbackInterval(unsub ? 300_000 : 30_000);
+    });
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      fireUnsub?.();
+      if (intervalId) clearInterval(intervalId);
     };
   }, [codes, i18n.language]);
 
@@ -631,11 +654,12 @@ type StatusFilter = "approved" | "waiting" | "declined";
  *
  * Features: search by plate / request number, filter by status, expandable
  * inline detail rows, and swipe-to-delete (confirmed via long-press/swipe).
- * Status badges update in real time via Firestore `onSnapshot` (not yet wired).
+ * Status badges refresh from Firestore shop signals (`onSnapshot`) when configured.
  *
- * Data source: `GET /api/orders` (Bearer JWT from `localStorage`), polled
- * every 30 seconds. Locally-dismissed orders are filtered out via the
- * `dismissed-order-ids` `sessionStorage` key.
+ * Data source: `GET /api/orders` (Bearer JWT from `localStorage`), refreshed
+ * via Firestore `onSnapshot` on shop signals when configured, with a 30s or
+ * 5-minute polling fallback. Locally-dismissed orders are filtered via
+ * `dismissed-order-ids` in `sessionStorage`.
  *
  * Navigation: reached from `dashboard`; navigates to `{ name: "request-detail" }`
  * on row tap.
@@ -644,6 +668,7 @@ export function OpenRequests() {
   const { t, i18n } = useTranslation();
   const codes = useCodes();
   const navigate = useNavigate();
+  usePhoneBackSync({ fallback: "/dashboard" });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -653,6 +678,8 @@ export function OpenRequests() {
 
   useEffect(() => {
     let cancelled = false;
+    let fireUnsub: (() => void) | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const load = async () => {
       try {
@@ -696,11 +723,31 @@ export function OpenRequests() {
       }
     };
 
+    const setFallbackInterval = (ms: number) => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(() => void load(), ms);
+    };
+
     void load();
-    const interval = setInterval(() => void load(), 30_000);
+    setFallbackInterval(30_000);
+
+    void attachShopOrderSignalsListener(() => {
+      if (!cancelled) void load();
+    }).then((unsub) => {
+      if (cancelled) {
+        unsub?.();
+        return;
+      }
+      fireUnsub = unsub;
+      if (intervalId) clearInterval(intervalId);
+      intervalId = null;
+      setFallbackInterval(unsub ? 300_000 : 30_000);
+    });
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      fireUnsub?.();
+      if (intervalId) clearInterval(intervalId);
     };
   }, [codes, i18n.language]);
 

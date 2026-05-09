@@ -14,6 +14,7 @@ import { DeclinedRequest } from "./components/DeclinedRequest";
 import { CaroolCheck } from "./components/CaroolCheck";
 import { OpenRequests } from "./components/OpenRequests";
 import { RequestDetail } from "./components/RequestDetail";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /**
  * Storage key for the most recent in-app path. Read once on boot to seed
@@ -62,17 +63,10 @@ function getInitialEntries(): string[] {
   return ["/"];
 }
 
-/**
- * Root router for the app.
- *
- * Uses `MemoryRouter` so the visible URL never changes. Each in-app
- * navigation pushes a fresh `history` entry via `usePhoneBackSync` so the
- * device's system back button maps onto the in-UI ← arrow.
- */
-export function AppRouter() {
+function RoutedContent() {
+  const location = useLocation();
   return (
-    <MemoryRouter initialEntries={getInitialEntries()}>
-      <PersistRouteOnChange />
+    <ErrorBoundary resetKey={`${location.pathname}${location.search}`}>
       <Routes>
         <Route
           path="/"
@@ -132,6 +126,22 @@ export function AppRouter() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+    </ErrorBoundary>
+  );
+}
+
+/**
+ * Root router for the app.
+ *
+ * Uses `MemoryRouter` so the visible URL never changes. Each in-app
+ * navigation pushes a fresh `history` entry via `usePhoneBackSync` so the
+ * device's system back button maps onto the in-UI ← arrow.
+ */
+export function AppRouter() {
+  return (
+    <MemoryRouter initialEntries={getInitialEntries()}>
+      <PersistRouteOnChange />
+      <RoutedContent />
     </MemoryRouter>
   );
 }

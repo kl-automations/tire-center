@@ -1,0 +1,11 @@
+rules_version = '2';
+// Deploy to your Firebase project: firebase deploy --only firestore:rules
+// TODO(b2b): confirm rules in Firebase console for production; custom token must include claim shop_id.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /orders/{shopId}/updates/{docId} {
+      allow read: if request.auth != null && request.auth.token.shop_id == shopId;
+      allow write: if false;
+    }
+  }
+}

@@ -6,13 +6,6 @@ import { APP_LANGUAGES, type Language, useTheme } from "../ThemeContext";
 import { usePhoneBackSync } from "../usePhoneBackSync";
 import { useToast } from "./Toast";
 
-/** Short labels for the language pill */
-const LANG_ABBREV: Record<Language, string> = {
-  he: "עב",
-  ru: "РУ",
-  ar: "عر",
-};
-
 type Step = "userCode" | "code";
 
 /**
@@ -42,14 +35,17 @@ export function Login() {
   const { showToast, toast } = useToast();
   const lastBackRef = useRef(0);
 
-  // Root screen back-press: first press shows a toast, second within 2s
-  // allows the system back to proceed (default popstate handling exits the
-  // PWA on Android).
-  usePhoneBackSync(() => {
-    if (Date.now() - lastBackRef.current < 2000) return false;
-    lastBackRef.current = Date.now();
-    showToast(t("common.pressAgainToExit"));
-    return true;
+  // Root screen back-press: first press shows a toast; second within 2s uses
+  // `passthrough` so we do not call MemoryRouter `navigate(-1)` (a no-op on
+  // the entry route) and the host can handle back (PWA exit on Android).
+  // Verify on a real installed PWA — see usePhoneBackSync `PhoneBackResult`.
+  usePhoneBackSync({
+    onBack: () => {
+      if (Date.now() - lastBackRef.current < 2000) return "passthrough";
+      lastBackRef.current = Date.now();
+      showToast(t("common.pressAgainToExit"));
+      return true;
+    },
   });
 
   useEffect(() => {
@@ -161,7 +157,7 @@ export function Login() {
             aria-haspopup="listbox"
           >
             <Globe className="w-4 h-4 text-foreground" aria-hidden />
-            <span className="text-sm font-bold text-foreground tabular-nums">{LANG_ABBREV[language]}</span>
+            <span className="text-sm font-bold text-foreground tabular-nums">{t(`login.langAbbrev.${language}`)}</span>
           </button>
           {langMenuOpen && (
             <ul
@@ -186,7 +182,7 @@ export function Login() {
                     }`}
                   >
                     <Globe className="w-4 h-4 shrink-0 opacity-90" aria-hidden />
-                    <span className="tabular-nums">{LANG_ABBREV[opt.code]}</span>
+                    <span className="tabular-nums">{t(`login.langAbbrev.${opt.code}`)}</span>
                   </button>
                 </li>
               ))}
