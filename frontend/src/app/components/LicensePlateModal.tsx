@@ -75,7 +75,6 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   // `null` covers all "skip validation" cases: no history (ERP ReturnCode='1'),
   // network/ERP error, response not yet returned, or no LP-blur fired yet.
   const [lastMileage, setLastMileage] = useState<number | null>(null);
-  const [maxMileage, setMaxMileage] = useState<number | null>(null);
   const [showMileagePopup, setShowMileagePopup] = useState(false);
   const [mileageWarningMessage, setMileageWarningMessage] = useState("");
   // Track the in-flight request (plate it was issued for + its AbortController)
@@ -106,7 +105,6 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     // the underlying value has been invalidated for any reason. Pending is
     // treated as skip-validation, matching the spec.
     setLastMileage(null);
-    setMaxMileage(null);
 
     const controller = new AbortController();
     lastMileageRequestRef.current = { plate, controller };
@@ -122,16 +120,13 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { last_mileage?: number | null; max_mileage?: number | null } | null) => {
+      .then((data: { last_mileage?: number | null } | null) => {
         // Stale-response guard: another blur (or LP edit) has happened since
         // we issued this request, so its result is no longer relevant.
         if (lastMileageRequestRef.current?.plate !== plate) return;
         const lastMileageValue =
           data && typeof data.last_mileage === "number" ? data.last_mileage : null;
-        const maxMileageValue =
-          data && typeof data.max_mileage === "number" ? data.max_mileage : null;
         setLastMileage(lastMileageValue);
-        setMaxMileage(maxMileageValue);
       })
       .catch(() => {
         // Spec: any failure (timeout, ERP error) silently skips validation.
@@ -284,17 +279,6 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       return;
     }
 
-    if (
-      maxMileage !== null &&
-      parsedMileage !== null &&
-      Number.isFinite(parsedMileage) &&
-      parsedMileage > maxMileage
-    ) {
-      setMileageWarningMessage(t("licensePlateModal.warningMileageAboveMax"));
-      setShowMileagePopup(true);
-      return;
-    }
-
     await submitToCar(plate, parsedMileage, trimmedMileage, { lastMileageHint: null });
   };
 
@@ -318,7 +302,6 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
       lastMileageRequestRef.current = null;
     }
     setLastMileage(null);
-    setMaxMileage(null);
   };
 
   const handleMileageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -326,14 +309,6 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   };
 
   if (!isOpen) return null;
-
-  const trimmedEnteredMileage = mileage.trim();
-  const parsedEnteredMileage = trimmedEnteredMileage ? parseInt(trimmedEnteredMileage, 10) : null;
-  const isMileageAboveMax =
-    maxMileage !== null &&
-    parsedEnteredMileage !== null &&
-    Number.isFinite(parsedEnteredMileage) &&
-    parsedEnteredMileage > maxMileage;
 
   const bgMain = PLATE_BG_MAIN[plateType];
   const text = PLATE_TEXT[plateType];
@@ -474,16 +449,11 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
             />
             <span className="text-sm text-muted-foreground shrink-0">{t("acceptedRequest.km")}</span>
           </div>
-          {isMileageAboveMax && (
-            <p className="text-sm text-red-500">
-              {t("licensePlateModal.mileageAboveMaxInline")}
-            </p>
-          )}
 
           <button
             type="button"
             onClick={handleContinue}
-            disabled={!licensePlate.trim() || !mileage.trim() || isSubmitting || isMileageAboveMax}
+            disabled={!licensePlate.trim() || !mileage.trim() || isSubmitting}
             className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
           >
             {isSubmitting ? (

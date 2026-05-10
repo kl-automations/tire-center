@@ -151,8 +151,6 @@
     "title": "تقرير جديد",
     "subtitle": "أدخل رقم لوحة المركبة",
     "warningMileageBelowLast": "قراءة العداد المدخلة أقل من آخر قراءة مسجّلة في النظام!",
-    "warningMileageAboveMax": "قراءة العداد المدخلة أعلى من الحد الأقصى المسموح لهذه المركبة",
-    "mileageAboveMaxInline": "قراءة العداد أعلى من الحد الأقصى المسموح لهذه المركبة",
     "genericCarLookupError": "خطأ في التحقق من المركبة. حاولوا مرة أخرى.",
     "mileageAttentionTitle": "تنبيه!",
     "mileageVerifyHint": "يُرجى التأكد من إدخال قراءة عداد صحيحة",

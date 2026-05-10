@@ -151,8 +151,6 @@
     "title": "דיווח חדש",
     "subtitle": "הזן מספר רישוי של הרכב",
     "warningMileageBelowLast": "הקילומטרז' שהוזן נמוך מהקילומטרז' האחרון במערכת!",
-    "warningMileageAboveMax": "הקילומטרז' שהוזן גבוה מהמקסימום המותר לרכב זה",
-    "mileageAboveMaxInline": "קילומטרז' גבוה מהמקסימום המותר לרכב זה",
     "genericCarLookupError": "שגיאה בבדיקת הרכב. נסו שוב.",
     "mileageAttentionTitle": "שים לב!",
     "mileageVerifyHint": "אנא וודא שהוזן קילומטרז' תקין",
