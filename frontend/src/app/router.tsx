@@ -14,6 +14,9 @@ import { DeclinedRequest } from "./components/DeclinedRequest";
 import { CaroolCheck } from "./components/CaroolCheck";
 import { OpenRequests } from "./components/OpenRequests";
 import { RequestDetail } from "./components/RequestDetail";
+import { StockAvailability } from "./components/StockAvailability";
+import { DemandOverview } from "./components/DemandOverview";
+import { MonthlyReceipt } from "./components/MonthlyReceipt";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /**
@@ -121,6 +124,30 @@ function RoutedContent() {
           element={
             <RequireAuth>
               <RequestDetail />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/stock-availability"
+          element={
+            <RequireAuth>
+              <StockAvailability />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/demand-overview"
+          element={
+            <RequireAuth>
+              <DemandOverview />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/monthly-receipt"
+          element={
+            <RequireAuth>
+              <MonthlyReceipt />
             </RequireAuth>
           }
         />

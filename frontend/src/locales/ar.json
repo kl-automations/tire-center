@@ -19,7 +19,8 @@
       "upgraded": "محسّن",
       "premium": "ممتاز"
     },
-    "pressAgainToExit": "اضغط مرة أخرى للخروج"
+    "pressAgainToExit": "اضغط مرة أخرى للخروج",
+    "comingSoon": "قريبًا"
   },
   "confirmLeave": {
     "title": "لم يتم حفظ المعلومات!",
@@ -89,6 +90,12 @@
     "newRequestDesc": "إنشاء تقرير جديد لمركبة",
     "openRequests": "تقارير مفتوحة",
     "openRequestsDesc": "عرض التقارير النشطة",
+    "stockAvailability": "توفر المخزون",
+    "stockAvailabilityDesc": "طلبات توفر من المنظومة",
+    "demandData": "بيانات الطلب",
+    "demandDataDesc": "قريبًا",
+    "monthlyReconciliation": "تسوية شهرية",
+    "monthlyReconciliationDesc": "قريبًا",
     "exportHistory": "تصدير السجل"
   },
   "settings": {
@@ -199,5 +206,52 @@
     "period6months": "6 أشهر",
     "exportButton": "تصدير",
     "sent": "تم الإرسال"
+  },
+  "stockAvailability": {
+    "title": "طلبات توفر المخزون",
+    "liveSection": "طلبات مباشرة",
+    "acceptedSection": "طلبات مقبولة",
+    "emptyLive": "لا توجد طلبات مباشرة حاليًا",
+    "emptyAccepted": "لا توجد طلبات مقبولة",
+    "requestId": "معرّف الطلب الفريد",
+    "tireSize": "مقاس الإطار المطلوب",
+    "quantity": "الكمية",
+    "approve": "تأكيد",
+    "cancel": "إلغاء",
+    "dismiss": "إغلاق",
+    "acceptedLabel": "تم القبول",
+    "declinedLabel": "تم الإلغاء"
+  },
+  "monthlyReceipt": {
+    "title": "التسوية الشهرية",
+    "selectedMonth": "الشهر",
+    "currentMonth": "الحالي",
+    "lookAtPastMonths": "عرض الأشهر السابقة",
+    "compareMonth": "مقارنة مع شهر",
+    "noCompare": "بدون مقارنة",
+    "noMonthsYet": "لا توجد أشهر متاحة",
+    "totalThisMonth": "إجمالي إجراءات الشهر",
+    "totalCompareMonth": "إجمالي إجراءات شهر المقارنة",
+    "action": "الإجراء",
+    "count": "العدد",
+    "compareDelta": "الفارق",
+    "exportCsv": "تصدير CSV",
+    "exportXls": "تصدير XLS",
+    "exportPdf": "تصدير PDF",
+    "actions": {
+      "tireReplacement": "استبدال إطار",
+      "punctureRepair": "إصلاح ثقب",
+      "wheelBalancing": "موازنة عجلات",
+      "frontAlignment": "ضبط زوايا أمامي",
+      "relocation": "نقل",
+      "valveReplacement": "استبدال صمام",
+      "tpmsSensor": "حساس TPMS",
+      "rimRepair": "إصلاح الجنط"
+    }
+  },
+  "demandOverview": {
+    "title": "نظرة عامة على الطلب",
+    "tireSize": "مقاس الإطار",
+    "monthlyDemand": "الطلب الشهري"
   }
 }

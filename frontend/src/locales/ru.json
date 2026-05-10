@@ -19,7 +19,8 @@
       "upgraded": "Улучшенный",
       "premium": "Премиум"
     },
-    "pressAgainToExit": "Нажмите ещё раз для выхода"
+    "pressAgainToExit": "Нажмите ещё раз для выхода",
+    "comingSoon": "Скоро"
   },
   "confirmLeave": {
     "title": "Данные не сохранены!",
@@ -89,6 +90,12 @@
     "newRequestDesc": "Создать новый отчет для автомобиля",
     "openRequests": "Открытые отчеты",
     "openRequestsDesc": "Просмотр активных отчетов",
+    "stockAvailability": "Наличие на складе",
+    "stockAvailabilityDesc": "Запросы наличия из системы",
+    "demandData": "Данные спроса",
+    "demandDataDesc": "Размеры шин по спросу",
+    "monthlyReconciliation": "Ежемесячные сверки",
+    "monthlyReconciliationDesc": "Месячная сводка действий",
     "exportHistory": "Экспорт истории"
   },
   "settings": {
@@ -199,5 +206,52 @@
     "period6months": "6 мес.",
     "exportButton": "Экспорт",
     "sent": "Отправлено"
+  },
+  "stockAvailability": {
+    "title": "Запросы наличия на складе",
+    "liveSection": "Активные запросы",
+    "acceptedSection": "Подтвержденные запросы",
+    "emptyLive": "Сейчас нет активных запросов",
+    "emptyAccepted": "Нет подтвержденных запросов",
+    "requestId": "Уникальный ID запроса",
+    "tireSize": "Требуемый размер шины",
+    "quantity": "Количество",
+    "approve": "Подтвердить",
+    "cancel": "Отменить",
+    "dismiss": "Закрыть",
+    "acceptedLabel": "Подтверждено",
+    "declinedLabel": "Отменено"
+  },
+  "monthlyReceipt": {
+    "title": "Ежемесячная сводка",
+    "selectedMonth": "Месяц",
+    "currentMonth": "Текущий",
+    "lookAtPastMonths": "Посмотреть прошлые месяцы",
+    "compareMonth": "Сравнить с месяцем",
+    "noCompare": "Без сравнения",
+    "noMonthsYet": "Нет доступных месяцев",
+    "totalThisMonth": "Всего действий за месяц",
+    "totalCompareMonth": "Всего в месяце сравнения",
+    "action": "Действие",
+    "count": "Количество",
+    "compareDelta": "Разница",
+    "exportCsv": "Экспорт CSV",
+    "exportXls": "Экспорт XLS",
+    "exportPdf": "Экспорт PDF",
+    "actions": {
+      "tireReplacement": "Замена шины",
+      "punctureRepair": "Ремонт прокола",
+      "wheelBalancing": "Балансировка колес",
+      "frontAlignment": "Сход-развал",
+      "relocation": "Перестановка",
+      "valveReplacement": "Замена вентиля",
+      "tpmsSensor": "Датчик TPMS",
+      "rimRepair": "Ремонт диска"
+    }
+  },
+  "demandOverview": {
+    "title": "Обзор спроса",
+    "tireSize": "Размер шины",
+    "monthlyDemand": "Месячный спрос"
   }
 }

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FileText, FolderOpen, History, Menu } from "lucide-react";
+import { BarChart3, Boxes, Calculator, FileText, FolderOpen, History, Menu } from "lucide-react";
 import { LicensePlateModal } from "./LicensePlateModal";
 import { ExportHistoryModal } from "./ExportHistoryModal";
 import { useOrdersSummary } from "./OpenRequests";
@@ -10,19 +10,13 @@ import { usePhoneBackSync } from "../usePhoneBackSync";
 import { useToast } from "./Toast";
 
 /**
- * Main hub screen shown after a successful login.
+ * Main hub after login: five dashboard tiles (new order, open requests, stock availability,
+ * plus two phase‑2 placeholders), export history, and settings. Phase‑2 tiles are visual only.
  *
- * Provides four primary actions:
- *  - New service order (opens `LicensePlateModal`)
- *  - Open requests (navigates to `open-requests` with an update badge if new statuses exist)
- *  - Export history (opens `ExportHistoryModal`)
- *  - Settings (opens `SettingsMenu` overlay)
- *
- * Navigation: reached from `login` on success; navigates to `open-requests`,
- * `accepted-request`, or `declined-request` via child modals.
+ * Navigation: from `login`; child flows go to order / open-request routes via modals and tiles.
  */
 export function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -49,6 +43,13 @@ export function Dashboard() {
   const handleOpenRequests = () => {
     navigate("/open-requests");
   };
+
+  const handleStockAvailability = () => {
+    navigate("/stock-availability");
+  };
+
+  const language = i18n.language?.split("-")[0] ?? "he";
+  const tileDirection = language === "he" || language === "ar" ? "rtl" : "ltr";
 
   return (
     <>
@@ -91,80 +92,152 @@ export function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 min-h-0 bg-background px-4 py-3 sm:p-6 flex flex-col">
+      <main className="flex-1 min-h-0 overflow-hidden bg-background px-4 py-3 sm:p-6 flex flex-col">
         <div className="max-w-4xl mx-auto w-full flex flex-col flex-1 min-h-0 justify-between gap-2">
           <div className="min-h-0 flex flex-col gap-2 sm:gap-3 flex-1 overflow-y-auto overscroll-contain">
-            <h2 className="text-lg sm:text-2xl text-foreground shrink-0 leading-tight">
+            <h2 className="text-xl sm:text-2xl text-foreground shrink-0 leading-tight">
               {t("dashboard.chooseAction")}
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 min-h-0 flex-1 md:min-h-0 auto-rows-fr">
-            {/* New Request Button */}
-            <button
-              onClick={handleNewRequest}
-              className="bg-card hover:bg-accent border border-border rounded-2xl p-4 sm:p-6 md:p-8 shadow-md hover:shadow-lg transition-all duration-200 group min-h-0 flex flex-col"
-            >
-              <div className="flex flex-col items-center justify-center text-center gap-2 sm:gap-3 flex-1 min-h-0 py-1">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-primary flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <FileText className="w-7 h-7 sm:w-8 sm:h-8 text-primary-foreground" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 min-h-0 flex-1 auto-rows-fr">
+              <button
+                type="button"
+                onClick={handleNewRequest}
+                className="bg-card hover:bg-accent border border-border rounded-2xl p-2.5 sm:p-6 shadow-md hover:shadow-lg transition-all duration-200 group min-h-[96px] sm:min-h-0 flex flex-col"
+              >
+                <div
+                  dir={tileDirection}
+                  className="flex flex-row items-center justify-start text-start gap-3 sm:gap-4 flex-1 min-h-0 py-0.5 sm:py-1"
+                >
+                  <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-primary flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <FileText className="w-5 h-5 sm:w-8 sm:h-8 text-primary-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xl sm:text-xl text-card-foreground mb-0.5 sm:mb-1 leading-tight">
+                      {t("dashboard.newRequest")}
+                    </h3>
+                    <p className="text-sm sm:text-sm text-muted-foreground leading-snug">{t("dashboard.newRequestDesc")}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl text-card-foreground mb-1">{t("dashboard.newRequest")}</h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground leading-snug">{t("dashboard.newRequestDesc")}</p>
-                </div>
-              </div>
-            </button>
+              </button>
 
-            {/* Open Requests Button with Notification */}
-            <button
-              onClick={handleOpenRequests}
-              className="bg-card hover:bg-accent border border-border rounded-2xl p-4 sm:p-6 md:p-8 shadow-md hover:shadow-lg transition-all duration-200 group relative min-h-0 flex flex-col"
-            >
-              {hasUnreadUpdates && (
-                <div className="absolute top-3 start-3 sm:top-4 sm:start-4 flex items-center gap-1">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                  </span>
-                </div>
-              )}
-              <div className="flex flex-col items-center justify-center text-center gap-2 sm:gap-3 flex-1 min-h-0 w-full py-1">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <FolderOpen className="w-7 h-7 sm:w-8 sm:h-8 text-secondary-foreground" />
-                </div>
-                <div className="w-full min-w-0">
-                  <h3 className="text-lg sm:text-xl text-card-foreground mb-1">{t("dashboard.openRequests")}</h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground leading-snug">{t("dashboard.openRequestsDesc")}</p>
-                  <div className="mt-2 sm:mt-3 grid grid-cols-3 gap-1.5 sm:gap-2 w-full max-w-[11rem] sm:max-w-xs mx-auto">
-                    <div className="rounded-lg sm:rounded-xl border-2 border-green-300 dark:border-green-700 bg-green-100 dark:bg-green-900/40 py-1.5 px-0.5 sm:py-2 sm:px-1 text-center">
-                      <div className="text-base sm:text-lg font-bold tabular-nums leading-none text-green-800 dark:text-green-300">
-                        {openRequestCounts.approved}
+              <button
+                type="button"
+                onClick={handleOpenRequests}
+                className="bg-card hover:bg-accent border border-border rounded-2xl p-2.5 sm:p-6 shadow-md hover:shadow-lg transition-all duration-200 group relative min-h-[96px] sm:min-h-0 flex flex-col"
+              >
+                {hasUnreadUpdates && (
+                  <div className="absolute top-3 start-3 sm:top-4 sm:start-4 flex items-center gap-1">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                  </div>
+                )}
+                <div
+                  dir={tileDirection}
+                  className="flex flex-row items-center justify-start text-start gap-3 sm:gap-4 flex-1 min-h-0 w-full py-0.5 sm:py-1"
+                >
+                  <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <FolderOpen className="w-5 h-5 sm:w-8 sm:h-8 text-secondary-foreground" />
+                  </div>
+                  <div className="w-full min-w-0 flex-1">
+                    <h3 className="text-xl sm:text-xl text-card-foreground mb-0.5 sm:mb-1 leading-tight">
+                      {t("dashboard.openRequests")}
+                    </h3>
+                    <p className="text-sm sm:text-sm text-muted-foreground leading-snug">{t("dashboard.openRequestsDesc")}</p>
+                    <div className="hidden sm:grid mt-3 grid-cols-3 gap-2 w-full max-w-xs mx-auto">
+                      <div className="rounded-lg sm:rounded-xl border-2 border-green-300 dark:border-green-700 bg-green-100 dark:bg-green-900/40 py-1.5 px-0.5 sm:py-2 sm:px-1 text-center">
+                        <div className="text-base sm:text-lg font-bold tabular-nums leading-none text-green-800 dark:text-green-300">
+                          {openRequestCounts.approved}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] font-semibold mt-0.5 sm:mt-1 leading-tight text-green-800 dark:text-green-300">
+                          {t("status.approved")}
+                        </div>
                       </div>
-                      <div className="text-[9px] sm:text-[10px] font-semibold mt-0.5 sm:mt-1 leading-tight text-green-800 dark:text-green-300">
-                        {t("status.approved")}
+                      <div className="rounded-lg sm:rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 py-1.5 px-0.5 sm:py-2 sm:px-1 text-center">
+                        <div className="text-base sm:text-lg font-bold tabular-nums leading-none text-amber-800 dark:text-amber-300">
+                          {openRequestCounts.waiting}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] font-semibold mt-0.5 sm:mt-1 leading-tight text-amber-800 dark:text-amber-300">
+                          {t("status.waiting")}
+                        </div>
                       </div>
-                    </div>
-                    <div className="rounded-lg sm:rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 py-1.5 px-0.5 sm:py-2 sm:px-1 text-center">
-                      <div className="text-base sm:text-lg font-bold tabular-nums leading-none text-amber-800 dark:text-amber-300">
-                        {openRequestCounts.waiting}
-                      </div>
-                      <div className="text-[9px] sm:text-[10px] font-semibold mt-0.5 sm:mt-1 leading-tight text-amber-800 dark:text-amber-300">
-                        {t("status.waiting")}
-                      </div>
-                    </div>
-                    <div className="rounded-lg sm:rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-100 dark:bg-red-900/40 py-1.5 px-0.5 sm:py-2 sm:px-1 text-center">
-                      <div className="text-base sm:text-lg font-bold tabular-nums leading-none text-red-800 dark:text-red-300">
-                        {openRequestCounts.declined}
-                      </div>
-                      <div className="text-[9px] sm:text-[10px] font-semibold mt-0.5 sm:mt-1 leading-tight text-red-800 dark:text-red-300">
-                        {t("status.declined")}
+                      <div className="rounded-lg sm:rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-100 dark:bg-red-900/40 py-1.5 px-0.5 sm:py-2 sm:px-1 text-center">
+                        <div className="text-base sm:text-lg font-bold tabular-nums leading-none text-red-800 dark:text-red-300">
+                          {openRequestCounts.declined}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] font-semibold mt-0.5 sm:mt-1 leading-tight text-red-800 dark:text-red-300">
+                          {t("status.declined")}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
 
+              <button
+                type="button"
+                onClick={handleStockAvailability}
+                className="bg-card hover:bg-accent border border-border rounded-2xl p-2.5 sm:p-6 shadow-md hover:shadow-lg transition-all duration-200 group min-h-[96px] sm:min-h-0 flex flex-col"
+              >
+                <div
+                  dir={tileDirection}
+                  className="flex flex-row items-center justify-start text-start gap-3 sm:gap-4 flex-1 min-h-0 py-0.5 sm:py-1"
+                >
+                  <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center transition-transform shrink-0">
+                    <Boxes className="w-5 h-5 sm:w-8 sm:h-8 text-indigo-700 dark:text-indigo-300" />
+                  </div>
+                  <div className="w-full min-w-0 flex-1">
+                    <h3 className="text-xl sm:text-xl text-card-foreground mb-0.5 sm:mb-1 leading-tight">
+                      {t("dashboard.stockAvailability")}
+                    </h3>
+                    <p className="text-sm sm:text-sm text-muted-foreground leading-snug">{t("dashboard.stockAvailabilityDesc")}</p>
+                  </div>
+                </div>
+              </button>
+
+              <div className="relative rounded-2xl min-h-[96px] sm:min-h-0 opacity-60 pointer-events-none select-none">
+                <span className="absolute top-2 end-2 z-10 rounded-full bg-muted px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-muted-foreground border border-border">
+                  {t("common.comingSoon")}
+                </span>
+                <div className="bg-card border border-border rounded-2xl p-2.5 sm:p-6 shadow-md h-full flex flex-col">
+                  <div
+                    dir={tileDirection}
+                    className="flex flex-row items-center justify-start text-start gap-3 sm:gap-4 flex-1 min-h-0 py-0.5 sm:py-1"
+                  >
+                    <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center shrink-0">
+                      <BarChart3 className="w-5 h-5 sm:w-8 sm:h-8 text-violet-700 dark:text-violet-300" />
+                    </div>
+                    <div className="w-full min-w-0 flex-1">
+                      <h3 className="text-xl sm:text-xl text-card-foreground mb-0.5 sm:mb-1 leading-tight">{t("dashboard.demandData")}</h3>
+                      <p className="text-sm sm:text-sm text-muted-foreground leading-snug">{t("dashboard.demandDataDesc")}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative rounded-2xl min-h-[96px] sm:min-h-0 opacity-60 pointer-events-none select-none">
+                <span className="absolute top-2 end-2 z-10 rounded-full bg-muted px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-muted-foreground border border-border">
+                  {t("common.comingSoon")}
+                </span>
+                <div className="bg-card border border-border rounded-2xl p-2.5 sm:p-6 shadow-md h-full flex flex-col">
+                  <div
+                    dir={tileDirection}
+                    className="flex flex-row items-center justify-start text-start gap-3 sm:gap-4 flex-1 min-h-0 py-0.5 sm:py-1"
+                  >
+                    <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-cyan-100 dark:bg-cyan-900/40 flex items-center justify-center shrink-0">
+                      <Calculator className="w-5 h-5 sm:w-8 sm:h-8 text-cyan-700 dark:text-cyan-300" />
+                    </div>
+                    <div className="w-full min-w-0 flex-1">
+                      <h3 className="text-xl sm:text-xl text-card-foreground mb-0.5 sm:mb-1 leading-tight">
+                        {t("dashboard.monthlyReconciliation")}
+                      </h3>
+                      <p className="text-sm sm:text-sm text-muted-foreground leading-snug">{t("dashboard.monthlyReconciliationDesc")}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

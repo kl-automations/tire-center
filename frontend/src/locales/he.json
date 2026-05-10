@@ -19,7 +19,8 @@
       "upgraded": "משודרג",
       "premium": "פרימיום"
     },
-    "pressAgainToExit": "לחץ שוב כדי לצאת"
+    "pressAgainToExit": "לחץ שוב כדי לצאת",
+    "comingSoon": "בקרוב"
   },
   "confirmLeave": {
     "title": "המידע לא נשמר!",
@@ -89,6 +90,12 @@
     "newRequestDesc": "צור דיווח חדש למכונית",
     "openRequests": "דיווחים פתוחים",
     "openRequestsDesc": "צפה בדיווחים הפעילים",
+    "stockAvailability": "זמינות מלאי",
+    "stockAvailabilityDesc": "בקשות זמינות מהשטח",
+    "demandData": "נתוני ביקוש",
+    "demandDataDesc": "מידות צמיגים לפי ביקוש",
+    "monthlyReconciliation": "התחשבנות חודשית",
+    "monthlyReconciliationDesc": "סיכום פעולות חודשי",
     "exportHistory": "ייצוא היסטוריה"
   },
   "settings": {
@@ -199,5 +206,52 @@
     "period6months": "6 חודשים",
     "exportButton": "ייצוא",
     "sent": "נשלח"
+  },
+  "stockAvailability": {
+    "title": "בקשות זמינות מלאי",
+    "liveSection": "בקשות ממתינות לאישור זמינות מלאי",
+    "acceptedSection": "בקשות מאושרות",
+    "emptyLive": "אין כרגע בקשות חיות",
+    "emptyAccepted": "אין בקשות מאושרות",
+    "requestId": "מזהה פנייה",
+    "tireSize": "מידת הצמיג הנדרש",
+    "quantity": "כמות",
+    "approve": "אישור",
+    "cancel": "ביטול",
+    "dismiss": "סגירה",
+    "acceptedLabel": "אושר",
+    "declinedLabel": "בוטל"
+  },
+  "monthlyReceipt": {
+    "title": "התחשבנות חודשית",
+    "selectedMonth": "חודש",
+    "currentMonth": "נוכחי",
+    "lookAtPastMonths": "הצג חודשי עבר",
+    "compareMonth": "השוואה לחודש",
+    "noCompare": "ללא השוואה",
+    "noMonthsYet": "אין חודשים זמינים",
+    "totalThisMonth": "סה״כ פעולות החודש",
+    "totalCompareMonth": "סה״כ פעולות בחודש להשוואה",
+    "action": "פעולה",
+    "count": "כמות",
+    "compareDelta": "פער",
+    "exportCsv": "ייצוא CSV",
+    "exportXls": "ייצוא XLS",
+    "exportPdf": "ייצוא PDF",
+    "actions": {
+      "tireReplacement": "החלפת צמיג",
+      "punctureRepair": "תיקון תקר",
+      "wheelBalancing": "איזון גלגלים",
+      "frontAlignment": "כיוון פרונט",
+      "relocation": "העברה",
+      "valveReplacement": "החלפת שסתום",
+      "tpmsSensor": "חיישן TPMS",
+      "rimRepair": "תיקון ג׳אנט"
+    }
+  },
+  "demandOverview": {
+    "title": "מידות צמיגים לפי ביקוש",
+    "tireSize": "מידת צמיג",
+    "monthlyDemand": "ביקוש חודשי"
   }
 }
