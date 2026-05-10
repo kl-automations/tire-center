@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { AxlesDiagram } from "./AxlesDiagram";
 import { LicensePlate, type PlateType } from "./LicensePlate";
-import { TirePopup, type ActionCodeItem, type ReasonCodeItem, type WheelData } from "./TirePopup";
+import { TirePopup, REPLACEMENT_ACTION_CODES, type ActionCodeItem, type ReasonCodeItem, type WheelData } from "./TirePopup";
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 import { useScreenCache } from "../useScreenCache";
 import { usePhoneBackSync } from "../usePhoneBackSync";
@@ -365,6 +365,11 @@ export function AcceptedRequest() {
     if (!cache) return;
     const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
     if (noCarool) return;
+    const wheelData = affectedWheels[wheel];
+    const needsPhoto = !!wheelData?.selectedActionCodes.some((c) =>
+      (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
+    );
+    if (!needsPhoto) return;
     try {
       sessionStorage.setItem(
         `route-carool-${orderId}-${wheel}`,
@@ -428,7 +433,11 @@ export function AcceptedRequest() {
     );
     const photoDoneSet = new Set(photoDone);
     const missing = Object.entries(affectedWheels)
-      .filter(([wheel, data]) => !NO_CAROOL_WHEELS.has(wheel) && data.selectedReasonCodes.length > 0)
+      .filter(
+        ([wheel, data]) =>
+          !NO_CAROOL_WHEELS.has(wheel) &&
+          data.selectedActionCodes.some((c) => (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c)),
+      )
       .filter(([wheel]) => !photoDoneSet.has(wheel))
       .map(([wheel]) => wheel);
     if (missing.length > 0) {

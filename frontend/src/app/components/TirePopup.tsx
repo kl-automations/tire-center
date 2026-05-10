@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { getRoadWheelPositions, type VehicleWheelCount } from "../vehicleWheelLayout";
 
+export const REPLACEMENT_ACTION_CODES = [3, 4] as const;
+
 /**
  * The primary action being performed on a tyre during a service visit.
  *
@@ -341,7 +343,9 @@ export function TirePopup({
           disabled={!canContinue}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl font-semibold transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {t("tirePopup.continueToCheck")}
+          {selectedActionCodes.some((c) => (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c))
+            ? t("tirePopup.continueToCheck")
+            : t("tirePopup.continue")}
         </button>
       </div>
     </div>
