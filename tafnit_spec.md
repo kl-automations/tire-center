@@ -184,6 +184,28 @@ This is the most complex call. It sends a flat list of `DiagnosisLine` elements 
 
 ---
 
+### `SendQueryResponse` — Stock-availability mechanic response (**proposed / unconfirmed**)
+
+> **Status:** Method name, namespace, and parameter names are **not yet confirmed** by Tafnit — treat as a working proposal until integration week (see open questions in `b2b-context.md` §9).
+
+Mechanic approve/decline for a red-route stock query is acked with this outbound SOAP call. Auth matches every other authenticated method: `userCode` / `password` from the session (`shop_id` + `erp_hash`).
+
+**Proposed request body:**
+
+| XML element | Type | Notes |
+|---|---|---|
+| `userCode` | string | Shop / mechanic id (same as other calls) |
+| `password` | string | `erp_hash` from `Login` |
+| `ApplyId` | int | Numeric form of the inbound stock webhook `RequestId` |
+| `TireShopCode` | int | Numeric shop scope — same value as `IsValidUser` → `AdditionalData` (`erp_shop_id` in our JWT) |
+| `Response` | int | `1` = approve (in stock), `2` = decline |
+
+**ReturnCode:** The response includes the usual `ReturnCode` string field; log it for ops visibility.
+
+**Ack semantics in this codebase:** Any completed HTTP round-trip counts as “acked” for UI follow-up (Firestore `*_acked` signals). **Do not** branch retry logic on `ReturnCode`. **Only** transport-layer failures (`httpx` request errors — connection, timeout, etc.) trigger backoff retries. A SOAP fault or HTTP error **body** still counts as a received response for that rule-set.
+
+---
+
 ## 6. Inbound Webhook (Tafnit Calls Us)
 
 After the garage manager approves or declines a diagnosis in the ERP, Tafnit fires a `POST` to our backend. This is a **JSON webhook**, not SOAP.

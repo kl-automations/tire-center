@@ -14,6 +14,7 @@ Stub status:
   - lookup_car                    → LIVE (call real ERP SOAP)
   - get_last_mileage              → LIVE (call real ERP SOAP)
   - submit_diagnosis              → LIVE (call real ERP SOAP)
+  - send_query_response           → LIVE (stock-availability ack to Tafnit)
   - request_history_export        → STUB (always returns True)
   Replace stubs with real SOAP calls once the ERP team confirms method signatures.
 
@@ -530,6 +531,41 @@ async def submit_diagnosis(
     log("ADAPTER/erp", f"SendDiagnose ReturnCode={response.ReturnCode} accepted={accepted}")
     log("ADAPTER/erp", f"SendDiagnose raw response: {response}")
     return accepted
+
+
+async def send_query_response(
+    apply_id: int,
+    tire_shop_code: int,
+    response: int,
+    shop_id: str,
+    erp_hash: str,
+) -> str | None:
+    """
+    Ack a stock-availability query to Tafnit via SendQueryResponse SOAP.
+
+    Auth matches every other ERP call: JWT ``shop_id`` as userCode,
+    ``erp_hash`` as password. ``Response`` is 1 (approve) or 2 (decline).
+
+    Returns the ReturnCode string for logging, or None if absent.
+    Transport / SOAP-layer exceptions propagate for the caller's retry loop.
+    """
+    body = (
+        f"<tem:userCode>{_x(shop_id)}</tem:userCode>"
+        f"<tem:password>{_x(erp_hash)}</tem:password>"
+        f"<tem:ApplyId>{int(apply_id)}</tem:ApplyId>"
+        f"<tem:TireShopCode>{int(tire_shop_code)}</tem:TireShopCode>"
+        f"<tem:Response>{int(response)}</tem:Response>"
+    )
+    log(
+        "ADAPTER/erp",
+        f"SOAP SendQueryResponse shop_id={shop_id} ApplyId={apply_id} TireShopCode={tire_shop_code} Response={response}",
+    )
+    # TODO(b2b): Verify SOAP method name, namespace, and parameter names with Tafnit during
+    # integration week — outbound stock-availability ack shapes are open (see b2b-context.md §9, item 1).
+    soap_response = await _call_soap("SendQueryResponse", body)
+    rc = soap_response.ReturnCode
+    log("ADAPTER/erp", f"SendQueryResponse ReturnCode={rc}")
+    return str(rc) if rc is not None else None
 
 
 # ── History export ────────────────────────────────────────────────────────────

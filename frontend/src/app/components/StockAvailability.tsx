@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Check, X } from "lucide-react";
@@ -17,7 +17,7 @@ export type StockAvailabilityRequest = {
 const AUTO_DISMISS_MS = 15_000;
 
 /**
- * Red-route stock checks from Tafnit. UI scaffold: sections + cards; data + writes ship later.
+ * Red-route stock checks from Tafnit (live list, approve/decline, Firestore-driven decline timer).
  *
  * Navigation: from dashboard; back returns to `/dashboard`.
  */
@@ -27,10 +27,15 @@ export function StockAvailability() {
   usePhoneBackSync({ fallback: "/dashboard" });
 
   const declineTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const requestsRef = useRef<StockAvailabilityRequest[]>([]);
 
   const [requests, setRequests] = useState<StockAvailabilityRequest[]>([]);
 
-  const fetchRequests = async () => {
+  useEffect(() => {
+    requestsRef.current = requests;
+  }, [requests]);
+
+  const fetchRequests = useCallback(async () => {
     const token = localStorage.getItem("token");
     const res = await fetch("/api/stock-availability/requests", {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -52,17 +57,21 @@ export function StockAvailability() {
       quantity: Number(r.quantity ?? 2),
       status: r.status,
     }));
-    setRequests(mapped);
-  };
+    setRequests((prev) => {
+      const declinedLocal = prev.filter((r) => r.status === "declined");
+      const incomingIds = new Set(mapped.map((r) => r.id));
+      return [...mapped, ...declinedLocal.filter((r) => !incomingIds.has(r.id))];
+    });
+  }, []);
 
-  const dismissDeclined = (id: string) => {
+  const dismissDeclined = useCallback((id: string) => {
     const pending = declineTimersRef.current[id];
     if (pending) {
       clearTimeout(pending);
       delete declineTimersRef.current[id];
     }
     setRequests((prev) => prev.filter((r) => r.id !== id));
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,10 +80,19 @@ export function StockAvailability() {
       console.warn("[stock-availability] initial fetch failed", err);
     });
 
-    void attachShopStockAvailabilitySignalsListener(() => {
+    void attachShopStockAvailabilitySignalsListener((changes) => {
       void fetchRequests().catch((err) => {
         console.warn("[stock-availability] refresh after signal failed", err);
       });
+      for (const { requestId, status } of changes) {
+        if (status !== "declined_acked" || declineTimersRef.current[requestId]) continue;
+        const row = requestsRef.current.find((r) => r.id === requestId);
+        if (row?.status !== "declined") continue;
+        declineTimersRef.current[requestId] = setTimeout(
+          () => dismissDeclined(requestId),
+          AUTO_DISMISS_MS,
+        );
+      }
     }).then((fn) => {
       if (cancelled) {
         fn?.();
@@ -87,7 +105,7 @@ export function StockAvailability() {
       cancelled = true;
       unsub?.();
     };
-  }, []);
+  }, [fetchRequests, dismissDeclined]);
 
   useEffect(() => {
     return () => {
@@ -101,15 +119,54 @@ export function StockAvailability() {
   const liveRequests = useMemo(() => requests.filter((r) => r.status !== "accepted"), [requests]);
   const acceptedRequests = useMemo(() => requests.filter((r) => r.status === "accepted"), [requests]);
 
-  const handleApprove = (id: string) => {
-    console.warn("[stock-availability] TODO(b2b): wire backend approve", id);
+  const handleApprove = async (id: string) => {
+    const token = localStorage.getItem("token");
+    let snapshot: StockAvailabilityRequest[] = [];
+    setRequests((prev) => {
+      snapshot = [...prev];
+      return prev.map((r) => (r.id === id ? { ...r, status: "accepted" as const } : r));
+    });
+    try {
+      const res = await fetch(`/api/stock-availability/requests/${encodeURIComponent(id)}/approve`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) {
+        setRequests(snapshot);
+        console.warn("[stock-availability] approve failed", res.status);
+      }
+    } catch (e) {
+      setRequests(snapshot);
+      console.warn("[stock-availability] approve failed", e);
+    }
   };
 
-  const handleDecline = (id: string) => {
-    console.warn("[stock-availability] TODO(b2b): wire backend decline", id);
-    // TODO(b2b): once Tafnit ack arrives, start the auto-dismiss timer.
-    // Blocked on b2b-context.md §5.1: Tafnit must ack the decline before the 15s timer may start (no path yet).
-    // declineTimersRef.current[id] = setTimeout(() => dismissDeclined(id), AUTO_DISMISS_MS);
+  const handleDecline = async (id: string) => {
+    const token = localStorage.getItem("token");
+    let snapshot: StockAvailabilityRequest[] = [];
+    setRequests((prev) => {
+      snapshot = [...prev];
+      return prev.map((r) => (r.id === id ? { ...r, status: "declined" as const } : r));
+    });
+    try {
+      const res = await fetch(`/api/stock-availability/requests/${encodeURIComponent(id)}/decline`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) {
+        setRequests(snapshot);
+        console.warn("[stock-availability] decline failed", res.status);
+      }
+    } catch (e) {
+      setRequests(snapshot);
+      console.warn("[stock-availability] decline failed", e);
+    }
   };
 
   return (
@@ -140,8 +197,8 @@ export function StockAvailability() {
                   key={request.id}
                   request={request}
                   loading={false}
-                  onApprove={() => handleApprove(request.id)}
-                  onDecline={() => handleDecline(request.id)}
+                  onApprove={() => void handleApprove(request.id)}
+                  onDecline={() => void handleDecline(request.id)}
                   onDismiss={() => dismissDeclined(request.id)}
                 />
               ))
