@@ -9,6 +9,7 @@ Local dev:  uvicorn main:app --reload --port 8000
 Production: Docker → uvicorn on $PORT (default 8080) → Cloud Run
 """
 
+import asyncio
 import json
 import os
 import time
@@ -22,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import config
 from adapters.erp import close_http_client
+from jobs.stock_availability_cleanup import cleanup_loop
 from logging_utils import log, log_error
 from routers import auth, car, carool, config_router, diagnosis, history, internal, orders, stock_availability, webhooks
 
@@ -99,8 +101,10 @@ async def lifespan(app: FastAPI):
       2. Creates the asyncpg connection pool and attaches it to app.state.db.
       3. Initialises Firebase Admin SDK and attaches the Firestore client to
          app.state.firestore.
+      4. Starts the stock-availability DB cleanup asyncio loop (next run 03:00 UTC).
 
     Shutdown:
+      - Cancels and awaits the stock-availability cleanup background task.
       - Closes all connections in the asyncpg pool gracefully.
       - Closes the shared httpx.AsyncClient used by the ERP adapter so its
         TCP connections drain cleanly instead of being torn down by the GC.
@@ -111,11 +115,25 @@ async def lifespan(app: FastAPI):
     _init_firebase()
     app.state.firestore = firestore.client()
     log("STARTUP", "Firestore client attached to app.state")
+
+    app.state.stock_cleanup_task = asyncio.create_task(cleanup_loop(app))
+    log("STARTUP", "stock_availability cleanup_loop task scheduled")
+
     log("STARTUP", "Lifespan startup complete — app is ready")
 
     yield
 
-    log("SHUTDOWN", "Lifespan shutdown begin — closing asyncpg pool")
+    log("SHUTDOWN", "Lifespan shutdown begin — cancelling stock_availability cleanup_loop")
+    cleanup_task = getattr(app.state, "stock_cleanup_task", None)
+    if cleanup_task is not None:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+    log("SHUTDOWN", "stock_availability cleanup_loop stopped")
+
+    log("SHUTDOWN", "Closing asyncpg pool")
     await app.state.db.close()
     log("SHUTDOWN", "asyncpg pool closed")
     log("SHUTDOWN", "Closing ERP httpx client")
