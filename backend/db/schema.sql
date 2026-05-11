@@ -34,6 +34,30 @@ CREATE INDEX IF NOT EXISTS idx_open_orders_status      ON open_orders (status);
 CREATE INDEX IF NOT EXISTS idx_open_orders_request_id  ON open_orders (request_id) WHERE request_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_open_orders_declined_at ON open_orders (declined_at) WHERE declined_at IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS stock_availability_requests (
+  request_id   text        NOT NULL,
+  shop_id      text        NOT NULL,
+  tire_size    text        NOT NULL,
+  car_number   text        NOT NULL,
+  car_model    text        NOT NULL,
+  km           text        NOT NULL,
+  quantity     smallint    NOT NULL DEFAULT 2,
+  status       text        NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'accepted', 'declined')),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (request_id, shop_id)
+);
+
+DROP TRIGGER IF EXISTS set_updated_at_stock_availability ON stock_availability_requests;
+CREATE TRIGGER set_updated_at_stock_availability
+  BEFORE UPDATE ON stock_availability_requests
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_stock_availability_car_number ON stock_availability_requests (car_number);
+CREATE INDEX IF NOT EXISTS idx_stock_availability_accepted_car_shop
+  ON stock_availability_requests (car_number, shop_id)
+  WHERE status = 'accepted';
+
 CREATE TABLE IF NOT EXISTS erp_action_codes (
   id               serial  PRIMARY KEY,
   erp_code         integer NOT NULL UNIQUE,

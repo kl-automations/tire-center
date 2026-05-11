@@ -15,9 +15,8 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from logging_utils import log, log_error
-from models.schemas import ErpWebhookPayload, CaroolWebhookPayload
+from models.schemas import ErpWebhookPayload, CaroolWebhookPayload, StockAvailabilityWebhookPayload
 from config import CAROOL_API_KEY
-from routers.diagnosis import _coerce_jsonb, _submit_to_erp
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 
@@ -52,6 +51,26 @@ def _firestore_signal(app, shop_id: str, order_id: str, status: str):
         log("FIRESTORE", f"signal write success order_id={order_id}")
     except Exception as e:
         log_error("firestore", f"signal write failed order_id={order_id}: {e}")
+
+
+def _stock_availability_signal(app, shop_id: str, request_id: str, status: str):
+    """
+    Write stock-availability signal docs for Firestore onSnapshot listeners.
+
+    Path: orders/{shop_id}/stock_availability/{request_id}
+    """
+    try:
+        log(
+            "FIRESTORE",
+            f"stock signal write shop_id={shop_id} request_id={request_id} status={status}",
+        )
+        db = app.state.firestore
+        db.collection("orders").document(shop_id) \
+          .collection("stock_availability").document(request_id) \
+          .set({"status": status, "updated_at": datetime.now(timezone.utc).isoformat()})
+        log("FIRESTORE", f"stock signal write success request_id={request_id}")
+    except Exception as e:
+        log_error("firestore", f"stock signal write failed request_id={request_id}: {e}")
 
 
 @router.post(
@@ -235,6 +254,130 @@ async def erp_webhook(request: Request):
 
 
 @router.post(
+    "/stock-availability",
+    summary="Receive stock-availability event from Tafnit",
+    description=(
+        "Single Tafnit stock-availability webhook dispatcher. "
+        "TODO: validate X-ERP-Hash header once Tafnit confirms exact auth convention."
+    ),
+    response_description="Acknowledgement that the event was processed.",
+)
+async def stock_availability_webhook(request: Request):
+    raw = await request.body()
+    raw_text = raw.decode("utf-8", errors="replace")
+    try:
+        data = json.loads(raw_text)
+        payload = StockAvailabilityWebhookPayload(**data)
+    except Exception as e:
+        log_error("stock_availability_webhook", f"payload parse failed: {e} | raw={raw_text[:500]}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # TODO(b2b): validate X-ERP-Hash header for Tafnit stock-availability webhook.
+    db = request.app.state.db
+    action_type = payload.ActionType
+    request_id = payload.RequestId
+    shop_id = payload.ShopId
+    log(
+        "WEBHOOK/stock-availability",
+        f"received ActionType={action_type} request_id={request_id} shop_id={shop_id}",
+    )
+
+    if action_type == "1":
+        await db.execute(
+            """
+            INSERT INTO stock_availability_requests (
+                request_id, shop_id, tire_size, car_number, car_model, km, quantity, status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, 2, 'live')
+            ON CONFLICT (request_id, shop_id)
+            DO UPDATE SET
+                tire_size = EXCLUDED.tire_size,
+                car_number = EXCLUDED.car_number,
+                car_model = EXCLUDED.car_model,
+                km = EXCLUDED.km,
+                quantity = EXCLUDED.quantity,
+                status = 'live',
+                updated_at = now()
+            """,
+            request_id,
+            shop_id,
+            payload.TireSize,
+            payload.CarNumber,
+            payload.CarModel,
+            payload.KM,
+        )
+        _stock_availability_signal(request.app, shop_id, request_id, "live")
+        log(
+            "WEBHOOK/stock-availability",
+            f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=upsert_live",
+        )
+        return {"ack": True}
+
+    if action_type == "2":
+        row = await db.fetchrow(
+            """
+            SELECT status
+            FROM stock_availability_requests
+            WHERE request_id = $1 AND shop_id = $2
+            """,
+            request_id,
+            shop_id,
+        )
+        if row and row["status"] == "live":
+            await db.execute(
+                """
+                DELETE FROM stock_availability_requests
+                WHERE request_id = $1 AND shop_id = $2
+                """,
+                request_id,
+                shop_id,
+            )
+            _stock_availability_signal(request.app, shop_id, request_id, "deleted")
+            log(
+                "WEBHOOK/stock-availability",
+                f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=deleted_live",
+            )
+        elif row and row["status"] == "accepted":
+            log(
+                "WEBHOOK/stock-availability",
+                f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=noop_accepted",
+            )
+        else:
+            log(
+                "WEBHOOK/stock-availability",
+                f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=noop_missing_or_non_live",
+            )
+        return {"ack": True}
+
+    if action_type in {"8", "9"}:
+        deleted = await db.fetchrow(
+            """
+            DELETE FROM stock_availability_requests
+            WHERE request_id = $1 AND shop_id = $2
+            RETURNING request_id
+            """,
+            request_id,
+            shop_id,
+        )
+        if deleted:
+            _stock_availability_signal(request.app, shop_id, request_id, "deleted")
+            outcome = "deleted"
+        else:
+            outcome = "noop_missing"
+        log(
+            "WEBHOOK/stock-availability",
+            f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome={outcome}",
+        )
+        return {"ack": True}
+
+    log(
+        "WEBHOOK/stock-availability",
+        f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=unsupported_action_noop",
+    )
+    return {"ack": True}
+
+
+@router.post(
     "/carool",
     summary="Receive AI analysis results from Carool",
     description=(
@@ -335,12 +478,15 @@ async def carool_webhook(payload: CaroolWebhookPayload, request: Request):
         return {"ack": True}
 
     try:
+        from routers.diagnosis import _coerce_jsonb, _submit_to_erp
+
         await _submit_to_erp(
             full_order,
             _coerce_jsonb(full_order["car_data"]),
             full_order["shop_id"],
             full_order["erp_hash"],
             db,
+            request.app,
         )
     except Exception as e:
         # Carool retries on any non-2xx response, which we never want — the

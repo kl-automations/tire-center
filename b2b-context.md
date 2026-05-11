@@ -117,8 +117,7 @@ The "red route" in the Kogol V2 spec is the flow where Tafnit checks multiple sh
 
 | Direction | Working name | Purpose | Body shape (proposed) |
 |---|---|---|---|
-| Tafnit → us | `POST /api/webhook/stock-availability` | New request push | `{request_id, shop_id, tire_size, quantity, expires_at?}` |
-| Tafnit → us | `POST /api/webhook/stock-availability/cancel` | Cancel search (resolved elsewhere) | `{request_id}` |
+| Tafnit → us | `POST /api/webhook/stock-availability` | **Single discriminated webhook** (create/cancel/close events) | `{ActionType, RequestId, ShopId, TireSize, CarNumber, CarModel, KM, ...}` |
 | us → Tafnit | (Tafnit method TBD) | Accept ack | `{request_id, shop_id}` |
 | us → Tafnit | (Tafnit method TBD) | Decline ack — retry until acked | `{request_id, shop_id}` |
 
@@ -163,7 +162,7 @@ This document is in English and is not translated.
 
 These are intentionally unresolved. Touch any of them in code → leave a `TODO(b2b)` comment and surface the choice.
 
-1. **Exact field shapes for the four Tafnit endpoints in §5.1** — final shapes will be confirmed during integration week, when Tafnit's side is built against this contract.
+1. **Exact field shapes for the single Tafnit stock-availability webhook (+ outbound ack methods) in §5.1** — final shapes will be confirmed during integration week, when Tafnit's side is built against this contract.
 2. **Retry-loop parameters for the decline ack** — max attempts, backoff curve, and what to do if the loop gives up (toast the mechanic? leave the card stuck? log and silently dismiss?).
 3. **`shop_id` mapping** — when Tafnit pushes a `shop_id` we don't have a row for in our shops table, what happens (provision, reject, log)?
 4. **Cancel-search after the mechanic already responded** — Tafnit sends "cancel" on a request the mechanic has already accepted or declined. Treat as a no-op? Roll back the local state? Show the mechanic a heads-up?

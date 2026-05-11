@@ -29,6 +29,7 @@ from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 from models.schemas import DiagnosisRequest
 from adapters import erp
+from routers.webhooks import _stock_availability_signal
 
 router = APIRouter(prefix="/api", tags=["diagnosis"])
 
@@ -197,7 +198,7 @@ def _normalize_tires_actions(
     return normalized
 
 
-async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db) -> None:
+async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db, fs_app=None) -> None:
     """
     Forward a stored diagnosis to the ERP and persist the result.
 
@@ -292,10 +293,37 @@ async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db)
         json.dumps(erp_payload),
         order["id"],
     )
+    try:
+        await _clear_accepted_stock_availability(
+            db,
+            fs_app,
+            order["license_plate"],
+            shop_id,
+        )
+    except Exception as e:
+        log_error(
+            "diagnosis",
+            f"stock cleanup failed after ERP submit order_id={order['id']} car_number={order['license_plate']} shop_id={shop_id}: {e}",
+        )
     log(
         "ROUTER/diagnosis",
         f"submit success order_id={order['id']} status=waiting",
     )
+
+
+async def _clear_accepted_stock_availability(db, fs_app, car_number: str, shop_id: str):
+    row = await db.fetchrow(
+        """
+        DELETE FROM stock_availability_requests
+        WHERE car_number = $1 AND shop_id = $2 AND status = 'accepted'
+        RETURNING request_id
+        """,
+        car_number,
+        shop_id,
+    )
+    if row:
+        if fs_app:
+            _stock_availability_signal(fs_app, shop_id, row["request_id"], "deleted")
 
 
 @router.post(
@@ -380,6 +408,7 @@ async def submit_diagnosis(
         shop["shop_id"],
         shop["erp_hash"],
         db,
+        request.app,
     )
 
     return {"ack": True}

@@ -30,6 +30,31 @@ export function StockAvailability() {
 
   const [requests, setRequests] = useState<StockAvailabilityRequest[]>([]);
 
+  const fetchRequests = async () => {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/stock-availability/requests", {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) {
+      throw new Error(`fetch failed: ${res.status}`);
+    }
+    const body = (await res.json()) as {
+      requests?: Array<{
+        request_id: string;
+        tire_size: string;
+        quantity: number;
+        status: StockAvailabilityRequestStatus;
+      }>;
+    };
+    const mapped: StockAvailabilityRequest[] = (body.requests ?? []).map((r) => ({
+      id: r.request_id,
+      tireSize: r.tire_size,
+      quantity: Number(r.quantity ?? 2),
+      status: r.status,
+    }));
+    setRequests(mapped);
+  };
+
   const dismissDeclined = (id: string) => {
     const pending = declineTimersRef.current[id];
     if (pending) {
@@ -42,9 +67,14 @@ export function StockAvailability() {
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | null = null;
+    void fetchRequests().catch((err) => {
+      console.warn("[stock-availability] initial fetch failed", err);
+    });
 
     void attachShopStockAvailabilitySignalsListener(() => {
-      // TODO(b2b): merge Firestore signals + optional GET refresh when backend lands
+      void fetchRequests().catch((err) => {
+        console.warn("[stock-availability] refresh after signal failed", err);
+      });
     }).then((fn) => {
       if (cancelled) {
         fn?.();

@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import config
 from adapters.erp import close_http_client
 from logging_utils import log, log_error
-from routers import auth, car, carool, config_router, diagnosis, history, internal, orders, webhooks
+from routers import auth, car, carool, config_router, diagnosis, history, internal, orders, stock_availability, webhooks
 
 
 # ── DB connection ─────────────────────────────────────────────────────────────
@@ -179,6 +179,7 @@ app.include_router(history.router)
 app.include_router(orders.router)
 app.include_router(orders.order_singular_router)
 app.include_router(webhooks.router)
+app.include_router(stock_availability.router)
 app.include_router(internal.router)
 log("STARTUP", "All routers registered")
 

@@ -49,11 +49,26 @@ async def cleanup_declined(request: Request):
 
     db = request.app.state.db
     log("DB", f"DELETE open_orders WHERE status='declined' AND declined_at<{cutoff.isoformat()}")
-    result = await db.execute(
+    declined_result = await db.execute(
         "DELETE FROM open_orders WHERE status = 'declined' AND declined_at < $1",
         cutoff,
     )
-    # asyncpg returns a status string like "DELETE 3"
-    deleted = int(result.split()[-1]) if result else 0
-    log("ROUTER/internal", f"cleanup deleted={deleted} declined orders")
-    return {"deleted": deleted}
+    declined_deleted = int(declined_result.split()[-1]) if declined_result else 0
+
+    log("DB", "DELETE stock_availability_requests WHERE status='accepted' AND updated_at < now()-24h")
+    stock_result = await db.execute(
+        """
+        DELETE FROM stock_availability_requests
+        WHERE status = 'accepted' AND updated_at < now() - INTERVAL '24 hours'
+        """
+    )
+    stock_deleted = int(stock_result.split()[-1]) if stock_result else 0
+
+    log(
+        "ROUTER/internal",
+        f"cleanup deleted_declined={declined_deleted} deleted_stock_availability={stock_deleted}",
+    )
+    return {
+        "deleted": declined_deleted,
+        "deleted_stock_availability": stock_deleted,
+    }

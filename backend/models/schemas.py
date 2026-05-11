@@ -328,3 +328,16 @@ class CaroolWebhookPayload(BaseModel):
         default=[],
         description="Carool's ordered list of recommended actions per tyre.",
     )
+
+
+class StockAvailabilityWebhookPayload(BaseModel):
+    """Inbound stock-availability event from Tafnit."""
+    model_config = ConfigDict(extra="ignore")
+
+    ActionType: str
+    RequestId: str
+    ShopId: str
+    TireSize: str
+    CarNumber: str
+    CarModel: str
+    KM: str
