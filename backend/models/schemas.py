@@ -332,7 +332,7 @@ class CaroolWebhookPayload(BaseModel):
 
 class StockAvailabilityWebhookPayload(BaseModel):
     """Inbound stock-availability event from Tafnit."""
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", coerce_numbers_to_str=True)
 
     ActionType: str
     RequestId: str

@@ -21,6 +21,24 @@ from config import CAROOL_API_KEY
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 
 
+def _decode_request_body(raw: bytes) -> str:
+    """
+    Decode an HTTP request body as text, tolerating Hebrew payloads from ERP
+    clients that send Windows-1255 (the Windows Hebrew codepage) instead of
+    UTF-8. UTF-8 is the documented contract; CP1255 is a defensive fallback so
+    we don't silently corrupt Hebrew strings when the ERP client misencodes.
+
+    Raises UnicodeDecodeError if both decodes fail — better to 400 the request
+    than persist garbage.
+    """
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        decoded = raw.decode("cp1255")
+        log("WEBHOOK", "decoded body as cp1255 — ERP client should send UTF-8")
+        return decoded
+
+
 # Inverse of the lookup tables in adapters/erp.py — maps ERP location codes
 # back to the wheel-position strings used internally and by the frontend.
 _LOCATION_TO_POSITION = {
@@ -110,11 +128,14 @@ async def erp_webhook(request: Request):
         404: No order with the given request_id found in the database.
     """
     raw = await request.body()
-    raw_text = raw.decode("utf-8", errors="replace")
+    try:
+        raw_text = _decode_request_body(raw)
+    except UnicodeDecodeError as e:
+        log_error("erp_webhook", f"body decode failed (neither UTF-8 nor CP1255): {e}")
+        raise HTTPException(status_code=400, detail="Invalid body encoding")
     log("WEBHOOK/erp", f"raw body: {raw_text}")
     try:
-        import json as _json
-        data = _json.loads(raw.decode("utf-8", errors="replace"))
+        data = json.loads(raw_text)
         payload = ErpWebhookPayload(**data)
     except Exception as e:
         log_error("erp_webhook", f"payload parse failed: {e} | raw={raw_text[:500]}")
@@ -264,7 +285,11 @@ async def erp_webhook(request: Request):
 )
 async def stock_availability_webhook(request: Request):
     raw = await request.body()
-    raw_text = raw.decode("utf-8", errors="replace")
+    try:
+        raw_text = _decode_request_body(raw)
+    except UnicodeDecodeError as e:
+        log_error("stock_availability_webhook", f"body decode failed (neither UTF-8 nor CP1255): {e}")
+        raise HTTPException(status_code=400, detail="Invalid body encoding")
     try:
         data = json.loads(raw_text)
         payload = StockAvailabilityWebhookPayload(**data)
