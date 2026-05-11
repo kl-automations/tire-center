@@ -198,7 +198,15 @@ def _normalize_tires_actions(
     return normalized
 
 
-async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db, fs_app=None) -> None:
+async def _submit_to_erp(
+    order,
+    car_data: dict,
+    shop_id: str,
+    erp_hash: str,
+    db,
+    fs_app=None,
+    erp_shop_id: str | None = None,
+) -> None:
     """
     Forward a stored diagnosis to the ERP and persist the result.
 
@@ -298,12 +306,13 @@ async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db,
             db,
             fs_app,
             order["license_plate"],
-            shop_id,
+            erp_shop_id,
         )
     except Exception as e:
         log_error(
             "diagnosis",
-            f"stock cleanup failed after ERP submit order_id={order['id']} car_number={order['license_plate']} shop_id={shop_id}: {e}",
+            f"stock cleanup failed after ERP submit order_id={order['id']} car_number={order['license_plate']} "
+            f"erp_shop_id={erp_shop_id!r}: {e}",
         )
     log(
         "ROUTER/diagnosis",
@@ -311,7 +320,15 @@ async def _submit_to_erp(order, car_data: dict, shop_id: str, erp_hash: str, db,
     )
 
 
-async def _clear_accepted_stock_availability(db, fs_app, car_number: str, shop_id: str):
+async def _clear_accepted_stock_availability(
+    db,
+    fs_app,
+    car_number: str,
+    erp_shop_id: str | None,
+):
+    """Rows use Tafnit's numeric shop_id; skip when JWT had no erp_shop_id (legacy / Carool webhook)."""
+    if not erp_shop_id:
+        return
     row = await db.fetchrow(
         """
         DELETE FROM stock_availability_requests
@@ -319,11 +336,11 @@ async def _clear_accepted_stock_availability(db, fs_app, car_number: str, shop_i
         RETURNING request_id
         """,
         car_number,
-        shop_id,
+        erp_shop_id,
     )
     if row:
         if fs_app:
-            _stock_availability_signal(fs_app, shop_id, row["request_id"], "deleted")
+            _stock_availability_signal(fs_app, erp_shop_id, row["request_id"], "deleted")
 
 
 @router.post(
@@ -409,6 +426,7 @@ async def submit_diagnosis(
         shop["erp_hash"],
         db,
         request.app,
+        erp_shop_id=shop.get("erp_shop_id"),
     )
 
     return {"ack": True}

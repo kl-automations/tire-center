@@ -89,7 +89,7 @@ export async function attachShopOrderSignalsListener(
 
 /**
  * Same auth + shop scoping as {@link attachShopOrderSignalsListener}, but listens to
- * `orders/{shop_id}/stock_availability` for stock-availability signal docs.
+ * `orders/{erp_shop_id}/stock_availability` (numeric shop id from custom-token response).
  * Writer side lands in a follow-up ticket; the subscription is a silent no-op until then.
  */
 export async function attachShopStockAvailabilitySignalsListener(
@@ -113,14 +113,18 @@ export async function attachShopStockAvailabilitySignalsListener(
       },
     });
     if (!tokRes.ok) return null;
-    const body = (await tokRes.json()) as { custom_token?: string; shop_id?: string };
-    if (!body.custom_token || !body.shop_id) return null;
+    const body = (await tokRes.json()) as {
+      custom_token?: string;
+      shop_id?: string;
+      erp_shop_id?: string;
+    };
+    if (!body.custom_token || !body.erp_shop_id) return null;
 
     const firebaseApp = getOrCreateApp(fb);
     const auth = getAuth(firebaseApp);
     await signInWithCustomToken(auth, body.custom_token);
     const db = getFirestore(firebaseApp);
-    const col = collection(db, "orders", body.shop_id, "stock_availability");
+    const col = collection(db, "orders", body.erp_shop_id, "stock_availability");
 
     let debounce: ReturnType<typeof setTimeout> | null = null;
     const debounced = () => {

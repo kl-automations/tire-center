@@ -7,5 +7,9 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.token.shop_id == shopId;
       allow write: if false;
     }
+    match /orders/{shopId}/stock_availability/{docId} {
+      allow read: if request.auth != null && request.auth.token.erp_shop_id == shopId;
+      allow write: if false;
+    }
   }
 }

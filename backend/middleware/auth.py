@@ -1,7 +1,7 @@
 """
 JWT auth dependency.
 Usage in a route:  shop = Depends(get_current_shop)
-Returns:           { "shop_id": str, "erp_hash": str }
+Returns:           { "shop_id": str, "erp_hash": str } and optionally "erp_shop_id" when present in the JWT.
 """
 
 from typing import Annotated
@@ -29,7 +29,11 @@ def _decode_shop_jwt(token: str) -> dict:
     if not shop_id or not erp_hash:
         raise ValueError("missing claims")
     log("AUTH", f"JWT verified shop_id={shop_id}")
-    return {"shop_id": shop_id, "erp_hash": erp_hash}
+    out: dict = {"shop_id": shop_id, "erp_hash": erp_hash}
+    erp_shop_id = payload.get("erp_shop_id")
+    if erp_shop_id is not None and str(erp_shop_id).strip():
+        out["erp_shop_id"] = str(erp_shop_id).strip()
+    return out
 
 
 def get_current_shop(
@@ -45,7 +49,7 @@ def get_current_shop(
     are present so the browser session stays authoritative once PR-B lands.
 
     Returns:
-        { "shop_id": str, "erp_hash": str }
+        { "shop_id": str, "erp_hash": str } plus "erp_shop_id" when encoded in the token.
 
     Raises:
         401 Unauthorized: Token is missing, expired, has an invalid signature,

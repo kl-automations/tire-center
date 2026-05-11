@@ -66,6 +66,14 @@ class FirebaseCustomTokenResponse(BaseModel):
     shop_id: str = Field(
         description="Shop scope matching Firestore path orders/{shop_id}/updates/*."
     )
+    erp_shop_id: str | None = Field(
+        default=None,
+        description=(
+            "Numeric ERP/Tafnit shop identifier for stock-availability Firestore path "
+            "orders/{erp_shop_id}/stock_availability. Omitted when the JWT has no erp_shop_id "
+            "(legacy token)."
+        ),
+    )
 
 
 # ---------- Car lookup ----------

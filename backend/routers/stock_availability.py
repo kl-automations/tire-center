@@ -23,8 +23,15 @@ async def list_stock_availability_requests(
     shop: dict = Depends(get_current_shop),
 ):
     db = request.app.state.db
-    shop_id = shop["shop_id"]
-    log("ROUTER/stock-availability", f"list requests shop_id={shop_id}")
+    erp_shop_id = shop.get("erp_shop_id")
+    if not erp_shop_id:
+        log(
+            "ROUTER/stock-availability",
+            "WARNING: list requests skipped — JWT has no erp_shop_id (legacy token); returning empty",
+        )
+        return {"requests": []}
+
+    log("ROUTER/stock-availability", f"list requests erp_shop_id={erp_shop_id}")
 
     rows = await db.fetch(
         """
@@ -33,7 +40,7 @@ async def list_stock_availability_requests(
         WHERE shop_id = $1 AND status IN ('live', 'accepted')
         ORDER BY created_at DESC
         """,
-        shop_id,
+        erp_shop_id,
     )
 
     requests = [
@@ -47,6 +54,6 @@ async def list_stock_availability_requests(
     ]
     log(
         "ROUTER/stock-availability",
-        f"list requests returning={len(requests)} shop_id={shop_id}",
+        f"list requests returning={len(requests)} erp_shop_id={erp_shop_id}",
     )
     return {"requests": requests}

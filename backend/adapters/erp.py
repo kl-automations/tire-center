@@ -194,8 +194,9 @@ async def request_otp(user_code: str) -> dict:
 
     Returns:
         {
-            "success": bool,       # True when ReturnCode == "1"
-            "otp_debug": str|None  # OTP value, only set when ERP_TEST_MODE=true
+            "success": bool,         # True when ReturnCode == "1"
+            "otp_debug": str|None,   # OTP value, only set when ERP_TEST_MODE=true
+            "erp_shop_id": str|None  # Numeric shop id from AdditionalData (Tafnit scope); None if absent
         }
     """
     body = f"<tem:userCode>{_x(user_code)}</tem:userCode>"
@@ -208,9 +209,20 @@ async def request_otp(user_code: str) -> dict:
     success = str(response.ReturnCode) == "1"
     log("ADAPTER/erp", f"IsValidUser ReturnCode={response.ReturnCode} success={success}")
     test_mode = os.environ.get("ERP_TEST_MODE", "false").lower() == "true"
+    erp_shop_id: str | None = None
+    if success:
+        ad = response.AdditionalData
+        if ad is not None and str(ad).strip():
+            erp_shop_id = str(ad).strip()
+        else:
+            log(
+                "ADAPTER/erp",
+                f"WARNING: IsValidUser succeeded but AdditionalData missing/empty userCode={user_code}",
+            )
     return {
         "success": success,
         "otp_debug": response.ReturnMessage if (success and test_mode) else None,
+        "erp_shop_id": erp_shop_id,
     }
 
 
