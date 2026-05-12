@@ -341,7 +341,7 @@ export function CaroolCheck() {
               <div className="w-full h-full flex items-center justify-center">
                 <WearMask
                   className="max-h-full max-w-full"
-                  style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
+                  style={{ transform: "rotate(90deg)", transformOrigin: "center" }}
                 />
               </div>
               )

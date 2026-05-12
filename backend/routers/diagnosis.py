@@ -29,7 +29,6 @@ from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 from models.schemas import DiagnosisRequest
 from adapters import erp
-from routers.webhooks import _stock_availability_signal
 
 router = APIRouter(prefix="/api", tags=["diagnosis"])
 
@@ -87,6 +86,9 @@ def _coerce_jsonb(value) -> dict:
     if isinstance(value, dict):
         return value
     return {}
+
+
+from routers.webhooks import _stock_availability_signal
 
 
 def _build_mechanic_inputs(body: DiagnosisRequest) -> dict:

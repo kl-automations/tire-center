@@ -228,6 +228,21 @@ export const STATUS_STYLES: Record<RequestStatus, { bg: string; text: string; bo
   },
 };
 
+const PLATE_CARD_STYLES: Record<PlateType, { card: string; hover: string }> = {
+  civilian: {
+    card: "bg-card border-border",
+    hover: "hover:border-primary/30",
+  },
+  military: {
+    card: "bg-zinc-50 dark:bg-zinc-900/50 border-zinc-600 dark:border-zinc-500",
+    hover: "hover:border-zinc-500 dark:hover:border-zinc-400",
+  },
+  police: {
+    card: "bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-700",
+    hover: "hover:border-red-500",
+  },
+};
+
 const WHEEL_POS_KEYS: Record<string, string> = {
   "front-right": "wheels.frontRight",
   "front-left": "wheels.frontLeft",
@@ -855,6 +870,7 @@ export function OpenRequests() {
           ) : (
             filtered.map((request) => {
               const styles = STATUS_STYLES[request.status];
+              const plateStyles = PLATE_CARD_STYLES[request.plateType ?? "civilian"];
               const isExpanded = expandedId === request.id;
               const lineItems = isExpanded
                 ? buildLineItems(request, t, codes.actions, codes.reasons, i18n.language)
@@ -863,7 +879,7 @@ export function OpenRequests() {
                 <div
                   key={request.id}
                   onClick={() => setExpandedId(isExpanded ? null : request.id)}
-                  className="w-full bg-card rounded-2xl p-5 shadow-md border border-border space-y-3 cursor-pointer hover:shadow-lg hover:border-primary/30 transition-all duration-200 text-start select-none"
+                  className={`w-full rounded-2xl p-5 shadow-md border space-y-3 cursor-pointer hover:shadow-lg transition-all duration-200 text-start select-none ${plateStyles.card} ${plateStyles.hover}`}
                 >
                   <LicensePlate plateNumber={request.licensePlate} plateType={request.plateType} className="w-full max-w-xs mx-auto" />
                   <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">

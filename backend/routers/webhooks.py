@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from logging_utils import log, log_error
 from models.schemas import ErpWebhookPayload, CaroolWebhookPayload, StockAvailabilityWebhookPayload
 from config import CAROOL_API_KEY
+from routers.diagnosis import _coerce_jsonb
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 

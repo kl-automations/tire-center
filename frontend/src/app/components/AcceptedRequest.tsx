@@ -365,7 +365,7 @@ export function AcceptedRequest() {
     if (!cache) return;
     const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
     if (noCarool) return;
-    const wheelData = affectedWheels[wheel];
+    const wheelData = getStoredAffectedWheels(cache.plate)[wheel];
     const needsPhoto = !!wheelData?.selectedActionCodes.some((c) =>
       (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
     );
