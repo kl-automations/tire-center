@@ -322,6 +322,7 @@ async def stock_availability_webhook(request: Request):
                 km = EXCLUDED.km,
                 quantity = EXCLUDED.quantity,
                 status = 'live',
+                closed_reason = NULL,
                 updated_at = now()
             """,
             request_id,
@@ -339,59 +340,81 @@ async def stock_availability_webhook(request: Request):
         return {"ack": True}
 
     if action_type == "2":
-        row = await db.fetchrow(
+        updated_rows = await db.fetch(
             """
-            SELECT status
-            FROM stock_availability_requests
-            WHERE request_id = $1 AND shop_id = $2
+            UPDATE stock_availability_requests
+            SET status = 'accepted'
+            WHERE request_id = $1 AND shop_id = $2 AND status <> 'accepted'
+            RETURNING shop_id
             """,
             request_id,
             shop_id,
         )
-        if row and row["status"] == "live":
-            await db.execute(
-                """
-                DELETE FROM stock_availability_requests
-                WHERE request_id = $1 AND shop_id = $2
-                """,
-                request_id,
-                shop_id,
-            )
-            _stock_availability_signal(request.app, shop_id, request_id, "deleted")
+        if not updated_rows:
             log(
                 "WEBHOOK/stock-availability",
-                f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=deleted_live",
+                f"ActionType=2 request_id={request_id} resolving_shop_id={shop_id} "
+                "WARNING: no row updated (missing or already accepted); continuing fan-out",
             )
-        elif row and row["status"] == "accepted":
-            log(
-                "WEBHOOK/stock-availability",
-                f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=noop_accepted",
-            )
-        else:
-            log(
-                "WEBHOOK/stock-availability",
-                f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome=noop_missing_or_non_live",
-            )
+
+        deleted_rows = await db.fetch(
+            """
+            DELETE FROM stock_availability_requests
+            WHERE request_id = $1 AND shop_id <> $2
+            RETURNING shop_id
+            """,
+            request_id,
+            shop_id,
+        )
+
+        if updated_rows:
+            _stock_availability_signal(request.app, shop_id, request_id, "accepted")
+        for row in deleted_rows:
+            sid = row["shop_id"]
+            _stock_availability_signal(request.app, sid, request_id, "deleted")
+
+        log(
+            "WEBHOOK/stock-availability",
+            f"processed ActionType=2 request_id={request_id} resolving_shop_id={shop_id} "
+            f"summary: accepted_row_updates={len(updated_rows)} peer_rows_deleted={len(deleted_rows)} "
+            f"firestore_accepted_signals={1 if updated_rows else 0} "
+            f"firestore_deleted_signals={len(deleted_rows)}",
+        )
         return {"ack": True}
 
     if action_type in {"8", "9"}:
-        deleted = await db.fetchrow(
+        reason = "closed" if action_type == "8" else "cancelled"
+        updated_rows = await db.fetch(
             """
-            DELETE FROM stock_availability_requests
-            WHERE request_id = $1 AND shop_id = $2
-            RETURNING request_id
+            UPDATE stock_availability_requests
+            SET closed_reason = $2
+            WHERE request_id = $1 AND status = 'accepted'
+            RETURNING shop_id
             """,
             request_id,
-            shop_id,
+            reason,
         )
-        if deleted:
-            _stock_availability_signal(request.app, shop_id, request_id, "deleted")
-            outcome = "deleted"
-        else:
-            outcome = "noop_missing"
+        deleted_rows = await db.fetch(
+            """
+            DELETE FROM stock_availability_requests
+            WHERE request_id = $1 AND status <> 'accepted'
+            RETURNING shop_id
+            """,
+            request_id,
+        )
+
+        for row in updated_rows:
+            sid = row["shop_id"]
+            _stock_availability_signal(request.app, sid, request_id, reason)
+        for row in deleted_rows:
+            sid = row["shop_id"]
+            _stock_availability_signal(request.app, sid, request_id, "deleted")
+
         log(
             "WEBHOOK/stock-availability",
-            f"processed ActionType={action_type} request_id={request_id} shop_id={shop_id} outcome={outcome}",
+            f"processed ActionType={action_type} request_id={request_id} reason={reason} "
+            f"summary: closed_reason_updates={len(updated_rows)} non_accepted_deleted={len(deleted_rows)} "
+            f"firestore_reason_signals={len(updated_rows)} firestore_deleted_signals={len(deleted_rows)}",
         )
         return {"ack": True}
 

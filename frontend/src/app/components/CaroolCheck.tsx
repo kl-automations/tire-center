@@ -129,7 +129,6 @@ export function CaroolCheck() {
   const params = useParams<{ orderId: string; wheel: string }>();
   const orderId = params.orderId ?? "";
   const currentWheel = params.wheel ?? "";
-  usePhoneBackSync({ fallback: `/order/${encodeURIComponent(orderId)}` });
   const cacheKey = `route-carool-${orderId}-${currentWheel}`;
   const [cache] = useScreenCache<CaroolCache>(cacheKey);
 
@@ -145,6 +144,16 @@ export function CaroolCheck() {
   const [cameraError, setCameraError] = useState(false);
   const [photoStep, setPhotoStep] = useState<PhotoStep>("sidewall");
   const [preview, setPreview] = useState<string | null>(null);
+  usePhoneBackSync({
+    fallback: `/order/${encodeURIComponent(orderId)}`,
+    onBack: () => {
+      if (preview) {
+        setPreview(null);
+        cropRectRef.current = null;
+        return true;
+      }
+    },
+  });
   const [showDone, setShowDone] = useState(false);
   const [caroolId, setCaroolId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -328,7 +337,14 @@ export function CaroolCheck() {
         >
           {photoStep === "sidewall"
             ? <ReferenceMask className="w-full h-full" />
-            : <WearMask className="w-full h-full" />
+            : (
+              <div className="w-full h-full flex items-center justify-center">
+                <WearMask
+                  className="max-h-full max-w-full"
+                  style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
+                />
+              </div>
+              )
           }
         </div>
       )}
@@ -338,7 +354,7 @@ export function CaroolCheck() {
         <div className="flex items-center justify-between px-4 pt-4">
           {/* Back only shown in preview mode (acts as retake) */}
           {preview
-            ? <button onClick={handleBack} className="text-white hover:opacity-75 transition-opacity p-1"><ArrowRight className="w-6 h-6" /></button>
+            ? <button onClick={handleBack} className="text-white hover:opacity-75 transition-opacity p-1"><ArrowRight className="w-6 h-6 ltr:rotate-180" /></button>
             : <div className="w-8" />
           }
           <div className="text-center">

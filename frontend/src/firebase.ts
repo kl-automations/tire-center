@@ -87,13 +87,17 @@ export async function attachShopOrderSignalsListener(
   }
 }
 
+export type StockAvailabilitySignalChange = {
+  requestId: string;
+  status: string;
+};
+
 /**
  * Same auth + shop scoping as {@link attachShopOrderSignalsListener}, but listens to
  * `orders/{erp_shop_id}/stock_availability` (numeric shop id from custom-token response).
- * Writer side lands in a follow-up ticket; the subscription is a silent no-op until then.
  */
 export async function attachShopStockAvailabilitySignalsListener(
-  onUpdate: () => void,
+  onUpdate: (changes: StockAvailabilitySignalChange[]) => void,
 ): Promise<(() => void) | null> {
   try {
     const token = localStorage.getItem("token");
@@ -127,19 +131,40 @@ export async function attachShopStockAvailabilitySignalsListener(
     const col = collection(db, "orders", body.erp_shop_id, "stock_availability");
 
     let debounce: ReturnType<typeof setTimeout> | null = null;
-    const debounced = () => {
+    const pending = new Map<string, string>();
+
+    const flush = () => {
+      debounce = null;
+      const changes: StockAvailabilitySignalChange[] = [...pending.entries()].map(
+        ([requestId, status]) => ({ requestId, status }),
+      );
+      pending.clear();
+      onUpdate(changes);
+    };
+
+    const scheduleFlush = () => {
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(() => {
-        debounce = null;
-        onUpdate();
-      }, 150);
+      debounce = setTimeout(flush, 150);
     };
 
     const unsub = onSnapshot(
       col,
-      debounced,
+      (snap) => {
+        let anyChange = false;
+        for (const change of snap.docChanges()) {
+          anyChange = true;
+          if (change.type === "added" || change.type === "modified") {
+            const data = change.doc.data() as { status?: unknown };
+            const st = typeof data.status === "string" ? data.status : "";
+            pending.set(change.doc.id, st);
+          } else if (change.type === "removed") {
+            pending.delete(change.doc.id);
+          }
+        }
+        if (anyChange) scheduleFlush();
+      },
       () => {
-        /* permission/network — ignore; list refresh will ship with backend */
+        /* permission/network — ignore */
       },
     );
 

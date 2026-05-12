@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS stock_availability_requests (
   km           text        NOT NULL,
   quantity     smallint    NOT NULL DEFAULT 2,
   status       text        NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'accepted', 'declined')),
+  closed_reason text       CHECK (closed_reason IS NULL OR closed_reason IN ('closed', 'cancelled')),
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (request_id, shop_id)

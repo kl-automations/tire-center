@@ -567,7 +567,7 @@ export function AcceptedRequest() {
             onClick={handleHeaderBack}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-5 h-5 ltr:rotate-180" />
           </button>
           <h1 className="text-base text-primary-foreground font-semibold">{t("acceptedRequest.title")}</h1>
           <div className="w-5" />

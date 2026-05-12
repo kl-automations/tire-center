@@ -184,7 +184,6 @@
     "tread": "סוליה",
     "capture": "צלם",
     "done": "הצילומים הושלמו",
-    "capture": "צלם",
     "approve": "אשר",
     "retake": "צלם שוב",
     "cameraError": "לא ניתן לגשת למצלמה",
@@ -219,7 +218,9 @@
     "cancel": "ביטול",
     "dismiss": "סגירה",
     "acceptedLabel": "אושר",
-    "declinedLabel": "בוטל"
+    "declinedLabel": "בוטל",
+    "closedNotice": "הפנייה נסגרה",
+    "cancelledNotice": "הפנייה בוטלה"
   },
   "monthlyReceipt": {
     "title": "התחשבנות חודשית",

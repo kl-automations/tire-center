@@ -1,6 +1,14 @@
-export function WearMask({ className }: { className?: string }) {
+import type { CSSProperties } from "react";
+
+export function WearMask({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: CSSProperties;
+}) {
   return (
-    <svg className={className} viewBox="0 0 290 364" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} style={style} viewBox="0 0 290 364" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g clipPath="url(#wm_clip)">
         <mask id="wm_mask" style={{ maskType: "luminance" }} maskUnits="userSpaceOnUse" x="0" y="0" width="290" height="364">
           <path d="M290 0H0V364H290V0Z" fill="white" />

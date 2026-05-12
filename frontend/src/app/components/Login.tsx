@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Sun, Moon, Globe, ArrowLeft } from "lucide-react";
+import { Sun, Moon, Globe, ArrowRight } from "lucide-react";
 import { APP_LANGUAGES, type Language, useTheme } from "../ThemeContext";
 import { usePhoneBackSync } from "../usePhoneBackSync";
 import { useToast } from "./Toast";
@@ -291,7 +291,7 @@ export function Login() {
                 onClick={handleBackToUserCode}
                 className="w-full flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 ltr:rotate-180" />
                 {t("login.backToUserCode")}
               </button>
             </form>

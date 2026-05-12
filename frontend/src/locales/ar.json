@@ -184,7 +184,6 @@
     "tread": "مداس الإطار",
     "capture": "التقاط",
     "done": "اكتملت الصور",
-    "capture": "التقاط",
     "approve": "تأكيد",
     "retake": "إعادة التصوير",
     "cameraError": "تعذّر الوصول إلى الكاميرا",
@@ -219,7 +218,9 @@
     "cancel": "إلغاء",
     "dismiss": "إغلاق",
     "acceptedLabel": "تم القبول",
-    "declinedLabel": "تم الإلغاء"
+    "declinedLabel": "تم الإلغاء",
+    "closedNotice": "تم إغلاق المطالبة",
+    "cancelledNotice": "تم إلغاء المطالبة"
   },
   "monthlyReceipt": {
     "title": "التسوية الشهرية",

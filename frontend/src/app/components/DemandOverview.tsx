@@ -22,7 +22,7 @@ export function DemandOverview() {
             onClick={() => navigate("/dashboard")}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
-            <ArrowRight className="w-6 h-6" />
+            <ArrowRight className="w-6 h-6 ltr:rotate-180" />
           </button>
           <h1 className="text-xl text-primary-foreground font-semibold">{t("demandOverview.title")}</h1>
           <div className="w-6" />

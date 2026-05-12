@@ -115,7 +115,7 @@ async def list_stock_availability_requests(
 
     rows = await db.fetch(
         """
-        SELECT request_id, tire_size, quantity, status
+        SELECT request_id, tire_size, quantity, status, closed_reason
         FROM stock_availability_requests
         WHERE shop_id = $1 AND status IN ('live', 'accepted')
         ORDER BY created_at DESC
@@ -129,6 +129,7 @@ async def list_stock_availability_requests(
             "tire_size": row["tire_size"],
             "quantity": int(row["quantity"]),
             "status": row["status"],
+            "closed_reason": row["closed_reason"],
         }
         for row in rows
     ]

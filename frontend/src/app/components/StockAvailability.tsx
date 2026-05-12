@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Check, X } from "lucide-react";
+import { ArrowRight, Check, Loader2, X } from "lucide-react";
 import { usePhoneBackSync } from "../usePhoneBackSync";
 import { attachShopStockAvailabilitySignalsListener } from "../../firebase";
 
@@ -12,7 +12,13 @@ export type StockAvailabilityRequest = {
   tireSize: string;
   quantity: number;
   status: StockAvailabilityRequestStatus;
+  closedReason: "closed" | "cancelled" | null;
 };
+
+function parseClosedReason(value: unknown): "closed" | "cancelled" | null {
+  if (value === "closed" || value === "cancelled") return value;
+  return null;
+}
 
 const AUTO_DISMISS_MS = 15_000;
 
@@ -28,8 +34,11 @@ export function StockAvailability() {
 
   const declineTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const requestsRef = useRef<StockAvailabilityRequest[]>([]);
+  const actionInFlightRef = useRef(false);
 
   const [requests, setRequests] = useState<StockAvailabilityRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
     requestsRef.current = requests;
@@ -49,6 +58,7 @@ export function StockAvailability() {
         tire_size: string;
         quantity: number;
         status: StockAvailabilityRequestStatus;
+        closed_reason?: string | null;
       }>;
     };
     const mapped: StockAvailabilityRequest[] = (body.requests ?? []).map((r) => ({
@@ -56,6 +66,7 @@ export function StockAvailability() {
       tireSize: r.tire_size,
       quantity: Number(r.quantity ?? 2),
       status: r.status,
+      closedReason: parseClosedReason(r.closed_reason),
     }));
     setRequests((prev) => {
       const declinedLocal = prev.filter((r) => r.status === "declined");
@@ -76,9 +87,15 @@ export function StockAvailability() {
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | null = null;
-    void fetchRequests().catch((err) => {
-      console.warn("[stock-availability] initial fetch failed", err);
-    });
+    void (async () => {
+      try {
+        await fetchRequests();
+      } catch (err) {
+        console.warn("[stock-availability] initial fetch failed", err);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
 
     void attachShopStockAvailabilitySignalsListener((changes) => {
       void fetchRequests().catch((err) => {
@@ -120,52 +137,70 @@ export function StockAvailability() {
   const acceptedRequests = useMemo(() => requests.filter((r) => r.status === "accepted"), [requests]);
 
   const handleApprove = async (id: string) => {
+    if (pendingId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setPendingId(id);
     const token = localStorage.getItem("token");
     let snapshot: StockAvailabilityRequest[] = [];
-    setRequests((prev) => {
-      snapshot = [...prev];
-      return prev.map((r) => (r.id === id ? { ...r, status: "accepted" as const } : r));
-    });
     try {
-      const res = await fetch(`/api/stock-availability/requests/${encodeURIComponent(id)}/approve`, {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          "Content-Type": "application/json",
-        },
+      setRequests((prev) => {
+        snapshot = [...prev];
+        return prev.map((r) =>
+          r.id === id ? { ...r, status: "accepted" as const, closedReason: null } : r,
+        );
       });
-      if (!res.ok) {
+      try {
+        const res = await fetch(`/api/stock-availability/requests/${encodeURIComponent(id)}/approve`, {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) {
+          setRequests(snapshot);
+          console.warn("[stock-availability] approve failed", res.status);
+        }
+      } catch (e) {
         setRequests(snapshot);
-        console.warn("[stock-availability] approve failed", res.status);
+        console.warn("[stock-availability] approve failed", e);
       }
-    } catch (e) {
-      setRequests(snapshot);
-      console.warn("[stock-availability] approve failed", e);
+    } finally {
+      actionInFlightRef.current = false;
+      setPendingId(null);
     }
   };
 
   const handleDecline = async (id: string) => {
+    if (pendingId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setPendingId(id);
     const token = localStorage.getItem("token");
     let snapshot: StockAvailabilityRequest[] = [];
-    setRequests((prev) => {
-      snapshot = [...prev];
-      return prev.map((r) => (r.id === id ? { ...r, status: "declined" as const } : r));
-    });
     try {
-      const res = await fetch(`/api/stock-availability/requests/${encodeURIComponent(id)}/decline`, {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          "Content-Type": "application/json",
-        },
+      setRequests((prev) => {
+        snapshot = [...prev];
+        return prev.map((r) => (r.id === id ? { ...r, status: "declined" as const } : r));
       });
-      if (!res.ok) {
+      try {
+        const res = await fetch(`/api/stock-availability/requests/${encodeURIComponent(id)}/decline`, {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) {
+          setRequests(snapshot);
+          console.warn("[stock-availability] decline failed", res.status);
+        }
+      } catch (e) {
         setRequests(snapshot);
-        console.warn("[stock-availability] decline failed", res.status);
+        console.warn("[stock-availability] decline failed", e);
       }
-    } catch (e) {
-      setRequests(snapshot);
-      console.warn("[stock-availability] decline failed", e);
+    } finally {
+      actionInFlightRef.current = false;
+      setPendingId(null);
     }
   };
 
@@ -178,7 +213,7 @@ export function StockAvailability() {
             onClick={() => navigate("/dashboard")}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
-            <ArrowRight className="w-6 h-6" />
+            <ArrowRight className="w-6 h-6 ltr:rotate-180" />
           </button>
           <h1 className="text-xl text-primary-foreground font-semibold">{t("stockAvailability.title")}</h1>
           <div className="w-6" />
@@ -190,13 +225,20 @@ export function StockAvailability() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-foreground">{t("stockAvailability.liveSection")}</h2>
             {liveRequests.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("stockAvailability.emptyLive")}</p>
+              isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-busy="true">
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+                  <span>{t("common.loading")}</span>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("stockAvailability.emptyLive")}</p>
+              )
             ) : (
               liveRequests.map((request) => (
                 <RequestCard
                   key={request.id}
                   request={request}
-                  loading={false}
+                  loading={pendingId === request.id}
                   onApprove={() => void handleApprove(request.id)}
                   onDecline={() => void handleDecline(request.id)}
                   onDismiss={() => dismissDeclined(request.id)}
@@ -214,7 +256,7 @@ export function StockAvailability() {
                 <RequestCard
                   key={request.id}
                   request={request}
-                  loading={false}
+                  loading={pendingId === request.id}
                   onApprove={() => {}}
                   onDecline={() => {}}
                   onDismiss={() => dismissDeclined(request.id)} // no-op in practice: no X on accepted cards; same handler as live for symmetry
@@ -293,10 +335,18 @@ function RequestCard({
       )}
 
       {isAccepted && (
-        <p className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 dark:text-green-300">
-          <Check className="w-4 h-4" />
-          {t("stockAvailability.acceptedLabel")}
-        </p>
+        <div className="space-y-1">
+          <p className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 dark:text-green-300">
+            <Check className="w-4 h-4" />
+            {t("stockAvailability.acceptedLabel")}
+          </p>
+          {request.closedReason === "closed" && (
+            <p className="text-sm text-muted-foreground">{t("stockAvailability.closedNotice")}</p>
+          )}
+          {request.closedReason === "cancelled" && (
+            <p className="text-sm text-muted-foreground">{t("stockAvailability.cancelledNotice")}</p>
+          )}
+        </div>
       )}
 
       {isDeclined && (

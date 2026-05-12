@@ -184,7 +184,6 @@
     "tread": "Протектор",
     "capture": "Снять",
     "done": "Фото сделаны",
-    "capture": "Снять",
     "approve": "Принять",
     "retake": "Переснять",
     "cameraError": "Нет доступа к камере",
@@ -219,7 +218,9 @@
     "cancel": "Отменить",
     "dismiss": "Закрыть",
     "acceptedLabel": "Подтверждено",
-    "declinedLabel": "Отменено"
+    "declinedLabel": "Отменено",
+    "closedNotice": "Обращение закрыто",
+    "cancelledNotice": "Обращение отменено"
   },
   "monthlyReceipt": {
     "title": "Ежемесячная сводка",
