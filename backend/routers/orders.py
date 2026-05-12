@@ -139,7 +139,7 @@ async def get_order(
 # outside this set means the order has already been submitted to the ERP
 # (or finalised), so the client should redirect to a result screen rather
 # than try to keep editing.
-_ACTIVE_ORDER_STATUSES = {"open", "pending_carool"}
+_ACTIVE_ORDER_STATUSES = {"open", "pending_carool", "waiting"}
 
 
 @order_singular_router.get(
@@ -153,10 +153,10 @@ _ACTIVE_ORDER_STATUSES = {"open", "pending_carool"}
         "`license_plate`, `plate_type`, `mileage` and `front_alignment` so "
         "the screen can render without a second round-trip.\n\n"
         "Status-code semantics:\n"
-        "- **200** — order is still active (`open` or `pending_carool`).\n"
+        "- **200** — order is still active (`open`, `pending_carool`, or `waiting`).\n"
         "- **404** — no such order, or it belongs to a different shop.\n"
-        "- **410** — order has moved past the editable window (`waiting`, "
-        "`approved`, `partly-approved`, `declined`); the client should "
+        "- **410** — order has moved past the editable window (`approved`, "
+        "`partly-approved`, `declined`, or other terminal states); the client should "
         "redirect to the appropriate result screen."
     ),
     response_description="Flattened car_data + per-row metadata for AcceptedRequest.",
@@ -227,8 +227,21 @@ async def get_order_for_rehydrate(
             diagnosis = json.loads(diagnosis)
         except json.JSONDecodeError:
             diagnosis = None
+    mechanic_inputs = diagnosis.get("mechanic_inputs") if isinstance(diagnosis, dict) else None
+    derived_lines: list[dict] = []
+    if mechanic_inputs and mechanic_inputs.get("tires"):
+        for wheel, actions in mechanic_inputs["tires"].items():
+            for a in actions or []:
+                if isinstance(a.get("action"), int):
+                    derived_lines.append(
+                        {
+                            "wheel": wheel,
+                            "action": a["action"],
+                            "reason": a.get("reason") or 0,
+                        }
+                    )
     front_alignment = bool(
-        diagnosis.get("front_alignment") if isinstance(diagnosis, dict) else False
+        mechanic_inputs.get("front_alignment") if mechanic_inputs else False
     )
 
     log(
@@ -241,8 +254,6 @@ async def get_order_for_rehydrate(
         "plate_type": row["plate_type"],
         "mileage": row["mileage"],
         "front_alignment": front_alignment,
-        # Carry through the stored car_data so the response shape mirrors the
-        # POST /api/car reuse path; existing_lines defaults to empty here.
-        "existing_lines": [],
         **car_data,
+        "existing_lines": derived_lines,
     }

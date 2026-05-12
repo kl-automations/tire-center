@@ -121,13 +121,13 @@ async def car_lookup(
     # mileage_update, so the updated mileage will reach the ERP naturally then.
     log(
         "DB",
-        f"SELECT open_orders WHERE shop_id={shop['shop_id']} plate={body.license_plate} status='open'",
+        f"SELECT open_orders WHERE shop_id={shop['shop_id']} plate={body.license_plate} status IN ('open','waiting')",
     )
     existing = await db.fetchrow(
         """
-        SELECT id, car_data
+        SELECT id, car_data, diagnosis
         FROM open_orders
-        WHERE shop_id = $1 AND license_plate = $2 AND status = 'open'
+        WHERE shop_id = $1 AND license_plate = $2 AND status IN ('open', 'waiting')
         ORDER BY created_at DESC
         LIMIT 1
         """,
@@ -157,6 +157,26 @@ async def car_lookup(
         stored_car_data = existing["car_data"]
         if isinstance(stored_car_data, str):
             stored_car_data = json.loads(stored_car_data)
+        from routers.diagnosis import _coerce_jsonb  # lazy — same pattern as webhooks.py
+
+        diag = _coerce_jsonb(existing["diagnosis"])
+        mechanic_inputs = diag.get("mechanic_inputs") if diag else None
+
+        if mechanic_inputs and mechanic_inputs.get("tires"):
+            derived_lines = []
+            for wheel, actions in mechanic_inputs["tires"].items():
+                for a in actions or []:
+                    if isinstance(a.get("action"), int):
+                        derived_lines.append(
+                            {
+                                "wheel": wheel,
+                                "action": a["action"],
+                                "reason": a.get("reason") or 0,
+                            }
+                        )
+            stored_car_data["existing_lines"] = derived_lines
+            if "front_alignment" in mechanic_inputs:
+                stored_car_data["front_alignment"] = bool(mechanic_inputs["front_alignment"])
         log(
             "ROUTER/car",
             f"car_lookup reused order_id={existing['id']} plate={body.license_plate}",

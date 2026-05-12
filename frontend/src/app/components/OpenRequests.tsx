@@ -457,6 +457,19 @@ type RawOrderRow = {
  * `hasUpdate` is initialised to `false`; the caller is responsible for
  * comparing statuses against a previously-seen snapshot and flipping it on.
  */
+/** Keep one row per business request number (highest `id` wins). */
+function dedupeOrdersByRequestNumber(orders: OpenRequest[]): OpenRequest[] {
+  return Array.from(
+    orders
+      .reduce((map, o) => {
+        if (!map.has(o.requestNumber) || o.id > map.get(o.requestNumber)!.id)
+          map.set(o.requestNumber, o);
+        return map;
+      }, new Map<string, OpenRequest>())
+      .values(),
+  );
+}
+
 export function mapOrdersResponse(
   raw: unknown[],
   reasons: ReasonCodeItem[],
@@ -610,8 +623,9 @@ export function useOrdersSummary(): UseOrdersSummaryResult {
           codes.reasons,
           i18n.language,
         );
+        const deduped = dedupeOrdersByRequestNumber(mapped);
         const dismissed = new Set(getDismissedOrderIds());
-        const visible = mapped.filter((r) => !dismissed.has(r.id));
+        const visible = deduped.filter((r) => !dismissed.has(r.id));
         if (!cancelled) {
           setOrders(visible);
           setIsLoading(false);
@@ -711,9 +725,10 @@ export function OpenRequests() {
           codes.reasons,
           i18n.language,
         );
+        const deduped = dedupeOrdersByRequestNumber(mapped);
 
         const dismissed = new Set(getDismissedOrderIds());
-        const visible = mapped.filter((r) => !dismissed.has(r.id));
+        const visible = deduped.filter((r) => !dismissed.has(r.id));
 
         // Compare each order's status to the persisted seen-snapshot; flip
         // `hasUpdate` on for any non-waiting status the mechanic hasn't seen.

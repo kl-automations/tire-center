@@ -263,13 +263,28 @@ export function TirePopup({
                     key={reason.code}
                     type="button"
                     onClick={() => {
-                      setSelectedReasonCodes((prev) =>
-                        prev.includes(reason.code) ? prev.filter((code) => code !== reason.code) : [...prev, reason.code]
-                      );
-                      setSelectedActionCodes((prev) =>
-                        prev.includes(action.code) ? prev : [...prev, action.code]
-                      );
-                      setReasonActionMap((prev) => ({ ...prev, [reason.code]: action.code }));
+                      const isActive = selectedReasonCodes.includes(reason.code);
+                      if (isActive) {
+                        const newReasonCodes = selectedReasonCodes.filter((c) => c !== reason.code);
+                        setSelectedReasonCodes(newReasonCodes);
+                        setReasonActionMap((prev) => {
+                          const next = { ...prev };
+                          delete next[reason.code];
+                          return next;
+                        });
+                        const otherActive = (actionCodeToReasons.get(action.code) ?? []).filter((r) =>
+                          newReasonCodes.includes(r.code)
+                        );
+                        if (otherActive.length === 0) {
+                          setSelectedActionCodes((prev) => prev.filter((c) => c !== action.code));
+                        }
+                      } else {
+                        setSelectedReasonCodes((prev) => [...prev, reason.code]);
+                        setSelectedActionCodes((prev) =>
+                          prev.includes(action.code) ? prev : [...prev, action.code]
+                        );
+                        setReasonActionMap((prev) => ({ ...prev, [reason.code]: action.code }));
+                      }
                     }}
                     className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
                       active

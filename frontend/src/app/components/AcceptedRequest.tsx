@@ -36,19 +36,19 @@ interface OrderCache {
   order_id: string;
 }
 
-function getStoredAffectedWheels(plate: string): Record<string, WheelData> {
+function getStoredAffectedWheels(orderId: string): Record<string, WheelData> {
   try {
-    const raw = sessionStorage.getItem(`affected-wheels-${plate}`);
+    const raw = sessionStorage.getItem(`affected-wheels-${orderId}`);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-function storeAffectedWheel(plate: string, wheel: string, data: WheelData) {
-  const current = getStoredAffectedWheels(plate);
+function storeAffectedWheel(orderId: string, wheel: string, data: WheelData) {
+  const current = getStoredAffectedWheels(orderId);
   current[wheel] = data;
-  sessionStorage.setItem(`affected-wheels-${plate}`, JSON.stringify(current));
+  sessionStorage.setItem(`affected-wheels-${orderId}`, JSON.stringify(current));
 }
 
 /**
@@ -142,7 +142,7 @@ function buildCacheFromOrderResponse(
  * the ERP submission then happens server-side from the Carool webhook) and
  * navigates back to `/dashboard`.
  *
- * Per-wheel data is persisted in `sessionStorage` (key `affected-wheels-{plate}`)
+ * Per-wheel data is persisted in `sessionStorage` (key `affected-wheels-{orderId}`)
  * and ERP-supplied props in `route-order-{orderId}` so a full page reload
  * restores the screen exactly where the mechanic left off.
  */
@@ -173,7 +173,7 @@ export function AcceptedRequest() {
         });
         if (cancelled) return;
         if (res.status === 410) {
-          // Order has moved past the open / pending_carool window — go look
+          // Order has moved past the editable lifecycle — go look
           // at it on the appropriate result screen.
           navigate("/open-requests", { replace: true });
           return;
@@ -265,39 +265,29 @@ export function AcceptedRequest() {
   const licensePlate = cache?.plate ?? "";
 
   const [affectedWheels, setAffectedWheels] = useState<Record<string, WheelData>>(
-    () => (licensePlate ? getStoredAffectedWheels(licensePlate) : {}),
+    () => (orderId ? getStoredAffectedWheels(orderId) : {}),
   );
-  // When the cache shows up after a refetch, hydrate affectedWheels from
-  // both sessionStorage (any in-progress entries) and the ERP existing
-  // lines. The OR-empty check matches the previous one-shot existingLines
-  // restoration in this component.
+  // Merge ERP/DB existing lines with sessionStorage: stored wins per wheel so
+  // partial stale session data cannot hide server pre-fills or desync the photo gate.
   useEffect(() => {
-    if (!licensePlate) return;
-    const stored = getStoredAffectedWheels(licensePlate);
-    if (Object.keys(stored).length > 0) {
-      setAffectedWheels(stored);
-      return;
-    }
-    const lines = cache?.existingLines ?? [];
-    if (lines.length === 0) {
-      setAffectedWheels({});
-      return;
-    }
-    const restored = existingLinesToAffectedWheels(lines);
-    setAffectedWheels(restored);
-    sessionStorage.setItem(
-      `affected-wheels-${licensePlate}`,
-      JSON.stringify(restored),
-    );
-  }, [licensePlate, cache?.existingLines]);
+    if (!orderId || !cache) return;
+    const stored = getStoredAffectedWheels(orderId);
+    const lines = cache.existingLines ?? [];
+    if (lines.length === 0 && Object.keys(stored).length === 0) return;
+    const fromErp = existingLinesToAffectedWheels(lines);
+    const merged = { ...fromErp, ...stored };
+    setAffectedWheels(merged);
+    setSpareTire("spare-tire" in merged);
+    sessionStorage.setItem(`affected-wheels-${orderId}`, JSON.stringify(merged));
+  }, [cache, orderId]);
 
   const [spareTire, setSpareTire] = useState<boolean>(() =>
-    licensePlate ? "spare-tire" in getStoredAffectedWheels(licensePlate) : false,
+    orderId ? "spare-tire" in getStoredAffectedWheels(orderId) : false,
   );
   useEffect(() => {
-    if (!licensePlate) return;
-    setSpareTire("spare-tire" in getStoredAffectedWheels(licensePlate));
-  }, [licensePlate]);
+    if (!orderId) return;
+    setSpareTire("spare-tire" in getStoredAffectedWheels(orderId));
+  }, [orderId]);
 
   const wheelCount = resolveVehicleWheelCount(
     licensePlate,
@@ -357,7 +347,7 @@ export function AcceptedRequest() {
   };
 
   const handlePopupSubmit = (wheel: string, data: WheelData) => {
-    storeAffectedWheel(licensePlate, wheel, data);
+    storeAffectedWheel(orderId, wheel, data);
     if (
       !data.selectedActionCodes.some((c) =>
         (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
@@ -374,7 +364,7 @@ export function AcceptedRequest() {
     if (!cache) return;
     const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
     if (noCarool) return;
-    const wheelData = getStoredAffectedWheels(cache.plate)[wheel];
+    const wheelData = getStoredAffectedWheels(orderId)[wheel];
     const needsPhoto = !!wheelData?.selectedActionCodes.some((c) =>
       (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
     );
@@ -409,9 +399,9 @@ export function AcceptedRequest() {
   const handleDiscardAndLeave = () => {
     setShowDiscardConfirm(false);
     try {
-      if (licensePlate) {
-        sessionStorage.removeItem(`affected-wheels-${licensePlate}`);
-        sessionStorage.removeItem(`carool-photos-done-${licensePlate}`);
+      if (orderId) {
+        sessionStorage.removeItem(`affected-wheels-${orderId}`);
+        sessionStorage.removeItem(`carool-photos-done-${orderId}`);
       }
       sessionStorage.removeItem(`route-order-${orderId}`);
     } catch {}
@@ -426,7 +416,7 @@ export function AcceptedRequest() {
         if (!("spare-tire" in prev)) return prev;
         const next = { ...prev };
         delete next["spare-tire"];
-        sessionStorage.setItem(`affected-wheels-${licensePlate}`, JSON.stringify(next));
+        sessionStorage.setItem(`affected-wheels-${orderId}`, JSON.stringify(next));
         return next;
       });
       setSelectedWheel((s) => (s === "spare-tire" ? null : s));
@@ -438,7 +428,7 @@ export function AcceptedRequest() {
     if (isSubmitting || !cache) return;
 
     const photoDone: string[] = JSON.parse(
-      sessionStorage.getItem(`carool-photos-done-${licensePlate}`) || "[]",
+      sessionStorage.getItem(`carool-photos-done-${orderId}`) || "[]",
     );
     const photoDoneSet = new Set(photoDone);
     const missing = Object.entries(affectedWheels)
@@ -528,8 +518,8 @@ export function AcceptedRequest() {
       }
 
       try {
-        sessionStorage.removeItem(`carool-photos-done-${licensePlate}`);
-        sessionStorage.removeItem(`affected-wheels-${licensePlate}`);
+        sessionStorage.removeItem(`carool-photos-done-${orderId}`);
+        sessionStorage.removeItem(`affected-wheels-${orderId}`);
         sessionStorage.removeItem(`route-order-${orderId}`);
       } catch {}
       setShowSuccess(true);

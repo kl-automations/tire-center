@@ -295,7 +295,7 @@ export function CaroolCheck() {
         }
         setShowDone(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
-        const doneKey = `carool-photos-done-${plate}`;
+        const doneKey = `carool-photos-done-${orderId}`;
         const existing: string[] = JSON.parse(sessionStorage.getItem(doneKey) || "[]");
         sessionStorage.setItem(doneKey, JSON.stringify([...new Set([...existing, currentWheel])]));
         // Drop this route's cache — we're going back to the order screen.
