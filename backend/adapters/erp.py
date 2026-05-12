@@ -285,7 +285,8 @@ async def lookup_car(
         dict with at minimum:
             recognized (bool), request_id (str), ownership_id (str),
             tire_level (int|None), wheel_count (int|None), tire_sizes (dict),
-            carool_needed (int, 0 or 1), last_mileage (int|None)
+            carool_needed (int, 0 or 1), last_mileage (int|None),
+            front_alignment (bool)
     """
     km = override_km if override_km is not None else (mileage if mileage else 0)
     body = (
@@ -306,6 +307,7 @@ async def lookup_car(
     log("ADAPTER/erp", f"Apply ReturnCode={response.ReturnCode} ApplyId={response.ApplyId}")
     log("ADAPTER/erp", f"Apply raw response: {response}")
     existing_lines: list[dict] = []
+    front_alignment = False
     for line in response._element.iter():
         tag = line.tag.rsplit("}", 1)[-1]
         if tag == "DiagnosisLine":
@@ -323,6 +325,8 @@ async def lookup_car(
             wheel = _LOCATION_TO_WHEEL.get(location)
             if action and wheel:
                 existing_lines.append({"wheel": wheel, "action": action, "reason": reason})
+            elif action and location == str(_NO_LOCATION_CODE):
+                front_alignment = True
     return {
         "recognized": str(response.ReturnCode) in ("1", "2"),
         "request_id": response.ApplyId,
@@ -338,6 +342,7 @@ async def lookup_car(
         "wheel_count": int(response.WheelCount) if response.WheelCount else None,
         "carool_needed": 1 if str(response.CaroolNeeded).lower() == "true" else 0,
         "existing_lines": existing_lines,
+        "front_alignment": front_alignment,
     }
 
 

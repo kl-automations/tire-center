@@ -358,6 +358,15 @@ export function AcceptedRequest() {
 
   const handlePopupSubmit = (wheel: string, data: WheelData) => {
     storeAffectedWheel(licensePlate, wheel, data);
+    if (
+      !data.selectedActionCodes.some((c) =>
+        (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
+      )
+    ) {
+      try {
+        sessionStorage.removeItem(`route-carool-${orderId}-${wheel}`);
+      } catch {}
+    }
     setAffectedWheels((prev) => ({ ...prev, [wheel]: data }));
   };
 
