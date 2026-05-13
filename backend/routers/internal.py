@@ -11,6 +11,7 @@ TODO: add OIDC token verification middleware before deploying to production.
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request
 
+from adapters import erp
 from logging_utils import log
 
 router = APIRouter(prefix="/internal", tags=["internal"])
@@ -72,3 +73,85 @@ async def cleanup_declined(request: Request):
         "deleted": declined_deleted,
         "deleted_stock_availability": stock_deleted,
     }
+
+
+@router.post(
+    "/sync-erp-tables",
+    summary="Pull ERP code tables and UPSERT into Postgres (scheduler / ops)",
+    description=(
+        "Calls the ERP SOAP table endpoints (no auth), then upserts into "
+        "`erp_action_codes`, `erp_reason_codes`, `erp_tire_level_codes`, and "
+        "`erp_tire_location_codes`. "
+        "Hebrew labels from the ERP update `label_he` / `description`; "
+        "`position_key` on tire locations is never overwritten."
+    ),
+    response_description="Row counts written per table.",
+    include_in_schema=False,
+)
+async def sync_erp_tables(request: Request):
+    log("ROUTER/internal", "sync-erp-tables invoked")
+    db = request.app.state.db
+
+    action_rows = await erp.get_action_table()
+    reason_rows = await erp.get_reason_table()
+    tire_level_rows = await erp.get_tire_level_table()
+    tire_loc_rows = await erp.get_tire_location_table()
+
+    for row in action_rows:
+        await db.execute(
+            """
+            INSERT INTO erp_action_codes (code, label_he)
+            VALUES ($1, $2)
+            ON CONFLICT (code) DO UPDATE SET label_he = EXCLUDED.label_he
+            """,
+            row["code"],
+            row["description"],
+        )
+
+    for row in reason_rows:
+        await db.execute(
+            """
+            INSERT INTO erp_reason_codes (code, label_he, linked_action_code)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (code) DO UPDATE SET
+                label_he = EXCLUDED.label_he,
+                linked_action_code = COALESCE(
+                    EXCLUDED.linked_action_code,
+                    erp_reason_codes.linked_action_code
+                )
+            """,
+            row["code"],
+            row["description"],
+            row.get("linked_action_code"),
+        )
+
+    for row in tire_level_rows:
+        await db.execute(
+            """
+            INSERT INTO erp_tire_level_codes (code, description)
+            VALUES ($1, $2)
+            ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description
+            """,
+            row["code"],
+            row["description"],
+        )
+
+    for row in tire_loc_rows:
+        await db.execute(
+            """
+            INSERT INTO erp_tire_location_codes (code, description)
+            VALUES ($1, $2)
+            ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description
+            """,
+            row["code"],
+            row["description"],
+        )
+
+    out = {
+        "action_codes": len(action_rows),
+        "reason_codes": len(reason_rows),
+        "tire_levels": len(tire_level_rows),
+        "tire_locations": len(tire_loc_rows),
+    }
+    log("ROUTER/internal", f"sync-erp-tables done {out}")
+    return out

@@ -573,6 +573,92 @@ async def send_query_response(
     return str(rc) if rc is not None else None
 
 
+def _local_xml_tag(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _parse_table_codes(
+    response: _SoapResponse,
+    *,
+    parse_linked_action: bool = False,
+) -> list[dict]:
+    """
+    Walk the SOAP response subtree for TableCode rows; each row exposes Code and
+    Description text. When parse_linked_action is True (reason table), also
+    reads LinkedActionCode / LinkActionCode / ActionLinkCode if present.
+    """
+    rows: list[dict] = []
+    for el in response._element.iter():
+        if _local_xml_tag(el.tag) != "TableCode":
+            continue
+        code_val: int | None = None
+        desc_val = ""
+        linked: int | None = None
+        for child in el.iter():
+            if child is el:
+                continue
+            ln = _local_xml_tag(child.tag)
+            txt = (child.text or "").strip()
+            if ln == "Code" and txt:
+                try:
+                    code_val = int(txt)
+                except ValueError:
+                    code_val = None
+            elif ln == "Description":
+                desc_val = txt
+            elif parse_linked_action and ln in (
+                "LinkedActionCode",
+                "LinkActionCode",
+                "ActionLinkCode",
+            ) and txt:
+                try:
+                    linked = int(txt)
+                except ValueError:
+                    linked = None
+        if code_val is None:
+            continue
+        row: dict = {"code": code_val, "description": desc_val}
+        if parse_linked_action:
+            row["linked_action_code"] = linked
+        rows.append(row)
+    return rows
+
+
+async def get_action_table() -> list[dict]:
+    """Fetch ERP action codes. No auth required."""
+    response = await _call_soap("GetActionTable", "")
+    rows = _parse_table_codes(response, parse_linked_action=False)
+    log("ADAPTER/erp", f"GetActionTable rows={len(rows)}")
+    return rows
+
+
+async def get_reason_table() -> list[dict]:
+    """Fetch ERP reason codes. No auth required.
+
+    Each item includes linked_action_code when the ERP returns it; otherwise None.
+    """
+    response = await _call_soap("GetReasonTable", "")
+    rows = _parse_table_codes(response, parse_linked_action=True)
+    log("ADAPTER/erp", f"GetReasonTable rows={len(rows)}")
+    return rows
+
+
+async def get_tire_level_table() -> list[dict]:
+    """Fetch tire quality level codes. No auth required."""
+    response = await _call_soap("GetTireLevelTable", "")
+    rows = _parse_table_codes(response, parse_linked_action=False)
+    log("ADAPTER/erp", f"GetTireLevelTable rows={len(rows)}")
+    return rows
+
+
+async def get_tire_location_table() -> list[dict]:
+    """Fetch tire location codes. No auth required."""
+    response = await _call_soap("GetTireLocationTable", "")
+    rows = _parse_table_codes(response, parse_linked_action=False)
+    log("ADAPTER/erp", f"GetTireLocationTable rows={len(rows)}")
+    return rows
+
+
 # ── History export ────────────────────────────────────────────────────────────
 
 async def request_history_export(

@@ -174,6 +174,7 @@ export interface OpenRequest {
   quality?: QualityTier;
   /** Whether front-axle wheel alignment was performed during this visit. */
   frontAlignment: boolean;
+  frontAlignmentConfirmed?: boolean | null;
   /**
    * Total number of road wheels on this vehicle.
    * Defaults to 4 when omitted; 6 for heavy vehicles — from backend or
@@ -266,7 +267,11 @@ function buildLineItems(
     const isWaiting = request.status === "waiting";
     items.push({
       text: t("common.frontAlignment"),
-      approved: isWaiting ? null : request.status === "approved" || request.status === "partly-approved",
+      approved: isWaiting
+        ? null
+        : typeof request.frontAlignmentConfirmed === "boolean"
+          ? request.frontAlignmentConfirmed
+          : null,
     });
   }
 
@@ -433,6 +438,7 @@ type RawOrderRow = {
     erp_response?: {
       wheels?: Record<string, WheelApproval>;
       action_approvals?: Record<string, Record<string, boolean>>;
+      front_alignment_confirmed?: boolean | null;
     } | null;
   } | null;
 };
@@ -536,6 +542,8 @@ export function mapOrdersResponse(
       frontTireSize: row.car_data?.FrontTireSize ?? "",
       rearTireSize: row.car_data?.RearTireSize ?? "",
       frontAlignment: row.diagnosis?.front_alignment ?? false,
+      frontAlignmentConfirmed:
+        row.diagnosis?.erp_response?.front_alignment_confirmed ?? null,
       wheels,
     };
   });

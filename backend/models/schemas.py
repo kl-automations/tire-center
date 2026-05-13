@@ -144,11 +144,19 @@ class ReasonCodeItem(BaseModel):
     linked_action_code: int
 
 
+class TireLevelsItem(BaseModel):
+    """One ERP tire quality level code row as exposed to the frontend."""
+
+    code: int
+    description: str
+
+
 class CodesResponse(BaseModel):
     """Response shape for GET /api/codes."""
 
     actions: list[ActionCodeItem]
     reasons: list[ReasonCodeItem]
+    tire_levels: list[TireLevelsItem]
 
 
 # ---------- Carool ----------

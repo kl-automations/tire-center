@@ -189,6 +189,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         wheel_count?: number | null;
         carool_needed?: number | null;
         existing_lines?: Array<{ wheel: string; action: number; reason: number }>;
+        front_alignment?: boolean;
       };
       let data: CarLookupResponse | null = null;
       try {
@@ -219,7 +220,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           wheelCount: typeof data.wheel_count === "number" ? data.wheel_count : null,
           caroolNeeded: typeof data.carool_needed === "number" ? data.carool_needed : null,
           existingLines: Array.isArray(data.existing_lines) ? data.existing_lines : [],
-          frontAlignment: false,
+          frontAlignment: data.front_alignment === true,
         };
         try {
           sessionStorage.setItem(`route-order-${orderId}`, JSON.stringify(cachePayload));

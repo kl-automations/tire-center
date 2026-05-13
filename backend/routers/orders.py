@@ -3,9 +3,8 @@ Orders router — read-only access to a shop's open service orders.
 
 Both endpoints are scoped to the authenticated shop_id from the JWT:
 no mechanic can ever read another shop's orders, even if they know the UUID.
-Declined orders are excluded from the list endpoint (they are cleaned up
-nightly by /internal/cleanup) but remain accessible by direct ID lookup
-until deleted.
+Declined orders remain in the list until the mechanic dismisses them or
+nightly /internal/cleanup removes them.
 """
 
 import json
@@ -48,9 +47,9 @@ def _decode_jsonb_columns(record: dict) -> None:
     "",
     summary="List all open service orders for the authenticated shop",
     description=(
-        "Returns all non-declined orders for the shop identified by the JWT. "
-        "Orders are sorted newest-first. Declined orders are omitted from the list "
-        "(they are deleted by the nightly cleanup job). "
+        "Returns all orders for the shop identified by the JWT, including "
+        "`declined` rows until dismissed or removed by nightly cleanup. "
+        "Orders are sorted newest-first. "
         "Response shape: `{ total: int, orders: [...] }`."
     ),
     response_description="Paginated list of open orders with full DB columns.",
@@ -60,22 +59,22 @@ async def list_orders(
     shop: dict = Depends(get_current_shop),
 ):
     """
-    Fetch all non-declined orders for the authenticated shop.
+    Fetch all orders for the authenticated shop.
 
     Reads shop_id from the JWT (never from the request body). Returns all
-    columns from open_orders except declined rows, ordered by created_at DESC.
+    columns from open_orders ordered by created_at DESC.
     UUIDs are coerced to strings for JSON serialisation.
     """
     log("ROUTER/orders", f"list_orders received shop_id={shop['shop_id']}")
     db = request.app.state.db
-    log("DB", f"SELECT open_orders WHERE shop_id={shop['shop_id']} AND status!='declined'")
+    log("DB", f"SELECT open_orders WHERE shop_id={shop['shop_id']}")
     rows = await db.fetch(
         """
         SELECT id, request_id, license_plate, plate_type, mileage,
                car_data, diagnosis, status, carool_diagnosis_id,
                created_at, updated_at
         FROM open_orders
-        WHERE shop_id = $1 AND status != 'declined'
+        WHERE shop_id = $1
         ORDER BY created_at DESC
         """,
         shop["shop_id"],
@@ -221,18 +220,22 @@ async def get_order_for_rehydrate(
     if not isinstance(car_data, dict):
         car_data = {}
 
-    diagnosis = row["diagnosis"]
-    if isinstance(diagnosis, str):
-        try:
-            diagnosis = json.loads(diagnosis)
-        except json.JSONDecodeError:
-            diagnosis = None
-    mechanic_inputs = diagnosis.get("mechanic_inputs") if isinstance(diagnosis, dict) else None
-    derived_lines: list[dict] = []
+    from routers.diagnosis import _coerce_jsonb  # lazy — same pattern as car.py
+
+    diagnosis = _coerce_jsonb(row["diagnosis"])
+    mechanic_inputs = diagnosis.get("mechanic_inputs") if isinstance(diagnosis.get("mechanic_inputs"), dict) else None
+
+    tires_dict = None
     if mechanic_inputs and mechanic_inputs.get("tires"):
-        for wheel, actions in mechanic_inputs["tires"].items():
+        tires_dict = mechanic_inputs["tires"]
+    elif isinstance(diagnosis.get("tires"), dict):
+        tires_dict = diagnosis["tires"]
+
+    derived_lines: list[dict] = []
+    if tires_dict:
+        for wheel, actions in tires_dict.items():
             for a in actions or []:
-                if isinstance(a.get("action"), int):
+                if isinstance(a, dict) and isinstance(a.get("action"), int):
                     derived_lines.append(
                         {
                             "wheel": wheel,
@@ -240,9 +243,13 @@ async def get_order_for_rehydrate(
                             "reason": a.get("reason") or 0,
                         }
                     )
-    front_alignment = bool(
-        mechanic_inputs.get("front_alignment") if mechanic_inputs else False
-    )
+
+    if mechanic_inputs is not None and "front_alignment" in mechanic_inputs:
+        front_alignment = bool(mechanic_inputs["front_alignment"])
+    elif "front_alignment" in diagnosis:
+        front_alignment = bool(diagnosis["front_alignment"])
+    else:
+        front_alignment = False
 
     log(
         "ROUTER/orders",

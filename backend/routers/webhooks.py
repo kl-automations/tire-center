@@ -147,9 +147,14 @@ async def erp_webhook(request: Request):
     )
     db = request.app.state.db
 
-    log("DB", f"SELECT open_orders WHERE request_id={payload.request_id}")
+    log("DB", f"SELECT open_orders WHERE request_id={payload.request_id} ORDER BY created_at DESC LIMIT 1")
     order = await db.fetchrow(
-        "SELECT id, shop_id, diagnosis FROM open_orders WHERE request_id = $1",
+        """
+        SELECT id, shop_id, diagnosis FROM open_orders
+        WHERE request_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
         payload.request_id,
     )
     if not order:

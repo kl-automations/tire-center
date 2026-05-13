@@ -5,6 +5,8 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { AxlesDiagram } from "./AxlesDiagram";
 import { LicensePlate, type PlateType } from "./LicensePlate";
 import { TirePopup, REPLACEMENT_ACTION_CODES, type ActionCodeItem, type ReasonCodeItem, type WheelData } from "./TirePopup";
+
+const NO_CAROOL_WHEELS = new Set(["spare-tire", "rear-right-inner", "rear-left-inner"]);
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 import { useScreenCache } from "../useScreenCache";
 import { usePhoneBackSync } from "../usePhoneBackSync";
@@ -200,6 +202,7 @@ export function AcceptedRequest() {
   // the screen cache (per spec).
   const [actionCodes, setActionCodes] = useState<ActionCodeItem[]>([]);
   const [reasonCodes, setReasonCodes] = useState<ReasonCodeItem[]>([]);
+  const [tireLevelCodes, setTireLevelCodes] = useState<Array<{ code: number; description: string }>>([]);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/codes")
@@ -208,6 +211,7 @@ export function AcceptedRequest() {
         if (cancelled || !data) return;
         setActionCodes(Array.isArray(data.actions) ? data.actions : []);
         setReasonCodes(Array.isArray(data.reasons) ? data.reasons : []);
+        setTireLevelCodes(Array.isArray(data.tire_levels) ? data.tire_levels : []);
       })
       .catch(() => {});
     return () => {
@@ -279,6 +283,24 @@ export function AcceptedRequest() {
     setAffectedWheels(merged);
     setSpareTire("spare-tire" in merged);
     sessionStorage.setItem(`affected-wheels-${orderId}`, JSON.stringify(merged));
+
+    const doneKey = `carool-photos-done-${orderId}`;
+    try {
+      const erpReplacementWheels = Object.entries(fromErp).filter(
+        ([wheel, wData]) =>
+          !NO_CAROOL_WHEELS.has(wheel) &&
+          wData.selectedActionCodes.some((c) =>
+            (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
+          ),
+      );
+      if (erpReplacementWheels.length > 0) {
+        const existingDone: string[] = JSON.parse(sessionStorage.getItem(doneKey) || "[]");
+        const nextDone = [...new Set([...existingDone, ...erpReplacementWheels.map(([w]) => w)])];
+        sessionStorage.setItem(doneKey, JSON.stringify(nextDone));
+      }
+    } catch {
+      /* ignore */
+    }
   }, [cache, orderId]);
 
   const [spareTire, setSpareTire] = useState<boolean>(() =>
@@ -347,6 +369,20 @@ export function AcceptedRequest() {
   };
 
   const handlePopupSubmit = (wheel: string, data: WheelData) => {
+    const prev = affectedWheels[wheel];
+    if (prev) {
+      const prevSig = [...prev.selectedReasonCodes].sort((a, b) => a - b).join(",");
+      const nextSig = [...data.selectedReasonCodes].sort((a, b) => a - b).join(",");
+      if (prevSig !== nextSig) {
+        try {
+          const doneKey = `carool-photos-done-${orderId}`;
+          const arr: string[] = JSON.parse(sessionStorage.getItem(doneKey) || "[]");
+          sessionStorage.setItem(doneKey, JSON.stringify(arr.filter((w) => w !== wheel)));
+        } catch {
+          /* ignore */
+        }
+      }
+    }
     storeAffectedWheel(orderId, wheel, data);
     if (
       !data.selectedActionCodes.some((c) =>
@@ -362,13 +398,20 @@ export function AcceptedRequest() {
 
   const handleNavigateToCaroolCheck = (wheel: string) => {
     if (!cache) return;
-    const noCarool = wheel === "spare-tire" || wheel === "rear-right-inner" || wheel === "rear-left-inner";
-    if (noCarool) return;
+    if (NO_CAROOL_WHEELS.has(wheel)) return;
     const wheelData = getStoredAffectedWheels(orderId)[wheel];
     const needsPhoto = !!wheelData?.selectedActionCodes.some((c) =>
       (REPLACEMENT_ACTION_CODES as readonly number[]).includes(c),
     );
     if (!needsPhoto) return;
+    let photoDoneList: string[] = [];
+    try {
+      const raw = JSON.parse(sessionStorage.getItem(`carool-photos-done-${orderId}`) || "[]");
+      photoDoneList = Array.isArray(raw) ? raw : [];
+    } catch {
+      photoDoneList = [];
+    }
+    if (photoDoneList.includes(wheel)) return;
     try {
       sessionStorage.setItem(
         `route-carool-${orderId}-${wheel}`,
@@ -377,8 +420,6 @@ export function AcceptedRequest() {
     } catch {}
     navigate(`/order/${encodeURIComponent(orderId)}/carool/${encodeURIComponent(wheel)}`);
   };
-
-  const NO_CAROOL_WHEELS = new Set(["spare-tire", "rear-right-inner", "rear-left-inner"]);
 
   const goBackToDashboard = () => {
     if (location.key === "default") {
@@ -534,6 +575,14 @@ export function AcceptedRequest() {
     }
   };
 
+  const rawTireLevel = cache?.tireLevel;
+  const tireLevelLabel =
+    rawTireLevel != null && String(rawTireLevel).trim() !== ""
+      ? tireLevelCodes.find((l) => l.code === Number(rawTireLevel))?.description ??
+        rawTireLevel ??
+        "—"
+      : "—";
+
   if (refetching) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -602,7 +651,7 @@ export function AcceptedRequest() {
             </div>
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
               <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
-              <p className="text-sm font-semibold text-foreground leading-tight truncate">{cache.tireLevel && cache.tireLevel.length > 0 ? cache.tireLevel : "—"}</p>
+              <p className="text-sm font-semibold text-foreground leading-tight truncate">{tireLevelLabel}</p>
             </div>
           </div>
 

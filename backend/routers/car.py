@@ -2,16 +2,18 @@
 Car-lookup router — opens (or reuses) a service order for a given licence plate.
 
 Wave 1 of the request flow:
-  Frontend  →  POST /api/car  →  if an open_orders row already exists for this
-                                 shop+plate (status='open'), reuse it: refresh
-                                 its mileage and return the stored car_data.
-                              →  otherwise call ERP Apply (SOAP), INSERT a new
-                                 open_orders row (status='open'), and return
-                                 vehicle + order data to the frontend.
+  Frontend  →  POST /api/car  →  if an open_orders row exists for this shop+plate
+                                 with status='open', reuse it: refresh mileage,
+                                 return stored car_data (no ERP call).
+                              →  otherwise call ERP Apply (SOAP). If the ERP
+                                 request_id matches an existing row (any status),
+                                 update that row's car_data in place; else INSERT
+                                 a new row (status='open').
 
-Reusing the existing row avoids creating duplicate open orders when a mechanic
-re-scans the same plate. The mileage update is propagated to the ERP later, in
-Wave 2 (POST /api/diagnosis), which already sends mileage_update.
+Reusing the open row avoids duplicate drafts. Calling the ERP when the plate has
+only a waiting (or completed) row refreshes ERP state and reconciles by request_id.
+The mileage update is propagated to the ERP later, in Wave 2 (POST /api/diagnosis),
+which already sends mileage_update.
 """
 
 import json
@@ -21,8 +23,50 @@ from logging_utils import log, log_error
 from middleware.auth import get_current_shop
 from models.schemas import CarLookupRequest, CodesResponse, LastMileageRequest, LastMileageResponse
 from adapters import erp
+from routers.diagnosis import _coerce_jsonb
 
 router = APIRouter(prefix="/api", tags=["car"])
+
+
+def _merge_saved_diagnosis_into_car_data(car_data: dict, diagnosis_raw) -> None:
+    """
+    Overlay mechanic-entered diagnosis from DB onto car_data for the response.
+
+    Uses mechanic_inputs.tires → top-level tires, and the same for
+    front_alignment. Only sets existing_lines when at least one line is derived.
+    """
+    diag = _coerce_jsonb(diagnosis_raw)
+    if not isinstance(diag, dict):
+        return
+
+    mechanic_inputs = diag.get("mechanic_inputs") if isinstance(diag.get("mechanic_inputs"), dict) else None
+
+    tires_dict = None
+    if mechanic_inputs and mechanic_inputs.get("tires"):
+        tires_dict = mechanic_inputs["tires"]
+    elif isinstance(diag.get("tires"), dict):
+        tires_dict = diag["tires"]
+
+    if tires_dict:
+        derived_lines = []
+        for wheel, actions in tires_dict.items():
+            for a in actions or []:
+                if isinstance(a, dict) and isinstance(a.get("action"), int):
+                    derived_lines.append(
+                        {
+                            "wheel": wheel,
+                            "action": a["action"],
+                            "reason": a.get("reason") or 0,
+                        }
+                    )
+        if derived_lines:
+            car_data["existing_lines"] = derived_lines
+
+    if mechanic_inputs is not None and "front_alignment" in mechanic_inputs:
+        car_data["front_alignment"] = bool(mechanic_inputs["front_alignment"])
+    elif "front_alignment" in diag:
+        car_data["front_alignment"] = bool(diag["front_alignment"])
+
 
 @router.get(
     "/codes",
@@ -49,9 +93,13 @@ async def get_codes(request: Request):
         ORDER BY linked_action_code, code
         """
     )
+    tire_levels_rows = await db.fetch(
+        "SELECT code, description FROM erp_tire_level_codes ORDER BY code"
+    )
     return {
         "actions": [dict(row) for row in actions_rows],
         "reasons": [dict(row) for row in reasons_rows],
+        "tire_levels": [dict(row) for row in tire_levels_rows],
     }
 
 
@@ -69,11 +117,11 @@ async def get_codes(request: Request):
         "returned alongside the existing `order_id`. The bumped mileage is "
         "forwarded to the ERP later, in Wave 2 (`POST /api/diagnosis`), via "
         "`mileage_update`.\n\n"
-        "**Fresh path** — if no matching open order exists, the ERP **Apply** "
-        "SOAP method is called to fetch vehicle details (tyre sizes, quality "
-        "tier, wheel count, etc.), a new row is inserted in **open_orders** "
-        "with `status='open'`, and the vehicle data is returned with the new "
-        "`order_id`."
+        "**ERP path** — if no matching `open` row exists, the ERP **Apply** "
+        "SOAP method is called. When the returned `request_id` matches an "
+        "existing row for the same shop and plate (any status), that row's "
+        "`car_data` and optional `mileage` are updated in place and the same "
+        "`order_id` is returned; otherwise a new `open` row is inserted."
     ),
     response_description=(
         "Vehicle data (from the ERP on a fresh lookup, or from the stored "
@@ -90,20 +138,15 @@ async def car_lookup(
     Fetch vehicle data and return it with an `order_id`, reusing an existing
     open order when possible.
 
-    On the reuse path, the ERP is not called: the matching open_orders row's
-    mileage is refreshed (when a non-null mileage is supplied in the request)
-    and the previously stored car_data JSONB is returned to the caller. On the
-    fresh path, the ERP response is stored verbatim in open_orders.car_data and
-    also forwarded to the caller so the frontend can render the accepted-request
-    screen immediately without an extra GET /api/orders/{id} round-trip.
-
-    The response shape is identical for both paths: `order_id` plus all fields
-    of car_data spread at the top level.
+    On the reuse path (`status='open'` only), the ERP is not called: mileage may
+    be refreshed and stored car_data is returned. Otherwise the ERP is consulted;
+    the row is updated in place when `request_id` matches an existing row, or a
+    new row is inserted. The response is always `order_id` plus car_data fields
+    at the top level.
 
     Raises:
-        400: ERP rejected the request on the fresh path (e.g. mileage too low,
-             unrecognised plate). The reuse path never calls the ERP and so
-             cannot raise this.
+        400: ERP rejected the request on the ERP path (e.g. mileage too low,
+             unrecognised plate). The open reuse path never calls the ERP.
     """
     log(
         "ROUTER/car",
@@ -121,13 +164,13 @@ async def car_lookup(
     # mileage_update, so the updated mileage will reach the ERP naturally then.
     log(
         "DB",
-        f"SELECT open_orders WHERE shop_id={shop['shop_id']} plate={body.license_plate} status IN ('open','waiting')",
+        f"SELECT open_orders WHERE shop_id={shop['shop_id']} plate={body.license_plate} status='open'",
     )
     existing = await db.fetchrow(
         """
         SELECT id, car_data, diagnosis
         FROM open_orders
-        WHERE shop_id = $1 AND license_plate = $2 AND status IN ('open', 'waiting')
+        WHERE shop_id = $1 AND license_plate = $2 AND status = 'open'
         ORDER BY created_at DESC
         LIMIT 1
         """,
@@ -157,33 +200,13 @@ async def car_lookup(
         stored_car_data = existing["car_data"]
         if isinstance(stored_car_data, str):
             stored_car_data = json.loads(stored_car_data)
-        from routers.diagnosis import _coerce_jsonb  # lazy — same pattern as webhooks.py
-
-        diag = _coerce_jsonb(existing["diagnosis"])
-        mechanic_inputs = diag.get("mechanic_inputs") if diag else None
-
-        if mechanic_inputs and mechanic_inputs.get("tires"):
-            derived_lines = []
-            for wheel, actions in mechanic_inputs["tires"].items():
-                for a in actions or []:
-                    if isinstance(a.get("action"), int):
-                        derived_lines.append(
-                            {
-                                "wheel": wheel,
-                                "action": a["action"],
-                                "reason": a.get("reason") or 0,
-                            }
-                        )
-            stored_car_data["existing_lines"] = derived_lines
-            if "front_alignment" in mechanic_inputs:
-                stored_car_data["front_alignment"] = bool(mechanic_inputs["front_alignment"])
+        _merge_saved_diagnosis_into_car_data(stored_car_data, existing["diagnosis"])
         log(
             "ROUTER/car",
             f"car_lookup reused order_id={existing['id']} plate={body.license_plate}",
         )
         return {
             "order_id": str(existing["id"]),
-            "existing_lines": [],
             **stored_car_data,
         }
 
@@ -214,6 +237,54 @@ async def car_lookup(
             detail=car_data.get("erp_message", "erp_rejected"),
         )
 
+    erp_request_id = str(car_data.get("request_id") or "")
+    matched = None
+    if erp_request_id:
+        matched = await db.fetchrow(
+            """
+            SELECT id, diagnosis
+            FROM open_orders
+            WHERE shop_id = $1 AND license_plate = $2 AND request_id = $3
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            shop["shop_id"],
+            body.license_plate,
+            erp_request_id,
+        )
+
+    if matched:
+        log(
+            "DB",
+            (
+                f"UPDATE open_orders (request_id match) shop_id={shop['shop_id']} "
+                f"plate={body.license_plate} order_id={matched['id']}"
+            ),
+        )
+        await db.execute(
+            """
+            UPDATE open_orders
+            SET car_data = $1::jsonb,
+                mileage = COALESCE($2, mileage)
+            WHERE id = $3
+            """,
+            json.dumps(car_data),
+            body.mileage,
+            matched["id"],
+        )
+        response_car = dict(car_data)
+        log(
+            "ROUTER/car",
+            (
+                f"car_lookup updated existing order_id={matched['id']} "
+                f"plate={body.license_plate} request_id={erp_request_id}"
+            ),
+        )
+        return {
+            "order_id": str(matched["id"]),
+            **response_car,
+        }
+
     log("DB", f"INSERT open_orders shop_id={shop['shop_id']} plate={body.license_plate}")
     order_id = await db.fetchval(
         """
@@ -226,7 +297,7 @@ async def car_lookup(
         body.license_plate,
         body.mileage,
         json.dumps(car_data),
-        str(car_data.get("request_id")),
+        erp_request_id,
         shop["erp_hash"],
     )
     log("DB", f"INSERT open_orders -> order_id={order_id}")

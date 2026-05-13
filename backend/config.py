@@ -71,6 +71,10 @@ FIREBASE_SERVICE_ACCOUNT = _optional("FIREBASE_SERVICE_ACCOUNT")  # JSON string
 # projectId, appId, etc. Exposed via GET /api/config when present.
 FIREBASE_WEB_CONFIG = _optional("FIREBASE_WEB_CONFIG")
 
+ERP_ENDPOINT_URL = _optional("ERP_ENDPOINT_URL")
+if ERP_ENDPOINT_URL:
+    os.environ["ERP_ENDPOINT_URL"] = ERP_ENDPOINT_URL
+
 # Master kill-switch for the Carool integration. Default is ON: any value other
 # than "0" (including a missing secret) leaves Carool enabled. Set the
 # CAROOL_ENABLED secret to exactly "0" to disable all Carool routes and hide
