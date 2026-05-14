@@ -173,6 +173,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
           license_plate: plate,
           mileage: parsedMileage,
           last_mileage_hint: lastMileageHint,
+          plate_type: plateType,
         }),
       });
 

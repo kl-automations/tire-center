@@ -242,14 +242,19 @@ export function Dashboard() {
           </div>
 
           <div className="flex justify-center shrink-0 pt-1 pb-0.5">
-            <button
-              type="button"
-              onClick={() => setIsExportHistoryOpen(true)}
-              className="inline-flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground border border-border/60 bg-muted/30 hover:bg-muted/50 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 transition-colors"
-            >
-              <History className="w-4 h-4 opacity-80" aria-hidden />
-              {t("dashboard.exportHistory")}
-            </button>
+            <div className="relative">
+              <span className="absolute -top-2.5 -end-2 z-10 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground border border-border">
+                {t("common.comingSoon")}
+              </span>
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 text-xs sm:text-sm text-muted-foreground border border-border/60 bg-muted/30 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 opacity-60 cursor-not-allowed"
+              >
+                <History className="w-4 h-4 opacity-80" aria-hidden />
+                {t("dashboard.exportHistory")}
+              </button>
+            </div>
           </div>
         </div>
       </main>

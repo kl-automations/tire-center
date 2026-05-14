@@ -74,6 +74,12 @@ CREATE TABLE IF NOT EXISTS erp_tire_locations (
   wheel_position   text    NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS pending_logins (
+  user_code   text        PRIMARY KEY,
+  erp_shop_id text        NOT NULL,
+  expires_at  timestamptz NOT NULL
+);
+
 INSERT INTO erp_action_codes (erp_code, description, frontend_action, frontend_reason) VALUES
   (2,  'כיוון פרונט',         'front_alignment', null),
   (3,  'בלאי,שחיקה,יובש',    'replacement',     'wear'),

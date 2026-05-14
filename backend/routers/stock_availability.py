@@ -90,6 +90,46 @@ async def _ack_tafnit_with_retry(
         )
 
 
+async def _resolve_erp_shop_id(request: Request, shop: dict) -> str | None:
+    erp_shop_id = shop.get("erp_shop_id")
+    if erp_shop_id is not None and str(erp_shop_id).strip():
+        return str(erp_shop_id).strip()
+
+    shop_id = str(shop.get("shop_id") or "").strip()
+    if not shop_id:
+        return None
+
+    db = request.app.state.db
+    try:
+        row = await db.fetchrow(
+            """
+            SELECT erp_shop_id
+            FROM shops
+            WHERE shop_id = $1
+            """,
+            shop_id,
+        )
+    except Exception as e:
+        log(
+            "ROUTER/stock-availability",
+            f"erp_shop_id DB lookup failed shop_id={shop_id}: {e}",
+        )
+        return None
+
+    if not row:
+        return None
+
+    resolved = str(row["erp_shop_id"] or "").strip()
+    if not resolved:
+        return None
+
+    log(
+        "ROUTER/stock-availability",
+        f"erp_shop_id resolved from DB shop_id={shop_id} -> {resolved}",
+    )
+    return resolved
+
+
 @router.get(
     "/requests",
     summary="List stock-availability requests for authenticated shop",
@@ -107,8 +147,10 @@ async def list_stock_availability_requests(
     if not erp_shop_id:
         log(
             "ROUTER/stock-availability",
-            "WARNING: list requests skipped — JWT has no erp_shop_id (legacy token); returning empty",
+            "WARNING: list requests JWT has no erp_shop_id (legacy token); attempting DB fallback",
         )
+        erp_shop_id = await _resolve_erp_shop_id(request, shop)
+    if not erp_shop_id:
         return {"requests": []}
 
     log("ROUTER/stock-availability", f"list requests erp_shop_id={erp_shop_id}")
@@ -140,14 +182,14 @@ async def list_stock_availability_requests(
     return {"requests": requests}
 
 
-def _require_erp_shop(shop: dict) -> str:
-    erp_shop_id = shop.get("erp_shop_id")
-    if not erp_shop_id or not str(erp_shop_id).strip():
+async def _require_erp_shop(request: Request, shop: dict) -> str:
+    erp_shop_id = await _resolve_erp_shop_id(request, shop)
+    if not erp_shop_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token missing erp_shop_id",
         )
-    return str(erp_shop_id).strip()
+    return erp_shop_id
 
 
 def _parse_apply_id(request_id: str) -> int:
@@ -169,7 +211,7 @@ async def approve_stock_availability_request(
     request_id: str,
     shop: dict = Depends(get_current_shop),
 ):
-    erp_shop_id = _require_erp_shop(shop)
+    erp_shop_id = await _require_erp_shop(request, shop)
     apply_id = _parse_apply_id(request_id)
     try:
         tire_shop_code = int(erp_shop_id)
@@ -225,7 +267,7 @@ async def decline_stock_availability_request(
     request_id: str,
     shop: dict = Depends(get_current_shop),
 ):
-    erp_shop_id = _require_erp_shop(shop)
+    erp_shop_id = await _require_erp_shop(request, shop)
     apply_id = _parse_apply_id(request_id)
     try:
         tire_shop_code = int(erp_shop_id)

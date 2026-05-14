@@ -93,9 +93,12 @@ async def get_codes(request: Request):
         ORDER BY linked_action_code, code
         """
     )
-    tire_levels_rows = await db.fetch(
-        "SELECT code, description FROM erp_tire_level_codes ORDER BY code"
-    )
+    try:
+        tire_levels_rows = await db.fetch(
+            "SELECT code, description FROM erp_tire_level_codes ORDER BY code"
+        )
+    except Exception:
+        tire_levels_rows = []
     return {
         "actions": [dict(row) for row in actions_rows],
         "reasons": [dict(row) for row in reasons_rows],
@@ -290,11 +293,12 @@ async def car_lookup(
         """
         INSERT INTO open_orders
           (shop_id, license_plate, plate_type, mileage, car_data, request_id, erp_hash)
-        VALUES ($1, $2, 'civilian', $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id
         """,
         shop["shop_id"],
         body.license_plate,
+        body.plate_type,
         body.mileage,
         json.dumps(car_data),
         erp_request_id,

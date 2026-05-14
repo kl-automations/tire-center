@@ -95,6 +95,10 @@ class CarLookupRequest(BaseModel):
             "Used to safely override Apply KM when entered mileage is lower."
         ),
     )
+    plate_type: str = Field(
+        default="civilian",
+        description="Plate category: 'civilian', 'military', or 'police'.",
+    )
 
 
 class LastMileageRequest(BaseModel):
