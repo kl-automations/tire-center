@@ -13,7 +13,6 @@ import { AcceptedRequest } from "./components/AcceptedRequest";
 import { DeclinedRequest } from "./components/DeclinedRequest";
 import { CaroolCheck } from "./components/CaroolCheck";
 import { OpenRequests } from "./components/OpenRequests";
-import { RequestDetail } from "./components/RequestDetail";
 import { StockAvailability } from "./components/StockAvailability";
 import { DemandOverview } from "./components/DemandOverview";
 import { MonthlyReceipt } from "./components/MonthlyReceipt";
@@ -116,14 +115,6 @@ function RoutedContent() {
           element={
             <RequireAuth>
               <OpenRequests />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/open-requests/:id"
-          element={
-            <RequireAuth>
-              <RequestDetail />
             </RequireAuth>
           }
         />

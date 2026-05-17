@@ -27,6 +27,7 @@ Implementation note:
   only allows 22443) is never consulted.
 """
 
+import html
 import os
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
@@ -155,11 +156,25 @@ async def _call_soap(method: str, body_inner: str) -> _SoapResponse:
     }
 
     client = await _get_http_client()
-    response = await client.post(
-        endpoint,
-        content=envelope.encode("utf-8"),
-        headers=headers,
-    )
+    for attempt in range(1, 3):
+        try:
+            response = await client.post(
+                endpoint,
+                content=envelope.encode("utf-8"),
+                headers=headers,
+            )
+            break
+        except (httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
+            if attempt == 2:
+                log_error(
+                    "ADAPTER/erp",
+                    f"SOAP {method} timeout on attempt 2 (final): {exc}",
+                )
+                raise
+            log(
+                "ADAPTER/erp",
+                f"SOAP {method} timeout on attempt 1, retrying: {exc}",
+            )
     response.raise_for_status()
 
     root = ET.fromstring(response.text)
@@ -330,7 +345,7 @@ async def lookup_car(
     return {
         "recognized": str(response.ReturnCode) in ("1", "2"),
         "request_id": response.ApplyId,
-        "ownership_id": response.Company,
+        "ownership_id": html.unescape(str(response.Company or "")),
         "car_model": response.CarModel,
         "last_mileage": int(response.LastMileage) if response.LastMileage else None,
         "tire_sizes": {
@@ -605,7 +620,7 @@ def _parse_table_codes(
                 except ValueError:
                     code_val = None
             elif ln == "Description":
-                desc_val = txt
+                desc_val = html.unescape(txt)
             elif parse_linked_action and ln in (
                 "LinkedActionCode",
                 "LinkActionCode",

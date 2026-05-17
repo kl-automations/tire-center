@@ -9,7 +9,9 @@
     "requestNotFound": "דיווח לא נמצא",
     "newRequest": "דיווח חדש",
     "spareTire": "גלגל רזרבי",
+    "front": "קדמי",
     "frontAlignment": "כיוון פרונט",
+    "tireQuality": "איכות צמיג",
     "requestNumberLine": "מספר פנייה: {{requestNumber}}",
     "requestNumberLabel": "מספר פנייה",
     "qualityLine": "איכות: {{quality}}",
@@ -64,11 +66,11 @@
   },
   "login": {
     "title": "דיווח שירות קוגול",
-    "subtitleUserCode": "הזן את קוד המשתמש שלך",
+    "subtitleUserCode": "הזן את שם המשתמש שלך",
     "subtitleCode": "הזן את קוד האימות שנשלח לטלפון שלך",
-    "userCodeLabel": "קוד משתמש",
-    "userCodePlaceholder": "לדוגמה: ISRAEL ISRAELI",
-    "userCodeError": "קוד המשתמש לא מזוהה במערכת",
+    "userCodeLabel": "שם משתמש",
+    "userCodePlaceholder": "לדוגמה: USERNAME",
+    "userCodeError": "שם המשתמש לא מזוהה במערכת",
     "codeLabel": "קוד אימות",
     "codePlaceholder": "הזן את הקוד",
     "codeError": "קוד שגוי, נסה שנית",
@@ -83,9 +85,8 @@
     }
   },
   "dashboard": {
-    "title": "דיווח שירות קוגול",
+    "title": "מרכז שירות קוגול",
     "subtitle": "לוח בקרה ראשי",
-    "chooseAction": "בחר פעולה",
     "newRequest": "דיווח חדש",
     "newRequestDesc": "צור דיווח חדש למכונית",
     "openRequests": "דיווחים פתוחים",
@@ -156,7 +157,8 @@
     "mileageAttentionTitle": "שים לב!",
     "mileageVerifyHint": "אנא וודא שהוזן קילומטרז' תקין",
     "updateMileage": "עדכן קילומטרז'",
-    "proceedAnyway": "המשך בכל זאת"
+    "proceedAnyway": "המשך בכל זאת",
+    "erp_timeout_retry": "לא הצלחנו להתחבר ל-ERP, נסה שוב"
   },
   "acceptedRequest": {
     "title": "דיווח חדש",
@@ -219,6 +221,7 @@
     "dismiss": "סגירה",
     "acceptedLabel": "אושר",
     "declinedLabel": "בוטל",
+    "ack_failed_message": "לא ניתן לדווח לטפנית. ניתן לסגור את הבקשה ידנית.",
     "closedNotice": "הפנייה נסגרה",
     "cancelledNotice": "הפנייה בוטלה"
   },

@@ -9,7 +9,9 @@
     "requestNotFound": "لم يتم العثور على التقرير",
     "newRequest": "تقرير جديد",
     "spareTire": "عجلة الاحتياط",
+    "front": "الأمام",
     "frontAlignment": "ضبط الزوايا الأمامية",
+    "tireQuality": "جودة الإطار",
     "requestNumberLine": "رقم الطلب: {{requestNumber}}",
     "requestNumberLabel": "رقم الطلب",
     "qualityLine": "الجودة: {{quality}}",
@@ -83,9 +85,8 @@
     }
   },
   "dashboard": {
-    "title": "تقرير خدمة كوغل",
+    "title": "مركز خدمة كوغول",
     "subtitle": "لوحة التحكم الرئيسية",
-    "chooseAction": "اختر إجراءً",
     "newRequest": "تقرير جديد",
     "newRequestDesc": "إنشاء تقرير جديد لمركبة",
     "openRequests": "تقارير مفتوحة",
@@ -156,7 +157,8 @@
     "mileageAttentionTitle": "تنبيه!",
     "mileageVerifyHint": "يُرجى التأكد من إدخال قراءة عداد صحيحة",
     "updateMileage": "تصحيح قراءة العداد",
-    "proceedAnyway": "المتابعة على أي حال"
+    "proceedAnyway": "المتابعة على أي حال",
+    "erp_timeout_retry": "تعذّر الاتصال بـ ERP، حاول مرة أخرى"
   },
   "acceptedRequest": {
     "title": "تقرير جديد",
@@ -219,6 +221,7 @@
     "dismiss": "إغلاق",
     "acceptedLabel": "تم القبول",
     "declinedLabel": "تم الإلغاء",
+    "ack_failed_message": "تعذّر إبلاغ تافنيت. يمكنك إغلاق الطلب يدويًا.",
     "closedNotice": "تم إغلاق المطالبة",
     "cancelledNotice": "تم إلغاء المطالبة"
   },

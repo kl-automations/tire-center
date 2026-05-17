@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useViewportFit } from "../useViewportFit";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { TriangleAlert, X } from "lucide-react";
@@ -71,6 +72,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
   const [plateType, setPlateType] = useState<PlateType>("civilian");
   const [mileage, setMileage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [erpTimeoutError, setErpTimeoutError] = useState(false);
   // Last mileage on file from the ERP, fetched in the background on LP-blur.
   // `null` covers all "skip validation" cases: no history (ERP ReturnCode='1'),
   // network/ERP error, response not yet returned, or no LP-blur fired yet.
@@ -161,6 +163,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     const genericFallback = t("licensePlateModal.genericCarLookupError");
 
     setIsSubmitting(true);
+    setErpTimeoutError(false);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("/api/car", {
@@ -177,6 +180,15 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         }),
       });
 
+      if (res.status === 503) {
+        let errBody: { detail?: string } | null = null;
+        try { errBody = await res.json(); } catch { /* ignore */ }
+        if (errBody?.detail === "erp_timeout") {
+          setErpTimeoutError(true);
+          return;
+        }
+      }
+
       type CarLookupResponse = {
         recognized?: boolean;
         detail?: string;
@@ -185,6 +197,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         car_model?: string;
         last_mileage?: number | null;
         tire_sizes?: { front?: string; rear?: string };
+        plate_type?: string;
         ownership_id?: string;
         tire_level?: string | null;
         wheel_count?: number | null;
@@ -206,7 +219,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
         // — critically — survives a full page reload via sessionStorage.
         const cachePayload = {
           plate: licensePlate,
-          plateType,
+          plateType: (data.plate_type as PlateType | undefined) ?? plateType,
           mileage: trimmedMileage,
           order_id: orderId,
           request_id: data.request_id,
@@ -310,6 +323,9 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     setMileage(e.target.value);
   };
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  const needsScroll = useViewportFit(panelRef, isOpen);
+
   if (!isOpen) return null;
 
   const bgMain = PLATE_BG_MAIN[plateType];
@@ -320,7 +336,12 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-card rounded-2xl shadow-2xl p-8 w-full max-w-2xl mx-4 border border-border">
+      <div
+        ref={panelRef}
+        className={`relative bg-card rounded-2xl shadow-2xl p-8 w-full max-w-2xl mx-4 border border-border ${
+          needsScroll ? "max-h-[calc(100dvh-2rem)] overflow-y-auto" : ""
+        }`}
+      >
         <button
           onClick={onClose}
           className="absolute top-4 start-4 text-muted-foreground hover:text-foreground transition-colors"
@@ -340,7 +361,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
                 key={opt}
                 type="button"
                 onClick={() => setPlateType(opt)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 border-2 ${
+                className={`px-4 py-2 rounded-lg text-base font-semibold transition-all duration-200 border-2 ${
                   plateType === opt
                     ? "border-primary bg-primary text-primary-foreground shadow-md"
                     : "border-border bg-card text-foreground hover:border-primary/50"
@@ -437,7 +458,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
 
           {/* Mileage input */}
           <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-muted/50">
-            <label className="text-sm font-medium text-foreground shrink-0">
+            <label className="text-base font-medium text-foreground shrink-0">
               {t("acceptedRequest.mileage")}
             </label>
             <input
@@ -447,16 +468,16 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
               onFocus={handleMileageFocus}
               onChange={handleMileageChange}
               placeholder="0"
-              className="flex-1 min-w-0 text-center rounded-lg border border-border bg-input-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="flex-1 min-w-0 text-center rounded-lg border border-border bg-input-background px-3 py-1.5 text-base focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <span className="text-sm text-muted-foreground shrink-0">{t("acceptedRequest.km")}</span>
+            <span className="text-base text-muted-foreground shrink-0">{t("acceptedRequest.km")}</span>
           </div>
 
           <button
             type="button"
             onClick={handleContinue}
             disabled={!licensePlate.trim() || !mileage.trim() || isSubmitting}
-            className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+            className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
           >
             {isSubmitting ? (
               <span className="inline-flex items-center justify-center gap-2">
@@ -467,6 +488,12 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
               t("common.continue")
             )}
           </button>
+
+          {erpTimeoutError && (
+            <p className="text-base text-destructive text-center">
+              {t("licensePlateModal.erp_timeout_retry")}
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -500,7 +527,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
             <button
               type="button"
               onClick={() => setShowMileagePopup(false)}
-              className="flex-1 bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+              className="flex-1 bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg font-semibold"
             >
               {t("licensePlateModal.updateMileage")}
             </button>
@@ -508,7 +535,7 @@ export function LicensePlateModal({ isOpen, onClose }: LicensePlateModalProps) {
               type="button"
               onClick={handleProceedAnyway}
               disabled={isSubmitting}
-              className="flex-1 border border-border bg-card hover:bg-muted text-foreground py-3 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 border border-border bg-card hover:bg-muted text-foreground py-3 rounded-lg transition-colors duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <span className="inline-flex items-center justify-center gap-2">

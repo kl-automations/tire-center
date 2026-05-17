@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { getRoadWheelPositions, type VehicleWheelCount } from "../vehicleWheelLayout";
+import { useViewportFit } from "../useViewportFit";
 
 export const REPLACEMENT_ACTION_CODES = [3, 4] as const;
 
@@ -145,6 +146,8 @@ export function TirePopup({
   const [selectedReasonCodes, setSelectedReasonCodes] = useState<number[]>([]);
   const [reasonActionMap, setReasonActionMap] = useState<Record<number, number>>({});
   const [movedToWheel, setMovedToWheel] = useState<string | null>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const needsScroll = useViewportFit(layoutRef, isOpen);
 
   const reset = useCallback(() => {
     setSelectedActionCodes(initialData?.selectedActionCodes ?? []);
@@ -233,7 +236,13 @@ export function TirePopup({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div
+      ref={layoutRef}
+      className={`fixed inset-0 z-50 bg-background flex flex-col min-h-0 ${
+        needsScroll ? "overflow-y-auto" : ""
+      }`}
+      style={{ height: "100dvh" }}
+    >
       {/* Header */}
       <div className="bg-primary px-4 py-2.5 shadow-md shrink-0">
         <div className="flex items-center justify-between">
@@ -244,13 +253,13 @@ export function TirePopup({
           >
             <ArrowRight className="w-5 h-5 ltr:rotate-180" />
           </button>
-          <h1 className="text-base text-primary-foreground font-semibold">{title}</h1>
+          <h1 className="text-lg text-primary-foreground font-semibold">{title}</h1>
           <div className="w-5" />
         </div>
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      <div className={`flex-1 min-h-0 px-4 py-3 space-y-4 ${needsScroll ? "" : "overflow-y-auto"}`}>
 
         {reasonedActions.map((action) => (
           <section key={action.code}>
@@ -286,7 +295,7 @@ export function TirePopup({
                         setReasonActionMap((prev) => ({ ...prev, [reason.code]: action.code }));
                       }
                     }}
-                    className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                    className={`py-2.5 rounded-xl text-base font-semibold border-2 transition-all duration-150 ${
                       active
                         ? "border-primary bg-primary text-primary-foreground shadow-sm"
                         : "border-border bg-card text-foreground hover:border-primary/50"
@@ -314,7 +323,7 @@ export function TirePopup({
                       : [...prev, action.code]
                   )
                 }
-                className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                className={`py-2.5 rounded-xl text-base font-semibold border-2 transition-all duration-150 ${
                   selectedActionCodes.includes(action.code)
                     ? "border-primary bg-primary text-primary-foreground shadow-sm"
                     : "border-border bg-card text-foreground hover:border-primary/50"
@@ -336,7 +345,7 @@ export function TirePopup({
                   key={pos}
                   type="button"
                   onClick={() => setMovedToWheel(movedToWheel === pos ? null : pos)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                  className={`px-4 py-2 rounded-xl text-base font-semibold border-2 transition-all duration-150 ${
                     movedToWheel === pos
                       ? "border-primary bg-primary text-primary-foreground shadow-sm"
                       : "border-border bg-card text-foreground hover:border-primary/50"
@@ -370,7 +379,7 @@ export function TirePopup({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm font-bold text-foreground">{children}</span>
+      <span className="text-base font-bold text-foreground">{children}</span>
       <div className="flex-1 h-px bg-border" />
     </div>
   );

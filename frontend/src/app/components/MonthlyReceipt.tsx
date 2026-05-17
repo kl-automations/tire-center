@@ -134,12 +134,12 @@ export function MonthlyReceipt() {
           <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            className="text-primary-foreground hover:opacity-80 transition-opacity"
+            className="flex items-center justify-center w-11 h-11 -ms-1 text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6 ltr:rotate-180" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">{t("monthlyReceipt.title")}</h1>
-          <div className="w-6" />
+          <h1 className="text-2xl text-primary-foreground font-semibold">{t("monthlyReceipt.title")}</h1>
+          <div className="w-11" />
         </div>
       </div>
 
@@ -147,14 +147,14 @@ export function MonthlyReceipt() {
         <div className="max-w-4xl mx-auto min-h-full flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-3">
             <article className="bg-card border border-border rounded-xl p-4 text-center">
-              <p className="text-xs text-muted-foreground font-semibold">{t("monthlyReceipt.totalThisMonth")}</p>
+              <p className="text-sm text-muted-foreground font-semibold">{t("monthlyReceipt.totalThisMonth")}</p>
               <p className="mt-1 text-2xl font-bold text-foreground tabular-nums">{totalThisMonth}</p>
             </article>
           </div>
 
           <section className="bg-card border border-border rounded-2xl p-4">
             <div
-              className={`mb-3 grid ${compareSnapshot ? "grid-cols-[1fr_auto_auto]" : "grid-cols-[1fr_auto]"} items-center gap-3 text-xs font-semibold text-muted-foreground`}
+              className={`mb-3 grid ${compareSnapshot ? "grid-cols-[1fr_auto_auto]" : "grid-cols-[1fr_auto]"} items-center gap-3 text-sm font-semibold text-muted-foreground`}
             >
               <span>{t("monthlyReceipt.action")}</span>
               <span>{t("monthlyReceipt.count")}</span>
@@ -168,15 +168,15 @@ export function MonthlyReceipt() {
                 return (
                   <div
                     key={item.actionKey}
-                    className={`grid ${compareSnapshot ? "grid-cols-[1fr_auto_auto]" : "grid-cols-[1fr_auto]"} items-center gap-3 rounded-lg bg-muted/40 px-3 py-2`}
+                    className={`grid ${compareSnapshot ? "grid-cols-[1fr_auto_auto]" : "grid-cols-[1fr_auto]"} items-center gap-3 rounded-lg bg-muted/40 px-3 py-3`}
                   >
-                    <span className="text-sm font-medium text-foreground">
+                    <span className="text-base font-medium text-foreground">
                       {t(`monthlyReceipt.actions.${item.actionKey}`)}
                     </span>
-                    <span className="text-sm font-bold text-foreground tabular-nums">{item.count}</span>
+                    <span className="text-base font-bold text-foreground tabular-nums">{item.count}</span>
                     {compareSnapshot && (
                       <span
-                        className={`text-sm font-semibold tabular-nums ${
+                        className={`text-base font-semibold tabular-nums ${
                           delta > 0
                             ? "text-green-700 dark:text-green-300"
                             : delta < 0
@@ -202,7 +202,7 @@ export function MonthlyReceipt() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths((v) => !v)}
-                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
+                className="px-3 py-2.5 text-base rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
               >
                 {t("monthlyReceipt.lookAtPastMonths")}
               </button>
@@ -210,12 +210,12 @@ export function MonthlyReceipt() {
 
             {showPastMonths && (
               <label className="space-y-1 block">
-                <span className="text-xs font-semibold text-muted-foreground">{t("monthlyReceipt.selectedMonth")}</span>
+                <span className="text-sm font-semibold text-muted-foreground">{t("monthlyReceipt.selectedMonth")}</span>
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   disabled={monthOptions.length === 0}
-                  className="w-full bg-input-background border border-border rounded-lg px-3 py-2 text-sm text-foreground disabled:opacity-60"
+                  className="w-full bg-input-background border border-border rounded-lg px-3 py-2.5 text-base text-foreground disabled:opacity-60"
                 >
                   {monthOptions.length === 0 ? (
                     <option value="">{t("monthlyReceipt.noMonthsYet")}</option>
@@ -233,11 +233,11 @@ export function MonthlyReceipt() {
 
           <section className="bg-card border border-border rounded-xl p-4 space-y-3 mt-auto">
             <label className="space-y-1 block">
-              <span className="text-xs font-semibold text-muted-foreground">{t("monthlyReceipt.compareMonth")}</span>
+              <span className="text-sm font-semibold text-muted-foreground">{t("monthlyReceipt.compareMonth")}</span>
               <select
                 value={compareMonth}
                 onChange={(e) => setCompareMonth(e.target.value)}
-                className="w-full bg-input-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+                className="w-full bg-input-background border border-border rounded-lg px-3 py-2.5 text-base text-foreground"
               >
                 <option value="">{t("monthlyReceipt.noCompare")}</option>
                 {monthOptions
@@ -252,7 +252,7 @@ export function MonthlyReceipt() {
 
             {compareSnapshot && (
               <article className="bg-muted/40 border border-border rounded-xl p-4 text-center">
-                <p className="text-xs text-muted-foreground font-semibold">{t("monthlyReceipt.totalCompareMonth")}</p>
+                <p className="text-sm text-muted-foreground font-semibold">{t("monthlyReceipt.totalCompareMonth")}</p>
                 <p className="mt-1 text-2xl font-bold text-foreground tabular-nums">{totalCompareMonth}</p>
               </article>
             )}
@@ -263,21 +263,21 @@ export function MonthlyReceipt() {
               <button
                 type="button"
                 onClick={exportCsv}
-                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
+                className="px-3 py-2.5 text-base rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
               >
                 {t("monthlyReceipt.exportCsv")}
               </button>
               <button
                 type="button"
                 onClick={exportXls}
-                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
+                className="px-3 py-2.5 text-base rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
               >
                 {t("monthlyReceipt.exportXls")}
               </button>
               <button
                 type="button"
                 onClick={exportPdf}
-                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
+                className="px-3 py-2.5 text-base rounded-lg border border-border bg-muted/40 hover:bg-muted/70"
               >
                 {t("monthlyReceipt.exportPdf")}
               </button>

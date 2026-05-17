@@ -181,6 +181,17 @@ export function AxlesDiagram({
 
   return (
     <div className="relative w-full aspect-square select-none">
+      {/* Front direction — above front axle (FRONT_Y); does not capture taps */}
+      <div
+        className="pointer-events-none absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 text-muted-foreground"
+        style={{ top: 0, paddingTop: "max(0.125rem, 0.25%)" }}
+      >
+        <svg className="h-2.5 w-2.5 shrink-0" viewBox="0 0 12 10" fill="none" aria-hidden>
+          <path d="M6 1L11 9H1L6 1Z" fill="currentColor" />
+        </svg>
+        <span className="text-xs leading-none">{t("common.front")}</span>
+      </div>
+
       {/* Axle lines SVG overlay */}
       <svg
         viewBox="0 0 100 100"

@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS stock_availability_requests (
   car_model    text        NOT NULL,
   km           text        NOT NULL,
   quantity     smallint    NOT NULL DEFAULT 2,
-  status       text        NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'accepted', 'declined')),
-  closed_reason text       CHECK (closed_reason IS NULL OR closed_reason IN ('closed', 'cancelled')),
+  status       text        NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'accepted', 'declined', 'declined_failed', 'closed')),
+  closed_reason text       CHECK (closed_reason IS NULL OR closed_reason IN ('closed', 'cancelled', 'ack_failed')),
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (request_id, shop_id)
@@ -72,6 +72,12 @@ CREATE TABLE IF NOT EXISTS erp_tire_locations (
   erp_code         integer NOT NULL UNIQUE,
   description      text    NOT NULL,
   wheel_position   text    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS erp_tire_level_codes (
+  id          serial  PRIMARY KEY,
+  code        integer NOT NULL UNIQUE,
+  description text    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS pending_logins (

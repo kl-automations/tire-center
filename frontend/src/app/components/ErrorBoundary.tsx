@@ -23,7 +23,7 @@ function ErrorFallback({ onDismiss }: { onDismiss: () => void }) {
           onDismiss();
           navigate("/", { replace: true });
         }}
-        className="bg-primary text-primary-foreground px-4 py-2.5 rounded-lg font-semibold text-sm"
+        className="bg-primary text-primary-foreground px-4 py-4 rounded-lg font-semibold text-base"
       >
         {i18n.t("errorBoundary.returnHome")}
       </button>

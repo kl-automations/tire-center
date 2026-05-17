@@ -70,25 +70,25 @@ export function ExportHistoryModal({ isOpen, onClose }: { isOpen: boolean; onClo
         {/* Close */}
         <button
           onClick={handleClose}
-          className="absolute top-4 start-4 text-muted-foreground hover:text-foreground transition-colors"
+          className="absolute top-3 start-3 flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="w-5 h-5" />
+          <X className="w-6 h-6" />
         </button>
 
         <div className="space-y-5">
           {/* Title */}
-          <h2 className="text-lg font-semibold text-foreground text-center">
+          <h2 className="text-xl font-semibold text-foreground text-center">
             {t("exportHistory.title")}
           </h2>
 
           {/* Explanation */}
-          <p className="text-sm text-muted-foreground text-center leading-relaxed bg-muted/60 rounded-xl px-4 py-3">
+          <p className="text-base text-muted-foreground text-center leading-relaxed bg-muted/60 rounded-xl px-4 py-3">
             {t("exportHistory.explanation")}
           </p>
 
           {/* Email */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground block">
+            <label className="text-base font-semibold text-foreground block">
               {t("exportHistory.emailLabel")}
             </label>
             <input
@@ -103,7 +103,7 @@ export function ExportHistoryModal({ isOpen, onClose }: { isOpen: boolean; onClo
 
           {/* Period selector */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground block">
+            <label className="text-base font-semibold text-foreground block">
               {t("exportHistory.periodLabel")}
             </label>
             <div className="flex flex-wrap gap-2">
@@ -111,7 +111,7 @@ export function ExportHistoryModal({ isOpen, onClose }: { isOpen: boolean; onClo
                 <button
                   key={key}
                   onClick={() => setPeriod(key)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 ${
+                  className={`flex-1 py-3.5 rounded-xl text-base font-semibold border-2 transition-all duration-150 ${
                     period === key
                       ? "bg-primary border-primary text-primary-foreground"
                       : "bg-background border-border text-foreground hover:border-primary/50"
@@ -127,7 +127,7 @@ export function ExportHistoryModal({ isOpen, onClose }: { isOpen: boolean; onClo
           <button
             onClick={handleExport}
             disabled={!canExport || sent}
-            className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${
+            className={`w-full py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${
               sent
                 ? "bg-green-600 text-white"
                 : canExport

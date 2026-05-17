@@ -13,9 +13,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Tire Center',
-        short_name: 'Tire Center',
-        description: 'Tire Center Management App',
+        name: 'מרכז שירות קוגול',
+        short_name: 'מרכז שירות קוגול',
+        description: 'מרכז שירות קוגול',
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',

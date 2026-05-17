@@ -16,7 +16,10 @@ The mileage update is propagated to the ERP later, in Wave 2 (POST /api/diagnosi
 which already sends mileage_update.
 """
 
+import asyncio
 import json
+
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from logging_utils import log, log_error
@@ -24,6 +27,8 @@ from middleware.auth import get_current_shop
 from models.schemas import CarLookupRequest, CodesResponse, LastMileageRequest, LastMileageResponse
 from adapters import erp
 from routers.diagnosis import _coerce_jsonb
+from routers.stock_availability import _ack_tafnit_with_retry, _resolve_erp_shop_id
+from routers.webhooks import _stock_availability_signal
 
 router = APIRouter(prefix="/api", tags=["car"])
 
@@ -66,6 +71,78 @@ def _merge_saved_diagnosis_into_car_data(car_data: dict, diagnosis_raw) -> None:
         car_data["front_alignment"] = bool(mechanic_inputs["front_alignment"])
     elif "front_alignment" in diag:
         car_data["front_alignment"] = bool(diag["front_alignment"])
+
+
+async def _auto_approve_stock_on_car_lookup(
+    request: Request,
+    shop: dict,
+    license_plate: str,
+) -> None:
+    erp_shop_id = await _resolve_erp_shop_id(request, shop)
+    if not erp_shop_id:
+        log(
+            "ROUTER/car",
+            f"WARNING: auto_approve stock_request skipped, erp_shop_id unresolved plate={license_plate}",
+        )
+        return
+
+    try:
+        tire_shop_code = int(erp_shop_id)
+    except ValueError:
+        log(
+            "ROUTER/car",
+            f"WARNING: auto_approve stock_request skipped, invalid erp_shop_id={erp_shop_id} plate={license_plate}",
+        )
+        return
+
+    db = request.app.state.db
+    try:
+        rows = await db.fetch(
+            """
+            UPDATE stock_availability_requests
+            SET status = 'accepted'
+            WHERE car_number = $1 AND shop_id = $2 AND status = 'live'
+            RETURNING request_id
+            """,
+            license_plate,
+            erp_shop_id,
+        )
+    except Exception as e:
+        log_error(
+            "ROUTER/car",
+            f"auto_approve stock_request DB failure plate={license_plate}: {e}",
+        )
+        return
+
+    for row in rows:
+        request_id = row["request_id"]
+        try:
+            apply_id = int(request_id)
+        except ValueError:
+            log(
+                "ROUTER/car",
+                f"WARNING: auto_approve stock_request skipped invalid request_id={request_id} plate={license_plate}",
+            )
+            continue
+
+        _stock_availability_signal(request.app, erp_shop_id, request_id, "accepted")
+        asyncio.create_task(
+            _ack_tafnit_with_retry(
+                request.app,
+                shop_id=shop["shop_id"],
+                erp_hash=shop["erp_hash"],
+                erp_shop_id=erp_shop_id,
+                request_id=request_id,
+                apply_id=apply_id,
+                tire_shop_code=tire_shop_code,
+                tafnit_response=1,
+                ack_status="accepted_acked",
+            )
+        )
+        log(
+            "ROUTER/car",
+            f"auto_approve stock_request plate={license_plate} request_id={request_id} erp_shop_id={erp_shop_id}",
+        )
 
 
 @router.get(
@@ -208,6 +285,9 @@ async def car_lookup(
             "ROUTER/car",
             f"car_lookup reused order_id={existing['id']} plate={body.license_plate}",
         )
+        asyncio.create_task(
+            _auto_approve_stock_on_car_lookup(request, shop, body.license_plate)
+        )
         return {
             "order_id": str(existing["id"]),
             **stored_car_data,
@@ -219,16 +299,22 @@ async def car_lookup(
         and body.mileage < body.last_mileage_hint
     )
     override_km = body.last_mileage_hint + 1 if should_override_km else None
-    car_data = await erp.lookup_car(
-        license_plate=body.license_plate,
-        mileage=body.mileage,
-        shop_id=shop["shop_id"],
-        erp_hash=shop["erp_hash"],
-        override_km=override_km,
-    )
+    try:
+        car_data = await erp.lookup_car(
+            license_plate=body.license_plate,
+            mileage=body.mileage,
+            shop_id=shop["shop_id"],
+            erp_hash=shop["erp_hash"],
+            override_km=override_km,
+        )
+    except (httpx.ReadTimeout, httpx.ConnectTimeout):
+        raise HTTPException(status_code=503, detail="erp_timeout")
     if should_override_km:
         car_data["actual_mileage"] = body.mileage
         car_data["mileage_overridden"] = True
+
+    _ownership = (car_data.get("ownership_id") or "").replace('"', "").replace("'", "")
+    _plate_type = "military" if "צהל" in _ownership else body.plate_type
 
     if not car_data["recognized"]:
         log_error(
@@ -268,12 +354,14 @@ async def car_lookup(
             """
             UPDATE open_orders
             SET car_data = $1::jsonb,
-                mileage = COALESCE($2, mileage)
+                mileage = COALESCE($2, mileage),
+                plate_type = $4
             WHERE id = $3
             """,
             json.dumps(car_data),
             body.mileage,
             matched["id"],
+            _plate_type,
         )
         response_car = dict(car_data)
         log(
@@ -283,8 +371,12 @@ async def car_lookup(
                 f"plate={body.license_plate} request_id={erp_request_id}"
             ),
         )
+        asyncio.create_task(
+            _auto_approve_stock_on_car_lookup(request, shop, body.license_plate)
+        )
         return {
             "order_id": str(matched["id"]),
+            "plate_type": _plate_type,
             **response_car,
         }
 
@@ -298,7 +390,7 @@ async def car_lookup(
         """,
         shop["shop_id"],
         body.license_plate,
-        body.plate_type,
+        _plate_type,
         body.mileage,
         json.dumps(car_data),
         erp_request_id,
@@ -307,8 +399,12 @@ async def car_lookup(
     log("DB", f"INSERT open_orders -> order_id={order_id}")
     log("ROUTER/car", f"car_lookup success order_id={order_id} plate={body.license_plate}")
 
+    asyncio.create_task(
+        _auto_approve_stock_on_car_lookup(request, shop, body.license_plate)
+    )
     return {
         "order_id": str(order_id),
+        "plate_type": _plate_type,
         **car_data,
     }
 

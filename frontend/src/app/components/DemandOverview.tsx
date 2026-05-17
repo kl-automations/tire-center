@@ -20,18 +20,18 @@ export function DemandOverview() {
           <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            className="text-primary-foreground hover:opacity-80 transition-opacity"
+            className="flex items-center justify-center w-11 h-11 -ms-1 text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6 ltr:rotate-180" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">{t("demandOverview.title")}</h1>
-          <div className="w-6" />
+          <h1 className="text-2xl text-primary-foreground font-semibold">{t("demandOverview.title")}</h1>
+          <div className="w-11" />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-8">
         <div className="max-w-5xl mx-auto" dir="ltr">
-          <div className="mb-4 grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 px-1 text-xs text-muted-foreground font-semibold">
+          <div className="mb-4 grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 px-1 text-sm text-muted-foreground font-semibold">
             <span>{t("demandOverview.monthlyDemand")}</span>
             <span className="text-right">{t("demandOverview.tireSize")}</span>
           </div>

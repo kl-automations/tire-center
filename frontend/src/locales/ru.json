@@ -9,7 +9,9 @@
     "requestNotFound": "Отчет не найден",
     "newRequest": "Новый отчет",
     "spareTire": "Запасное колесо",
+    "front": "Вперёд",
     "frontAlignment": "Сход-развал",
+    "tireQuality": "Качество шин",
     "requestNumberLine": "Номер обращения: {{requestNumber}}",
     "requestNumberLabel": "Номер обращения",
     "qualityLine": "Качество: {{quality}}",
@@ -83,9 +85,8 @@
     }
   },
   "dashboard": {
-    "title": "Сервисный отчет Когель",
+    "title": "Центр обслуживания Когол",
     "subtitle": "Главная панель",
-    "chooseAction": "Выберите действие",
     "newRequest": "Новый отчет",
     "newRequestDesc": "Создать новый отчет для автомобиля",
     "openRequests": "Открытые отчеты",
@@ -156,7 +157,8 @@
     "mileageAttentionTitle": "Внимание!",
     "mileageVerifyHint": "Убедитесь, что пробег введён верно",
     "updateMileage": "Исправить пробег",
-    "proceedAnyway": "Всё равно продолжить"
+    "proceedAnyway": "Всё равно продолжить",
+    "erp_timeout_retry": "Не удалось подключиться к ERP, попробуйте снова"
   },
   "acceptedRequest": {
     "title": "Новый отчет",
@@ -219,6 +221,7 @@
     "dismiss": "Закрыть",
     "acceptedLabel": "Подтверждено",
     "declinedLabel": "Отменено",
+    "ack_failed_message": "Не удалось отправить ответ в Tafnit. Закройте запрос вручную.",
     "closedNotice": "Обращение закрыто",
     "cancelledNotice": "Обращение отменено"
   },

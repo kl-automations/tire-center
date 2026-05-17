@@ -6,7 +6,7 @@ JSON against them) and the OpenAPI schema source (FastAPI serialises them
 into /openapi.json, which powers Swagger UI at /docs and the Mintlify site).
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Any
 
 
@@ -312,6 +312,12 @@ class ErpWebhookPayload(BaseModel):
             "open_orders.request_id as text and used directly for lookups."
         )
     )
+
+    @field_validator("request_id", mode="before")
+    @classmethod
+    def coerce_request_id(cls, v):
+        return str(v)
+
     DiagnoseData: list[ErpDiagnoseItem] = Field(
         description=(
             "Per-line approval decisions, one item per (action × location) line "

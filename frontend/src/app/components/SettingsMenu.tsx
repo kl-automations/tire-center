@@ -57,10 +57,10 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
       <div className="absolute top-0 end-0 h-full w-full max-w-sm bg-card shadow-2xl border-s border-border flex flex-col animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">{t("settings.title")}</h2>
+          <h2 className="text-xl font-semibold text-foreground">{t("settings.title")}</h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -69,26 +69,26 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {/* Account */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-base font-semibold text-muted-foreground uppercase tracking-wider">
               <User className="w-4 h-4" />
               <span>{t("settings.account")}</span>
             </div>
             <div className="bg-background rounded-xl p-4 border border-border">
               <p className="font-semibold text-foreground">{t("settings.connectedUser")}</p>
-              <p className="text-sm text-muted-foreground">{userCode}</p>
+              <p className="text-base text-muted-foreground">{userCode}</p>
             </div>
           </div>
 
           {/* Dark/Light Mode */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-base font-semibold text-muted-foreground uppercase tracking-wider">
               {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               <span>{t("settings.displayMode")}</span>
             </div>
             <div className="bg-background rounded-xl border border-border overflow-hidden">
               <button
                 onClick={() => { toggleTheme(); }}
-                className="w-full flex items-center justify-between px-4 py-3"
+                className="w-full flex items-center justify-between px-4 py-4"
               >
                 <span className="font-semibold text-foreground">
                   {theme === "dark" ? t("common.darkMode") : t("common.lightMode")}
@@ -111,7 +111,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
 
           {/* Language */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-base font-semibold text-muted-foreground uppercase tracking-wider">
               <Globe className="w-4 h-4" />
               <span>{t("settings.language")}</span>
             </div>
@@ -120,7 +120,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
                 <button
                   key={opt.code}
                   onClick={() => setLanguage(opt.code)}
-                  className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${
+                  className={`w-full flex items-center justify-between px-4 py-4 transition-colors ${
                     language === opt.code
                       ? "bg-primary/10 dark:bg-blue-400/15"
                       : "hover:bg-muted"
@@ -142,7 +142,7 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
         <div className="p-5 border-t border-border">
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground py-3 rounded-xl transition-colors duration-200 font-semibold"
+            className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground py-4 rounded-xl transition-colors duration-200 font-semibold"
           >
             <LogOut className="w-5 h-5" />
             {t("settings.signOut")}

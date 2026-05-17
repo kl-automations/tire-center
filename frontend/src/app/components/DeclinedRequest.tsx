@@ -48,10 +48,10 @@ export function DeclinedRequest() {
             onClick={() => navigate("/dashboard")}
             className="text-primary-foreground hover:opacity-80 transition-opacity"
           >
-            <ArrowRight className="w-6 h-6 ltr:rotate-180" />
+            <ArrowRight className="w-5 h-5 ltr:rotate-180" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">{t("declinedRequest.title")}</h1>
-          <div className="w-6" /> {/* Spacer for alignment */}
+          <h1 className="text-2xl text-primary-foreground font-semibold">{t("declinedRequest.title")}</h1>
+          <div className="w-5" />
         </div>
       </div>
 

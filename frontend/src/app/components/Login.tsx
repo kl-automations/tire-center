@@ -30,6 +30,9 @@ export function Login() {
   const [cooldownUntil, setCooldownUntil] = useState<number>(0);
   const [now, setNow] = useState<number>(Date.now());
   const langMenuRef = useRef<HTMLDivElement>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef(code);
+  codeRef.current = code;
   const navigate = useNavigate();
   const { theme, toggleTheme, language, setLanguage } = useTheme();
   const { showToast, toast } = useToast();
@@ -100,14 +103,15 @@ export function Login() {
     }
   };
 
-  const handleCodeSubmit = async (e: React.FormEvent) => {
+  const handleCodeSubmit = async (e: React.FormEvent, otpOverride?: string) => {
     e.preventDefault();
+    const otp = otpOverride ?? code;
     setCodeError(false);
     try {
       const res = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userCode, otp: code }),
+        body: JSON.stringify({ userCode, otp }),
       });
       if (res.status === 401) {
         setCodeError(true);
@@ -131,6 +135,52 @@ export function Login() {
     setCodeError(false);
   };
 
+  useEffect(() => {
+    if (step !== "code") return;
+    if (typeof window === "undefined" || !("OTPCredential" in window)) return;
+
+    const abortController = new AbortController();
+
+    (async () => {
+      try {
+        const cred = await navigator.credentials.get({
+          otp: { transport: ["sms"] },
+          signal: abortController.signal,
+        } as CredentialRequestOptions);
+        if (!cred || !("code" in cred)) return;
+        const otp = (cred as { code: string }).code;
+        if (codeRef.current) return;
+        setCode(otp);
+        setCodeError(false);
+        void handleCodeSubmit(
+          { preventDefault: () => {} } as React.FormEvent,
+          otp,
+        );
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.debug("Web OTP:", err);
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== "code") return;
+    const input = otpInputRef.current;
+    if (!input) return;
+
+    const id = setInterval(() => {
+      const domValue = input.value;
+      if (domValue && domValue !== codeRef.current) {
+        setCode(domValue);
+        setCodeError(false);
+      }
+    }, 250);
+
+    return () => clearInterval(id);
+  }, [step]);
+
   const cooldownActive = Date.now() < cooldownUntil;
   const cooldownSeconds = Math.ceil((cooldownUntil - now) / 1000);
 
@@ -141,7 +191,7 @@ export function Login() {
       <div className="absolute top-4 start-4 flex items-center gap-2">
         <button
           onClick={toggleTheme}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
+          className="flex items-center justify-center w-11 h-11 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
           title={theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
         >
           {theme === "dark" ? <Sun className="w-5 h-5 text-foreground" /> : <Moon className="w-5 h-5 text-foreground" />}
@@ -150,14 +200,14 @@ export function Login() {
           <button
             type="button"
             onClick={() => setLangMenuOpen((o) => !o)}
-            className="flex items-center justify-center gap-1 h-10 px-3 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
+            className="flex items-center justify-center gap-1.5 h-11 px-4 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors"
             title={t("login.changeLanguage")}
             aria-label={t("login.changeLanguage")}
             aria-expanded={langMenuOpen}
             aria-haspopup="listbox"
           >
             <Globe className="w-4 h-4 text-foreground" aria-hidden />
-            <span className="text-sm font-bold text-foreground tabular-nums">{t(`login.langAbbrev.${language}`)}</span>
+            <span className="text-base font-bold text-foreground tabular-nums">{t(`login.langAbbrev.${language}`)}</span>
           </button>
           {langMenuOpen && (
             <ul
@@ -175,7 +225,7 @@ export function Login() {
                       setLanguage(opt.code);
                       setLangMenuOpen(false);
                     }}
-                    className={`flex w-full items-center justify-center gap-1 h-10 px-3 rounded-full text-sm font-bold transition-colors border ${
+                    className={`flex w-full items-center justify-center gap-1.5 h-11 px-4 rounded-full text-base font-bold transition-colors border ${
                       language === opt.code
                         ? "bg-muted border-primary/40 text-foreground"
                         : "border-transparent hover:bg-muted text-foreground"
@@ -230,7 +280,7 @@ export function Login() {
                   type="text"
                   value={userCode}
                   onChange={(e) => {
-                    setUserCode(e.target.value);
+                    setUserCode(e.target.value.replace(/\s/g, ""));
                     setUserCodeError(false);
                     setCooldownUntil(0);
                   }}
@@ -243,13 +293,13 @@ export function Login() {
                   autoCapitalize="characters"
                 />
                 {userCodeError && (
-                  <p className="text-red-500 text-sm mt-1">{t("login.userCodeError")}</p>
+                  <p className="text-red-500 text-base mt-1">{t("login.userCodeError")}</p>
                 )}
               </div>
               <button
                 type="submit"
                 disabled={cooldownActive}
-                className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+                className="w-full bg-primary hover:bg-secondary text-primary-foreground py-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg font-semibold"
               >
                 {cooldownActive ? `${cooldownSeconds}s` : t("login.submitUserCode")}
               </button>
@@ -261,6 +311,7 @@ export function Login() {
                   {t("login.codeLabel")}
                 </label>
                 <input
+                  ref={otpInputRef}
                   id="code"
                   type="text"
                   inputMode="numeric"
@@ -277,19 +328,19 @@ export function Login() {
                   autoComplete="one-time-code"
                 />
                 {codeError && (
-                  <p className="text-red-500 text-sm mt-1">{t("login.codeError")}</p>
+                  <p className="text-red-500 text-base mt-1">{t("login.codeError")}</p>
                 )}
               </div>
               <button
                 type="submit"
-                className="w-full bg-primary hover:bg-secondary text-primary-foreground py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+                className="w-full bg-primary hover:bg-secondary text-primary-foreground py-4 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg font-semibold"
               >
                 {t("login.submitCode")}
               </button>
               <button
                 type="button"
                 onClick={handleBackToUserCode}
-                className="w-full flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
+                className="w-full flex items-center justify-center gap-2 py-3 text-muted-foreground hover:text-foreground transition-colors text-base"
               >
                 <ArrowRight className="w-4 h-4 ltr:rotate-180" />
                 {t("login.backToUserCode")}

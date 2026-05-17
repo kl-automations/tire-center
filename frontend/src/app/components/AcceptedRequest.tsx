@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Loader2 } from "lucide-react";
@@ -10,6 +10,7 @@ const NO_CAROOL_WHEELS = new Set(["spare-tire", "rear-right-inner", "rear-left-i
 import { resolveVehicleWheelCount } from "../vehicleWheelLayout";
 import { useScreenCache } from "../useScreenCache";
 import { usePhoneBackSync } from "../usePhoneBackSync";
+import { useViewportFit } from "../useViewportFit";
 import { ConfirmModal } from "./ConfirmModal";
 import { useToast } from "./Toast";
 
@@ -265,6 +266,8 @@ export function AcceptedRequest() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const needsScroll = useViewportFit(layoutRef, !!cache);
 
   const licensePlate = cache?.plate ?? "";
 
@@ -597,7 +600,7 @@ export function AcceptedRequest() {
           <p className="text-muted-foreground">{t("common.requestNotFound")}</p>
           <button
             onClick={() => navigate("/dashboard", { replace: true })}
-            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg"
+            className="bg-primary text-primary-foreground px-4 py-3 rounded-lg font-semibold"
           >
             {t("declinedRequest.backHome")}
           </button>
@@ -607,9 +610,15 @@ export function AcceptedRequest() {
   }
 
   return (
-    <div className="h-screen bg-background flex flex-col relative overflow-hidden" style={{ height: "100dvh" }}>
+    <div
+      ref={layoutRef}
+      className={`h-screen bg-background flex flex-col relative min-h-0 ${
+        needsScroll ? "overflow-y-auto" : "overflow-hidden"
+      }`}
+      style={{ height: "100dvh" }}
+    >
       {/* Header */}
-      <div className="bg-primary px-4 py-2.5 shadow-md">
+      <div className="shrink-0 bg-primary px-4 py-2.5 shadow-md">
         <div className="flex items-center justify-between">
           <button
             onClick={handleHeaderBack}
@@ -617,13 +626,17 @@ export function AcceptedRequest() {
           >
             <ArrowRight className="w-5 h-5 ltr:rotate-180" />
           </button>
-          <h1 className="text-base text-primary-foreground font-semibold">{t("acceptedRequest.title")}</h1>
+          <h1 className="text-lg text-primary-foreground font-semibold">{t("acceptedRequest.title")}</h1>
           <div className="w-5" />
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-3 py-2 flex flex-col justify-between overflow-hidden">
+      <div
+        className={`flex-1 px-3 py-2 flex flex-col min-h-0 ${
+          needsScroll ? "overflow-y-auto" : "justify-between overflow-hidden"
+        }`}
+      >
         <div className="space-y-2">
 
           {/* License Plate */}
@@ -633,31 +646,31 @@ export function AcceptedRequest() {
           <div className="grid grid-cols-2 gap-1.5">
             {cache.plateType === "civilian" ? (
               <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
-                <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.customerLabel")}</p>
-                <p className="text-sm font-semibold text-foreground leading-tight truncate">{cache.ownershipId ?? "—"}</p>
+                <p className="text-xs text-muted-foreground leading-tight truncate">{t("acceptedRequest.customerLabel")}</p>
+                <p className="text-base font-semibold text-foreground leading-tight truncate">{cache.ownershipId ?? "—"}</p>
               </div>
             ) : (
               <div />
             )}
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
-              <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.requestNumberLabel")}</p>
-              <p className="text-sm font-semibold text-foreground tabular-nums leading-tight truncate">{cache.request_id ?? orderId}</p>
+              <p className="text-xs text-muted-foreground leading-tight truncate">{t("common.requestNumberLabel")}</p>
+              <p className="text-base font-semibold text-foreground tabular-nums leading-tight truncate">{cache.request_id ?? orderId}</p>
             </div>
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
-              <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("acceptedRequest.mileage")}</p>
-              <p className="text-sm font-semibold text-foreground tabular-nums leading-tight" dir="ltr">
+              <p className="text-xs text-muted-foreground leading-tight truncate">{t("acceptedRequest.mileage")}</p>
+              <p className="text-base font-semibold text-foreground tabular-nums leading-tight" dir="ltr">
                 {cache.mileage ? `${Number(cache.mileage).toLocaleString()} ${t("acceptedRequest.km")}` : "—"}
               </p>
             </div>
             <div className="bg-card rounded-lg border border-border px-2 py-1.5 text-center min-w-0">
-              <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
-              <p className="text-sm font-semibold text-foreground leading-tight truncate">{tireLevelLabel}</p>
+              <p className="text-xs text-muted-foreground leading-tight truncate">{t("common.qualityLabel")}</p>
+              <p className="text-base font-semibold text-foreground leading-tight truncate">{tireLevelLabel}</p>
             </div>
           </div>
 
           {/* Wheel Selector */}
           <div className="bg-card rounded-xl p-1.5 shadow-md border border-border">
-            <p className="text-xs font-semibold text-foreground mb-0.5 text-center">{t("acceptedRequest.selectWheel")}</p>
+            <p className="text-sm font-semibold text-foreground mb-1 text-center">{t("acceptedRequest.selectWheel")}</p>
             <div className="relative mx-auto max-w-[240px]">
               <AxlesDiagram
                 onWheelClick={handleWheelClick}
@@ -683,7 +696,7 @@ export function AcceptedRequest() {
           {/* Spare tire + Front Alignment */}
           <div className="bg-card rounded-xl px-4 py-3 shadow-md border border-border space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">{t("common.spareTire")}</span>
+              <span className="text-base font-medium text-foreground">{t("common.spareTire")}</span>
               <button
                 dir="ltr"
                 type="button"
@@ -696,7 +709,7 @@ export function AcceptedRequest() {
               </button>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">{t("common.frontAlignment")}</span>
+              <span className="text-base font-medium text-foreground">{t("common.frontAlignment")}</span>
               <button
                 dir="ltr"
                 type="button"
@@ -716,7 +729,7 @@ export function AcceptedRequest() {
         <button
           onClick={handleSubmitDiagnosis}
           disabled={isSubmitting}
-          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded-xl transition-colors duration-200 shadow-lg font-semibold text-sm mb-1 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded-xl transition-colors duration-200 shadow-lg font-semibold text-base mb-1 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isSubmitting ? (
             <span className="inline-flex items-center justify-center gap-2">

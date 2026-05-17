@@ -29,6 +29,31 @@ def _is_transport_error(exc: BaseException) -> bool:
     return isinstance(exc, httpx.RequestError)
 
 
+async def _mark_declined_failed(app, erp_shop_id: str, request_id: str) -> None:
+    db = app.state.db
+    row = await db.fetchrow(
+        """
+        UPDATE stock_availability_requests
+        SET status = 'declined_failed'
+        WHERE request_id = $1 AND shop_id = $2 AND status = 'declined'
+        RETURNING request_id
+        """,
+        request_id,
+        erp_shop_id,
+    )
+    if not row:
+        log(
+            "ROUTER/stock-availability",
+            f"declined_failed skip (not declined) request_id={request_id} erp_shop_id={erp_shop_id}",
+        )
+        return
+    log(
+        "ROUTER/stock-availability",
+        f"declined_failed request_id={request_id} erp_shop_id={erp_shop_id}",
+    )
+    _stock_availability_signal(app, erp_shop_id, request_id, "declined_failed")
+
+
 async def _ack_tafnit_with_retry(
     app,
     *,
@@ -74,6 +99,8 @@ async def _ack_tafnit_with_retry(
                             "ROUTER/stock-availability",
                             f"SendQueryResponse gave up after {failures} transport failures request_id={request_id}",
                         )
+                        if ack_status == "declined_acked":
+                            await _mark_declined_failed(app, erp_shop_id, request_id)
                         return
                     await asyncio.sleep(_backoff_seconds(failures))
                     continue
@@ -135,7 +162,7 @@ async def _resolve_erp_shop_id(request: Request, shop: dict) -> str | None:
     summary="List stock-availability requests for authenticated shop",
     description=(
         "Returns current stock-availability rows scoped to the mechanic's shop. "
-        "Only live/accepted rows are returned for initial UI hydration."
+        "Returns live, accepted, and declined_failed rows for initial UI hydration."
     ),
 )
 async def list_stock_availability_requests(
@@ -159,7 +186,7 @@ async def list_stock_availability_requests(
         """
         SELECT request_id, tire_size, quantity, status, closed_reason
         FROM stock_availability_requests
-        WHERE shop_id = $1 AND status IN ('live', 'accepted')
+        WHERE shop_id = $1 AND status IN ('live', 'accepted', 'declined_failed')
         ORDER BY created_at DESC
         """,
         erp_shop_id,
@@ -312,3 +339,52 @@ async def decline_stock_availability_request(
 
     log("ROUTER/stock-availability", f"decline request_id={request_id} erp_shop_id={erp_shop_id}")
     return {"status": "declined"}
+
+
+@router.post(
+    "/requests/{request_id}/dismiss",
+    summary="Dismiss a declined_failed stock-availability request after ack give-up",
+)
+async def dismiss_stock_availability_request(
+    request: Request,
+    request_id: str,
+    shop: dict = Depends(get_current_shop),
+):
+    erp_shop_id = await _require_erp_shop(request, shop)
+    db = request.app.state.db
+    row = await db.fetchrow(
+        """
+        UPDATE stock_availability_requests
+        SET status = 'closed', closed_reason = 'ack_failed'
+        WHERE request_id = $1 AND shop_id = $2 AND status = 'declined_failed'
+        RETURNING request_id
+        """,
+        request_id,
+        erp_shop_id,
+    )
+    if row:
+        _stock_availability_signal(request.app, erp_shop_id, request_id, "deleted")
+        log(
+            "ROUTER/stock-availability",
+            f"dismiss request_id={request_id} erp_shop_id={erp_shop_id}",
+        )
+        return {"status": "closed"}
+
+    existing = await db.fetchrow(
+        """
+        SELECT request_id
+        FROM stock_availability_requests
+        WHERE request_id = $1 AND shop_id = $2
+        """,
+        request_id,
+        erp_shop_id,
+    )
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Request not found",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Request not declined_failed",
+    )

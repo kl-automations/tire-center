@@ -1,3 +1,6 @@
+import { useRef } from "react";
+import { useViewportFit } from "../useViewportFit";
+
 interface ConfirmModalProps {
   open: boolean;
   title: string;
@@ -26,19 +29,25 @@ export function ConfirmModal({
   onPrimary,
   onDestructive,
 }: ConfirmModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const needsScroll = useViewportFit(panelRef, open);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/50" onClick={onPrimary} />
       <div
+        ref={panelRef}
         role="alertdialog"
         aria-modal="true"
-        className="relative bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border p-6 text-center space-y-5"
+        className={`relative bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border p-6 text-center space-y-5 my-4 ${
+          needsScroll ? "max-h-[calc(100dvh-2rem)] overflow-y-auto" : ""
+        }`}
       >
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-foreground leading-tight">{title}</h3>
           {subtitle && (
-            <p className="text-sm text-muted-foreground leading-snug">{subtitle}</p>
+            <p className="text-base text-muted-foreground leading-snug">{subtitle}</p>
           )}
         </div>
         <div className="flex flex-col gap-2">

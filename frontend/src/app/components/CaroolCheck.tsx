@@ -355,21 +355,21 @@ export function CaroolCheck() {
           {/* Back only shown in preview mode (acts as retake) */}
           {preview
             ? <button onClick={handleBack} className="text-white hover:opacity-75 transition-opacity p-1"><ArrowRight className="w-6 h-6 ltr:rotate-180" /></button>
-            : <div className="w-8" />
+            : <div className="w-5" />
           }
           <div className="text-center">
-            <p className="text-white font-semibold text-sm leading-tight">{wheelLabel}</p>
-            <p className="text-white/70 text-xs mt-0.5">{stepLabel}</p>
+            <p className="text-white font-bold text-xl leading-tight">{wheelLabel}</p>
+            <p className="text-white/70 text-base mt-1">{stepLabel}</p>
           </div>
-          <p className="text-white/60 text-xs tabular-nums">{completedSteps + 1}/{totalSteps}</p>
+          <p className="text-white/60 text-base tabular-nums">{completedSteps + 1}/{totalSteps}</p>
         </div>
       </div>
 
       {/* Camera error */}
       {cameraError && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 px-8 text-center">
-          <p className="text-white font-semibold text-base">{t("caroolCheck.cameraError")}</p>
-          <p className="text-white/60 text-sm leading-snug">{t("caroolCheck.cameraErrorHint")}</p>
+          <p className="text-white font-semibold text-lg">{t("caroolCheck.cameraError")}</p>
+          <p className="text-white/60 text-base leading-snug">{t("caroolCheck.cameraErrorHint")}</p>
         </div>
       )}
 

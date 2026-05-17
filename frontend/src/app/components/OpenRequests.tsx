@@ -103,9 +103,15 @@ function labelFor(item: LabeledRow | undefined, language: string): string {
   return item.label_he || "";
 }
 
+export interface TireLevelItem {
+  code: number;
+  description: string;
+}
+
 export interface OrderCodes {
   actions: ActionCodeItem[];
   reasons: ReasonCodeItem[];
+  tire_levels: TireLevelItem[];
 }
 
 /**
@@ -115,7 +121,7 @@ export interface OrderCodes {
  * an empty `actions` array as "not loaded yet" rather than "no codes".
  */
 export function useCodes(): OrderCodes {
-  const [codes, setCodes] = useState<OrderCodes>({ actions: [], reasons: [] });
+  const [codes, setCodes] = useState<OrderCodes>({ actions: [], reasons: [], tire_levels: [] });
   useEffect(() => {
     let cancelled = false;
     fetch("/api/codes")
@@ -125,6 +131,7 @@ export function useCodes(): OrderCodes {
         setCodes({
           actions: Array.isArray(data.actions) ? data.actions : [],
           reasons: Array.isArray(data.reasons) ? data.reasons : [],
+          tire_levels: Array.isArray(data.tire_levels) ? data.tire_levels : [],
         });
       })
       .catch(() => {});
@@ -172,6 +179,8 @@ export interface OpenRequest {
   rearTireProfile?: string;
   /** Tyre quality tier selected for this order — from backend. */
   quality?: QualityTier;
+  /** ERP tire_level code from car_data — from backend. */
+  tireLevelCode?: number;
   /** Whether front-axle wheel alignment was performed during this visit. */
   frontAlignment: boolean;
   frontAlignmentConfirmed?: boolean | null;
@@ -431,6 +440,7 @@ type RawOrderRow = {
   car_data?: {
     FrontTireSize?: string;
     RearTireSize?: string;
+    tire_level?: number;
   } | null;
   diagnosis?: {
     front_alignment?: boolean;
@@ -541,6 +551,7 @@ export function mapOrdersResponse(
       hasUpdate: false,
       frontTireSize: row.car_data?.FrontTireSize ?? "",
       rearTireSize: row.car_data?.RearTireSize ?? "",
+      tireLevelCode: row.car_data?.tire_level,
       frontAlignment: row.diagnosis?.front_alignment ?? false,
       frontAlignmentConfirmed:
         row.diagnosis?.erp_response?.front_alignment_confirmed ?? null,
@@ -698,8 +709,7 @@ type StatusFilter = "approved" | "waiting" | "declined";
  * 5-minute polling fallback. Locally-dismissed orders are filtered via
  * `dismissed-order-ids` in `sessionStorage`.
  *
- * Navigation: reached from `dashboard`; navigates to `{ name: "request-detail" }`
- * on row tap.
+ * Navigation: reached from `dashboard`; rows expand inline on tap.
  */
 export function OpenRequests() {
   const { t, i18n } = useTranslation();
@@ -821,12 +831,12 @@ export function OpenRequests() {
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <button
             onClick={() => navigate("/dashboard")}
-            className="text-primary-foreground hover:opacity-80 transition-opacity"
+            className="flex items-center justify-center w-11 h-11 -ms-1 text-primary-foreground hover:opacity-80 transition-opacity"
           >
             <ArrowRight className="w-6 h-6 ltr:rotate-180" />
           </button>
-          <h1 className="text-xl text-primary-foreground font-semibold">{t("openRequests.title")}</h1>
-          <div className="w-6" />
+          <h1 className="text-2xl text-primary-foreground font-semibold">{t("openRequests.title")}</h1>
+          <div className="w-11" />
         </div>
       </div>
 
@@ -846,36 +856,36 @@ export function OpenRequests() {
           <div className="flex gap-3">
             <button
               onClick={() => setStatusFilter(statusFilter === "approved" ? null : "approved")}
-              className={`flex-1 rounded-xl border-2 py-2 px-2 text-center transition-all duration-150 ${
+              className={`flex-1 rounded-xl border-2 py-3 px-2 text-center transition-all duration-150 ${
                 statusFilter === "approved"
                   ? "bg-green-500 border-green-600 text-white"
                   : "bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300"
               }`}
             >
               <div className="text-2xl font-bold tabular-nums leading-none">{counts.approved}</div>
-              <div className="text-[11px] font-semibold mt-0.5 leading-tight">{t("status.approved")}</div>
+              <div className="text-sm font-semibold mt-1 leading-tight">{t("status.approved")}</div>
             </button>
             <button
               onClick={() => setStatusFilter(statusFilter === "waiting" ? null : "waiting")}
-              className={`flex-1 rounded-xl border-2 py-2 px-2 text-center transition-all duration-150 ${
+              className={`flex-1 rounded-xl border-2 py-3 px-2 text-center transition-all duration-150 ${
                 statusFilter === "waiting"
                   ? "bg-amber-500 border-amber-600 text-white"
                   : "bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
               }`}
             >
               <div className="text-2xl font-bold tabular-nums leading-none">{counts.waiting}</div>
-              <div className="text-[11px] font-semibold mt-0.5 leading-tight">{t("status.waiting")}</div>
+              <div className="text-sm font-semibold mt-1 leading-tight">{t("status.waiting")}</div>
             </button>
             <button
               onClick={() => setStatusFilter(statusFilter === "declined" ? null : "declined")}
-              className={`flex-1 rounded-xl border-2 py-2 px-2 text-center transition-all duration-150 ${
+              className={`flex-1 rounded-xl border-2 py-3 px-2 text-center transition-all duration-150 ${
                 statusFilter === "declined"
                   ? "bg-red-500 border-red-600 text-white"
                   : "bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300"
               }`}
             >
               <div className="text-2xl font-bold tabular-nums leading-none">{counts.declined}</div>
-              <div className="text-[11px] font-semibold mt-0.5 leading-tight">{t("status.declined")}</div>
+              <div className="text-sm font-semibold mt-1 leading-tight">{t("status.declined")}</div>
             </button>
           </div>
         </div>
@@ -889,7 +899,7 @@ export function OpenRequests() {
               <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">{t("openRequests.empty")}</p>
+            <p className="text-center text-base text-muted-foreground py-12">{t("openRequests.empty")}</p>
           ) : (
             filtered.map((request) => {
               const styles = STATUS_STYLES[request.status];
@@ -898,40 +908,50 @@ export function OpenRequests() {
               const lineItems = isExpanded
                 ? buildLineItems(request, t, codes.actions, codes.reasons, i18n.language)
                 : [];
+              const tireLevelDescription = request.tireLevelCode
+                ? codes.tire_levels.find((tl) => tl.code === request.tireLevelCode)?.description
+                : undefined;
               return (
                 <div
                   key={request.id}
                   onClick={() => setExpandedId(isExpanded ? null : request.id)}
-                  className={`w-full rounded-2xl p-5 shadow-md border space-y-3 cursor-pointer hover:shadow-lg transition-all duration-200 text-start select-none ${plateStyles.card} ${plateStyles.hover}`}
+                  className={`w-full rounded-2xl p-6 shadow-md border space-y-4 min-h-[200px] cursor-pointer hover:shadow-lg transition-all duration-200 text-start select-none ${plateStyles.card} ${plateStyles.hover}`}
                 >
                   <LicensePlate plateNumber={request.licensePlate} plateType={request.plateType} className="w-full max-w-xs mx-auto" />
                   <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
                     <span
-                      className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${styles.bg} ${styles.text} border ${styles.border}`}
+                      className={`inline-block px-3 py-1.5 rounded-full text-base font-semibold ${styles.bg} ${styles.text} border ${styles.border}`}
                     >
                       {t(STATUS_LABEL_KEYS[request.status])}
                     </span>
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      {t("common.requestNumberLine", { requestNumber: request.requestNumber })}
-                    </span>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <span className="rounded-lg border border-border bg-card px-3 py-2 text-base text-muted-foreground tabular-nums">
+                        {t("common.requestNumberLine", { requestNumber: request.requestNumber })}
+                      </span>
+                      {tireLevelDescription ? (
+                        <span className="rounded-lg border border-border bg-card px-3 py-2 text-base text-muted-foreground">
+                          {tireLevelDescription}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   {request.status === "declined" && request.rejectionReason && (
                     <div className="w-full rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-3 text-start">
-                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">
+                      <p className="text-sm font-semibold text-muted-foreground mb-1.5">
                         {t("declinedRequest.rejectionReason")}
                       </p>
-                      <p className="text-sm text-foreground leading-snug line-clamp-4">{request.rejectionReason}</p>
+                      <p className="text-base text-foreground leading-snug line-clamp-4">{request.rejectionReason}</p>
                     </div>
                   )}
                   {isExpanded && (
                     <div className="pt-3 border-t border-border space-y-2" onClick={(e) => e.stopPropagation()}>
                       {lineItems.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-1">—</p>
+                        <p className="text-base text-muted-foreground text-center py-1">—</p>
                       ) : (
                         lineItems.map((item, i) => (
                           <div key={i} className="flex items-center justify-between gap-3">
                             <span
-                              className={`text-sm leading-snug ${
+                              className={`text-base leading-snug ${
                                 item.approved === true
                                   ? "text-green-700 dark:text-green-400"
                                   : item.approved === false
@@ -943,7 +963,7 @@ export function OpenRequests() {
                             </span>
                             {item.approved !== null && (
                               <span
-                                className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 border ${
+                                className={`text-sm font-semibold px-2.5 py-1 rounded-full flex-shrink-0 border ${
                                   item.approved
                                     ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"
                                     : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-300 dark:border-red-700"
